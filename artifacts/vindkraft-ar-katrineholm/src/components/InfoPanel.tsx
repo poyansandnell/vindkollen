@@ -10,7 +10,14 @@ export function InfoPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1 text-sm leading-relaxed text-white/75">
-          <p>Detta är de vindkraftverk som Ericsberg/Katrineholm Vind vill bygga norr om Katrineholm.</p>
+          <p>
+            Detta är de vindkraftverk som Ericsbergs Säteri genom Renewable Sweden AB har begärt
+            samrådsyttrande om hos Försvarsmakten.
+          </p>
+          <p>
+            Underlaget avser Ericsbergs Vind 1–5 i Katrineholms kommun, totalt 29 vindkraftverk fördelade på
+            fem delområden.
+          </p>
           <p>
             Om dessa verk byggs finns en risk att det öppnar för betydligt större vindkraftsparker i
             Katrineholms kommun.

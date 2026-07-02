@@ -9,16 +9,25 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
   return (
     <div className="absolute inset-0 z-30 flex flex-col justify-between overflow-y-auto bg-[#090909] px-6 py-10 text-white">
       <div className="mx-auto w-full max-w-md text-center">
-        {/* Platshållare för Katrineholm FRAMÅTs logotyp — byt ut mot riktig logotyp senare. */}
-        <div
-          className="mx-auto flex h-24 w-24 items-center justify-center rounded-2xl border-2 border-dashed border-[#FF8B01]/70 bg-[#FF8B01]/5"
-          role="img"
-          aria-label="Katrineholm FRAMÅT-logotyp (platshållare)"
-        >
-          <span className="px-2 text-center text-[11px] font-semibold leading-tight tracking-wide text-[#FFB347]">
-            KATRINEHOLM
-            <br />
-            FRAMÅT
+        {/*
+          Logotyp för Katrineholm FRAMÅT. Om en riktig logotypfil finns, lägg den i
+          public/logo.png (ersätter den nuvarande) — <img> nedan används automatiskt då.
+          Faller tillbaka till textbaserad logotyp om bilden saknas.
+        */}
+        <div className="mx-auto flex flex-col items-center justify-center" role="img" aria-label="Katrineholm FRAMÅT">
+          <img
+            src="/logo.png"
+            alt="Katrineholm FRAMÅT"
+            className="h-20 w-auto object-contain"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+              const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+              if (fallback) fallback.style.display = "block";
+            }}
+          />
+          <span className="hidden text-center leading-tight tracking-wide">
+            <span className="block text-2xl font-semibold text-white">Katrineholm</span>
+            <span className="block text-4xl font-black uppercase text-[#FF8B01]">FRAMÅT</span>
           </span>
         </div>
 
@@ -59,6 +68,14 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
         >
           {starting ? "Startar…" : "Starta visualisering"}
         </button>
+        <p className="text-center text-[11px] leading-relaxed text-white/40">
+          Se begärd kopia från Ericsbergs Säteri/Renewable Sweden AB:s begäran om samrådsyttrande till
+          Försvarsmakten. Underlaget avser Ericsbergs Vind 1–5 i Katrineholms kommun och omfattar totalt 29
+          vindkraftverk med maximal totalhöjd 250 meter.
+        </p>
+        <p className="text-center text-[10px] text-white/25">
+          Visualiseringen bygger på koordinater och uppgifter från det bifogade underlaget.
+        </p>
         <p className="text-center text-[11px] text-white/30">
           Fungerar bäst utomhus, i dagsljus eller kväll, med fri sikt mot horisonten.
         </p>
