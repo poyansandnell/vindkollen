@@ -2,17 +2,18 @@ interface PermissionGateProps {
   onStart: () => void;
   starting: boolean;
   errors: string[];
+  turbineCount: number;
 }
 
-export function PermissionGate({ onStart, starting, errors }: PermissionGateProps) {
+export function PermissionGate({ onStart, starting, errors, turbineCount }: PermissionGateProps) {
   return (
     <div className="absolute inset-0 z-30 flex flex-col justify-between bg-gradient-to-b from-[#0b1f1a] via-[#0e2a22] to-[#081713] px-6 py-10 text-emerald-50">
       <div className="mx-auto max-w-md text-center">
         <p className="text-xs font-semibold tracking-[0.2em] text-emerald-400">KATRINEHOLM</p>
         <h1 className="mt-3 text-3xl font-semibold leading-tight">Vindkraft AR Katrineholm</h1>
         <p className="mt-4 text-sm leading-relaxed text-emerald-200/70">
-          Rikta kameran mot skogen norr om staden och se de 29 vindkraftverk som planeras vid Länsterberget — i verklig
-          storlek, på rätt avstånd och i rätt riktning.
+          Rikta kameran mot skogen norr om staden och se de {turbineCount} vindkraftverk som planeras i området — i
+          verklig storlek, på rätt avstånd och i rätt riktning.
         </p>
       </div>
 

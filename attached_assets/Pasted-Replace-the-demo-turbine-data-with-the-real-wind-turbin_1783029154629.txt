@@ -1,0 +1,48 @@
+Replace the demo turbine data with the real wind turbine positions. Use these SWEREF99 TM coordinates and convert them to WGS84 internally using proj4. Create one turbine for each coordinate. Keep all existing functionality.
+
+Important:
+- TotalHeight_m = turbine height from ground to blade tip.
+- HubHeight_m = navhöjd.
+- RotorDiameter_m = rotor diameter.
+- GroundHeight_m = Z / markhöjd.
+- TotalHeightAboveSea_m = totalhöjd över havet.
+- Use TotalHeight_m for visual turbine size.
+- Store GroundHeight_m and TotalHeightAboveSea_m for future terrain/height realism.
+- Keep camera, GPS, compass, AR view, blinking aviation lights, sound, map view and PWA functionality.
+
+Turbine data:
+Name, SWEREF99_TM_East, SWEREF99_TM_North, GroundHeight_m, HubHeight_m, RotorDiameter_m, TotalHeight_m, TotalHeightAboveSea_m
+
+V1-1, 572831, 6531802, 60, 169, 162, 250, 310
+V1-2, 573444, 6531358, 60, 169, 162, 250, 310
+V1-3, 572209, 6531313, 59.6, 169, 162, 250, 309.6
+V1-4, 574009, 6530860, 60, 169, 162, 250, 310
+V1-5, 574764, 6530671, 60, 169, 162, 250, 310
+V1-6, 574133, 6530099, 60, 169, 162, 250, 310
+V1-7, 574383, 6529391, 53.1, 169, 162, 250, 303.1
+
+V2-1, 570530, 6528757, 67.5, 169, 162, 250, 317.5
+V2-2, 570907, 6528120, 50, 169, 162, 250, 300
+V2-3, 571323, 6527324, 50, 169, 162, 250, 300
+V2-4, 571487, 6526310, 60, 169, 162, 250, 310
+V2-5, 570688, 6526208, 60, 169, 162, 250, 310
+V2-6, 571139, 6525624, 60, 169, 162, 250, 310
+
+V3-1, 571183, 6532917, 50, 169, 162, 250, 300
+V3-2, 569746, 6532282, 50, 169, 162, 250, 300
+V3-3, 570696, 6532228, 50, 169, 162, 250, 300
+V3-4, 570080, 6531618, 60, 169, 162, 250, 310
+
+V4-1, 576748, 6531209, 55.6, 169, 162, 250, 305.6
+V4-2, 576740, 6530470, 60, 169, 162, 250, 310
+V4-3, 576668, 6529730, 50, 169, 162, 250, 300
+V4-4, 576040, 6528983, 50, 169, 162, 250, 300
+V4-5, 576840, 6528959, 50, 169, 162, 250, 300
+V4-6, 576159, 6528257, 51.9, 169, 162, 250, 301.9
+
+V5-1, 573567, 6540090, 60, 169, 162, 250, 310
+V5-2, 572745, 6539926, 60, 169, 162, 250, 310
+V5-3, 574324, 6539816, 60, 169, 162, 250, 310
+V5-4, 574887, 6539328, 60, 169, 162, 250, 310
+V5-5, 574869, 6538522, 60, 169, 162, 250, 310
+V5-6, 573824, 6538206, 69.6, 169, 162, 250, 319.6

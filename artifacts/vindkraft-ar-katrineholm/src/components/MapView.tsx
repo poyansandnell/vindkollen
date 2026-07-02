@@ -106,7 +106,7 @@ export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
         </div>
       </div>
       <div className="border-t border-white/10 bg-[#0a1a16] px-4 py-3 text-xs text-emerald-200/70">
-        {turbines.length} planerade vindkraftverk, Länsterberget norr om Katrineholm.
+        {turbines.length} planerade vindkraftverk norr om Katrineholm.
         {userLat === null && " Aktivera plats för att se var du befinner dig på kartan."}
       </div>
     </div>

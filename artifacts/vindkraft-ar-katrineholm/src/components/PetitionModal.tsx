@@ -49,7 +49,7 @@ export function PetitionModal({ onClose }: { onClose: () => void }) {
             <h2 className="text-xl font-semibold text-emerald-50">Folkomröstning om vindkraft</h2>
             <p className="mt-1 text-sm text-emerald-200/70">
               Katrineholms kommun höll en folkomröstning 2022 om vindkraft i kommunens skogar. Skriv under för att
-              visa ditt engagemang inför framtida beslut om Länsterberget.
+              visa ditt engagemang inför framtida beslut om vindkraftsutbyggnaden norr om staden.
             </p>
           </div>
           <button onClick={onClose} className="shrink-0 rounded-full bg-white/10 p-1.5 text-emerald-50 hover:bg-white/20">

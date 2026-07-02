@@ -1,8 +1,7 @@
-// Vindkraftverk baserade på det planerade Länsterberget-projektet norr om
-// Katrineholm (gränsen mot Flen/Eskilstuna). Koordinaterna är lagrade i
-// SWEREF99 TM (EPSG:3006) — Sveriges officiella referenssystem för
-// lantmäteridata — och konverteras till WGS84 i realtid med proj4, se
-// `sweref.ts`.
+// Vindkraftverk baserade på verkliga planerade positioner norr om
+// Katrineholm. Koordinaterna är lagrade i SWEREF99 TM (EPSG:3006) — Sveriges
+// officiella referenssystem för lantmäteridata — och konverteras till WGS84
+// i realtid med proj4, se `sweref.ts`.
 export interface TurbineSweref {
   id: string;
   name: string;
@@ -10,38 +9,73 @@ export interface TurbineSweref {
   easting: number;
   /** SWEREF99 TM northing (meter) */
   northing: number;
-  /** Totalhöjd i meter (nav + rotorblad) */
+  /** Totalhöjd i meter (mark till bladspets) — används för visuell storlek */
   heightMeters: number;
+  /** Markhöjd (Z) i meter över havet */
+  groundHeightMeters: number;
+  /** Navhöjd i meter */
+  hubHeightMeters: number;
+  /** Rotordiameter i meter */
+  rotorDiameterMeters: number;
+  /** Totalhöjd över havet (markhöjd + totalhöjd) i meter */
+  totalHeightAboveSeaMeters: number;
 }
 
-export const TURBINES: TurbineSweref[] = [
-  { id: "t1", name: "Länsterberget 1", easting: 581376, northing: 6559753, heightMeters: 250 },
-  { id: "t2", name: "Länsterberget 2", easting: 581949, northing: 6559745, heightMeters: 250 },
-  { id: "t3", name: "Länsterberget 3", easting: 582438, northing: 6559736, heightMeters: 250 },
-  { id: "t4", name: "Länsterberget 4", easting: 583004, northing: 6559616, heightMeters: 250 },
-  { id: "t5", name: "Länsterberget 5", easting: 583583, northing: 6559747, heightMeters: 250 },
-  { id: "t6", name: "Länsterberget 6", easting: 584144, northing: 6559664, heightMeters: 250 },
-  { id: "t7", name: "Länsterberget 7", easting: 581110, northing: 6560297, heightMeters: 250 },
-  { id: "t8", name: "Länsterberget 8", easting: 581715, northing: 6560287, heightMeters: 250 },
-  { id: "t9", name: "Länsterberget 9", easting: 582129, northing: 6560150, heightMeters: 250 },
-  { id: "t10", name: "Länsterberget 10", easting: 582774, northing: 6560276, heightMeters: 250 },
-  { id: "t11", name: "Länsterberget 11", easting: 583246, northing: 6560205, heightMeters: 250 },
-  { id: "t12", name: "Länsterberget 12", easting: 583833, northing: 6560215, heightMeters: 250 },
-  { id: "t13", name: "Länsterberget 13", easting: 581337, northing: 6560653, heightMeters: 250 },
-  { id: "t14", name: "Länsterberget 14", easting: 581875, northing: 6560782, heightMeters: 250 },
-  { id: "t15", name: "Länsterberget 15", easting: 582414, northing: 6560778, heightMeters: 250 },
-  { id: "t16", name: "Länsterberget 16", easting: 582918, northing: 6560809, heightMeters: 250 },
-  { id: "t17", name: "Länsterberget 17", easting: 583542, northing: 6560678, heightMeters: 250 },
-  { id: "t18", name: "Länsterberget 18", easting: 584174, northing: 6560680, heightMeters: 250 },
-  { id: "t19", name: "Länsterberget 19", easting: 581038, northing: 6561303, heightMeters: 250 },
-  { id: "t20", name: "Länsterberget 20", easting: 581588, northing: 6561171, heightMeters: 250 },
-  { id: "t21", name: "Länsterberget 21", easting: 582273, northing: 6561199, heightMeters: 250 },
-  { id: "t22", name: "Länsterberget 22", easting: 582776, northing: 6561336, heightMeters: 250 },
-  { id: "t23", name: "Länsterberget 23", easting: 583272, northing: 6561283, heightMeters: 250 },
-  { id: "t24", name: "Länsterberget 24", easting: 583789, northing: 6561177, heightMeters: 250 },
-  { id: "t25", name: "Länsterberget 25", easting: 581292, northing: 6561827, heightMeters: 250 },
-  { id: "t26", name: "Länsterberget 26", easting: 581934, northing: 6561754, heightMeters: 250 },
-  { id: "t27", name: "Länsterberget 27", easting: 582425, northing: 6561714, heightMeters: 250 },
-  { id: "t28", name: "Länsterberget 28", easting: 583066, northing: 6561796, heightMeters: 250 },
-  { id: "t29", name: "Länsterberget 29", easting: 583514, northing: 6561782, heightMeters: 250 },
+interface RawTurbine {
+  name: string;
+  easting: number;
+  northing: number;
+  groundHeightMeters: number;
+  hubHeightMeters: number;
+  rotorDiameterMeters: number;
+  totalHeightMeters: number;
+  totalHeightAboveSeaMeters: number;
+}
+
+const RAW_TURBINES: RawTurbine[] = [
+  { name: "V1-1", easting: 572831, northing: 6531802, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V1-2", easting: 573444, northing: 6531358, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V1-3", easting: 572209, northing: 6531313, groundHeightMeters: 59.6, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 309.6 },
+  { name: "V1-4", easting: 574009, northing: 6530860, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V1-5", easting: 574764, northing: 6530671, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V1-6", easting: 574133, northing: 6530099, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V1-7", easting: 574383, northing: 6529391, groundHeightMeters: 53.1, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 303.1 },
+
+  { name: "V2-1", easting: 570530, northing: 6528757, groundHeightMeters: 67.5, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 317.5 },
+  { name: "V2-2", easting: 570907, northing: 6528120, groundHeightMeters: 50, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 300 },
+  { name: "V2-3", easting: 571323, northing: 6527324, groundHeightMeters: 50, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 300 },
+  { name: "V2-4", easting: 571487, northing: 6526310, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V2-5", easting: 570688, northing: 6526208, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V2-6", easting: 571139, northing: 6525624, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+
+  { name: "V3-1", easting: 571183, northing: 6532917, groundHeightMeters: 50, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 300 },
+  { name: "V3-2", easting: 569746, northing: 6532282, groundHeightMeters: 50, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 300 },
+  { name: "V3-3", easting: 570696, northing: 6532228, groundHeightMeters: 50, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 300 },
+  { name: "V3-4", easting: 570080, northing: 6531618, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+
+  { name: "V4-1", easting: 576748, northing: 6531209, groundHeightMeters: 55.6, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 305.6 },
+  { name: "V4-2", easting: 576740, northing: 6530470, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V4-3", easting: 576668, northing: 6529730, groundHeightMeters: 50, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 300 },
+  { name: "V4-4", easting: 576040, northing: 6528983, groundHeightMeters: 50, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 300 },
+  { name: "V4-5", easting: 576840, northing: 6528959, groundHeightMeters: 50, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 300 },
+  { name: "V4-6", easting: 576159, northing: 6528257, groundHeightMeters: 51.9, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 301.9 },
+
+  { name: "V5-1", easting: 573567, northing: 6540090, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V5-2", easting: 572745, northing: 6539926, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V5-3", easting: 574324, northing: 6539816, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V5-4", easting: 574887, northing: 6539328, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V5-5", easting: 574869, northing: 6538522, groundHeightMeters: 60, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 310 },
+  { name: "V5-6", easting: 573824, northing: 6538206, groundHeightMeters: 69.6, hubHeightMeters: 169, rotorDiameterMeters: 162, totalHeightMeters: 250, totalHeightAboveSeaMeters: 319.6 },
 ];
+
+export const TURBINES: TurbineSweref[] = RAW_TURBINES.map((t, index) => ({
+  id: `t${index + 1}`,
+  name: t.name,
+  easting: t.easting,
+  northing: t.northing,
+  heightMeters: t.totalHeightMeters,
+  groundHeightMeters: t.groundHeightMeters,
+  hubHeightMeters: t.hubHeightMeters,
+  rotorDiameterMeters: t.rotorDiameterMeters,
+  totalHeightAboveSeaMeters: t.totalHeightAboveSeaMeters,
+}));

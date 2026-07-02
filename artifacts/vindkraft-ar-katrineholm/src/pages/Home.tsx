@@ -41,7 +41,9 @@ export default function Home() {
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black text-emerald-50">
-      {!started && <PermissionGate onStart={handleStart} starting={starting} errors={errors} />}
+      {!started && (
+        <PermissionGate onStart={handleStart} starting={starting} errors={errors} turbineCount={TURBINES.length} />
+      )}
 
       {started && (
         <>
