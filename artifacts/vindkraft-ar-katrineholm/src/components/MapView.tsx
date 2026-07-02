@@ -11,7 +11,16 @@ interface MapViewProps {
 }
 
 const METERS_PER_DEGREE_LAT = 111320;
-const MAX_TILES = 20;
+// Högre gräns tillåter att kartan stannar på en djupare (skarpare) zoomnivå
+// innan den tvingas backa till en grövre/suddigare — fler, mindre plattor ger
+// betydligt vassare flygfoto, i nivå med Google Maps satellit.
+const MAX_TILES = 64;
+// Esri World Imagery levererar inte äkta @2x-plattor, men genom att hämta
+// en zoomnivå extra på Retina-skärmar (högt devicePixelRatio, t.ex. iPhone)
+// får vi dubbelt så mycket bildinformation per synlig yta, vilket eliminerar
+// den suddighet man annars får av att skala upp lågupplösta plattor.
+const RETINA_ZOOM_BIAS = typeof window !== "undefined" && window.devicePixelRatio >= 2 ? 1 : 0;
+const MAX_ZOOM = 19;
 
 // Katrineholms centrum — visas som en distinkt "stad"-etikett på kartan,
 // separat från vindkraftverkens markörer.
@@ -134,7 +143,8 @@ export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
 
     // Hitta högsta zoomnivå (mest detaljerad flygfoto) där antalet plattor
     // som täcker vår bounding box fortfarande är rimligt (prestanda/nätverk).
-    let zoom = 16;
+    // På Retina-skärmar börjar vi en nivå djupare för skarpare bild.
+    let zoom = MAX_ZOOM + RETINA_ZOOM_BIAS;
     let tileRange: { zoom: number; x1: number; x2: number; y1: number; y2: number } | null = null;
     for (; zoom >= 9; zoom--) {
       const x1 = Math.floor(lon2tileX(bounds.minLon, zoom));
@@ -199,6 +209,7 @@ export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
                 top: `${tile.top}%`,
                 width: `${tile.width}%`,
                 height: `${tile.height}%`,
+                imageRendering: "auto",
               }}
             />
           ))}

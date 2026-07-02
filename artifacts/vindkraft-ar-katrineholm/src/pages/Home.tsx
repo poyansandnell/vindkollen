@@ -99,7 +99,10 @@ export default function Home() {
             />
           )}
 
-          {ready && (nightMode || sunMode === "evening") && (
+          {/* Dagsläge stänger av mörkläggningen helt, oavsett vilket
+              visualiseringsläge (t.ex. "Kväll") som är valt — bara det
+              manuella Nattläge-valet styr detta filter. */}
+          {ready && nightMode && (
             <div className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-b from-[#0a1030]/55 via-[#0a1030]/35 to-[#0a1030]/60" />
           )}
 

@@ -2,3 +2,4 @@
 - [Device orientation → camera quaternion](device-orientation-camera-quaternion.md) — rotate the AR camera from alpha/beta/gamma (yaw+pitch+roll), not just compass heading, or overlays feel stuck to the screen.
 - [iOS compass permission gesture](ios-compass-permission.md) — DeviceOrientationEvent.requestPermission() must be called synchronously from a user-gesture handler, not after an await chain.
 - [Procedural rotor blade orientation](procedural-rotor-orientation.md) — build fanned blades in the local XY plane with no extra tilt so their spin axis (Z) naturally faces the viewer after Object3D.lookAt.
+- [Manual toggle vs derived mode coupling](manual-toggle-vs-derived-mode-coupling.md) — a manual on/off toggle silently gets overridden if a visual effect checks `toggle || presetMode === "x"` instead of the toggle alone.

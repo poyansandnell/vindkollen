@@ -449,17 +449,18 @@ export function ARScene({
       // istället för att följa skärmen när telefonen tiltas.
       state.camera.quaternion.copy(quaternionRef.current);
 
-      // Blinkande flyghinderljus styrs av det manuella Nattläge-valet (aldrig
-      // av den faktiska klockan) eller av "Kväll"-visualiseringsläget, som
-      // också kräver blinkande ljus. Ingen automatisk tidsbaserad omkoppling.
+      // Blinkande flyghinderljus styrs enbart av det manuella Nattläge-valet
+      // (aldrig av den faktiska klockan eller av "Kväll"-visualiseringsläget).
+      // Dagsläge ska alltid stänga av detta helt tills användaren ändrar det.
       const { nightMode: curNightMode } = modeRef.current;
-      const night = curNightMode || curMode === "evening";
+      const night = curNightMode;
       const now = Date.now();
 
       // Mörklägg scenen — dämpar omgivningsljus/riktat ljus, vilket gör
-      // kameraströmmen och 3D-objekten mörkare tillsammans. Styrs av samma
-      // manuella Nattläge-val, oavsett verklig tid på dygnet.
-      const eveningDim = curNightMode || curMode === "evening";
+      // kameraströmmen och 3D-objekten mörkare tillsammans. Styrs enbart av
+      // det manuella Nattläge-valet, oavsett verklig tid på dygnet eller
+      // valt "Kväll"-visualiseringsläge.
+      const eveningDim = curNightMode;
       state.ambient.intensity = eveningDim ? 0.32 : 1.1;
       state.sunLight.intensity = eveningDim ? 0.12 : 0.6;
       state.sunSprite.visible = !eveningDim;
