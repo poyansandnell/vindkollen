@@ -32,7 +32,7 @@ export default function Home() {
   const [showInfo, setShowInfo] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [calibrated, setCalibrated] = useState(false);
-  const [showSoundLevel, setShowSoundLevel] = useState(false);
+  const [showSoundLevel, setShowSoundLevel] = useState(true);
 
   const [sunMode, setSunMode] = useState<SunMode>("current");
   const [realScale, setRealScale] = useState(false);
@@ -245,7 +245,7 @@ export default function Home() {
           )}
 
           {ready && calibrated && (
-            <div className="pointer-events-none absolute inset-x-0 top-24 z-30 flex justify-center">
+            <div className="pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center">
               <span className="rounded-full bg-[#FF8B01]/90 px-4 py-1.5 text-xs font-medium text-[#090909] shadow-lg">
                 Horisont kalibrerad!
               </span>
@@ -253,12 +253,21 @@ export default function Home() {
           )}
 
           {/* Top bar */}
-          <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 bg-gradient-to-b from-black/70 to-transparent px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
-            <div>
-              <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKRAFT AR</p>
-              <p className="text-sm text-white/90">Katrineholm · {TURBINES.length} verk</p>
+          <div className="absolute inset-x-0 top-0 z-20 flex flex-col gap-2 bg-gradient-to-b from-black/70 to-transparent px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKRAFT AR</p>
+                <p className="text-sm text-white/90">Katrineholm · {TURBINES.length} verk</p>
+              </div>
+              <button
+                onClick={() => setShowControls(true)}
+                aria-pressed={showControls}
+                className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+              >
+                ⚙️ Visning
+              </button>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {wind.playing && (
                 <span className="flex items-center gap-1.5 rounded-full bg-[#FF8B01]/20 px-2.5 py-1 text-[11px] text-[#FFB347]">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FFB347]" />
@@ -279,20 +288,14 @@ export default function Home() {
                   Kalibrera horisont
                 </button>
               )}
-              <button
-                onClick={() => setShowSoundLevel((v) => !v)}
-                aria-pressed={showSoundLevel}
-                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
-              >
-                🔊 dBA
-              </button>
-              <button
-                onClick={() => setShowControls(true)}
-                aria-pressed={showControls}
-                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
-              >
-                ⚙️ Visning
-              </button>
+              {!showSoundLevel && (
+                <button
+                  onClick={() => setShowSoundLevel(true)}
+                  className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+                >
+                  🔊 Visa ljudnivå
+                </button>
+              )}
             </div>
           </div>
 
@@ -301,7 +304,7 @@ export default function Home() {
           )}
 
           {ready && photoError && (
-            <div className="pointer-events-none absolute inset-x-0 top-[5.25rem] z-30 flex justify-center px-4">
+            <div className="pointer-events-none absolute inset-x-0 top-[7.5rem] z-30 flex justify-center px-4">
               <span className="rounded-full bg-red-500/20 px-4 py-1.5 text-xs text-red-200 shadow-lg">{photoError}</span>
             </div>
           )}

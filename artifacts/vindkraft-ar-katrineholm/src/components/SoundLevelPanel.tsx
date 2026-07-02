@@ -7,18 +7,18 @@ export function SoundLevelPanel({ estimate, onClose }: { estimate: SoundLevelEst
   const colors = SEVERITY_COLORS[severity];
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-[5.25rem] z-20 flex justify-center px-4">
+    <div className="pointer-events-none absolute inset-x-0 top-[7.5rem] z-20 flex justify-center px-4">
       <div
         className={`pointer-events-auto w-full max-w-xs rounded-2xl border ${colors.border} ${colors.bg} p-3.5 text-white shadow-xl backdrop-blur-sm`}
       >
-        <div className="mb-1.5 flex items-center justify-between">
+        <div className="mb-1.5 flex items-center justify-between gap-2">
           <p className="text-xs font-semibold tracking-wide text-[#FFB347]">🔊 Beräknad ljudnivå</p>
           <button
             onClick={onClose}
-            aria-label="Stäng ljudnivåpanel"
-            className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/80 hover:bg-white/20"
+            aria-label="Dölj ljudnivåpanel"
+            className="flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-white/25 active:bg-white/30"
           >
-            ✕
+            ✕ Dölj
           </button>
         </div>
 
