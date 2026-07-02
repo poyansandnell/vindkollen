@@ -1,0 +1,168 @@
+Make the following updates only:
+
+1. Welcome screen
+Before entering the AR experience, create a clean welcome screen.
+
+At the center of the screen place the official "Katrineholm FRAMÅT" logo (leave a placeholder so I can easily replace it with our real logo later).
+
+Below the logo write:
+
+"Vindkraft AR"
+
+Then:
+
+"Visualisera hur de planerade vindkraftverken kan komma att upplevas från olika platser i Katrineholm."
+
+Below that:
+
+"Appen använder kameran, GPS och mobilens kompass för att placera vindkraftverken i rätt riktning och på ungefär rätt avstånd."
+
+Large orange button:
+
+"Starta visualisering"
+
+Use our orange theme:
+Primary: #FF8B01
+Accent: #FFB347
+Background: #090909
+
+-------------------------------------------------
+
+2. Wind turbines
+
+Make every turbine start with a different stable rotor position.
+
+Do NOT let all turbines start at the same blade angle.
+
+Use a deterministic random angle based on turbine name.
+
+Give every turbine a slightly different realistic rotor speed
+(approximately 6–14 RPM).
+
+-------------------------------------------------
+
+3. Aviation lights
+
+The red aviation warning lights should blink realistically.
+
+Blink approximately every second.
+
+Do not synchronize every turbine.
+
+Each turbine should have a small phase offset so they blink naturally.
+
+-------------------------------------------------
+
+4. Map
+
+Replace the current grid background with a satellite/aerial map if possible.
+
+If a free satellite layer is unavailable without an API key, use the closest available aerial/dark map.
+
+Keep all turbine markers and distance labels.
+
+-------------------------------------------------
+
+5. Orange design
+
+Replace every green UI element with Katrineholm FRAMÅT orange.
+
+Buttons, highlights, labels and active states should all use:
+
+#FF8B01
+
+-------------------------------------------------
+
+6. Information panel
+
+Add this text:
+
+"Detta är de vindkraftverk som Ericsberg/Katrineholm Vind vill bygga norr om Katrineholm."
+
+Then:
+
+"Om dessa verk byggs finns en risk att det öppnar för betydligt större vindkraftsparker i Katrineholms kommun."
+
+Then:
+
+"Som jämförelse presenterade Holmen tidigare planer på upp till 77 vindkraftverk i området kring Simonstorp i Norrköpings och Finspångs kommuner. Projektet omarbetades senare till 32 verk. Norrköpings kommun valde därefter att använda sitt kommunala veto mot den del av etableringen som berörde kommunen."
+
+Present this as factual background information.
+
+-------------------------------------------------
+
+7. Contact form
+
+Important:
+
+Do NOT present this as a digital signature.
+
+A valid municipal referendum initiative requires physical signatures on paper.
+
+Change the main button text to:
+
+"Jag vill bli kontaktad"
+
+When opening the form:
+
+Title:
+
+"Folkomröstning om vindkraft 2026"
+
+Description:
+
+"En giltig namninsamling för en kommunal folkomröstning kräver underskrifter på papper. Skicka in din intresseanmälan så kontaktar Katrineholm FRAMÅT dig med information om hur och var du kan skriva under."
+
+Fields:
+
+• För- och efternamn (required)
+
+• Telefonnummer (required)
+
+• E-post (optional)
+
+• Ort (optional)
+
+Button:
+
+"Skicka intresseanmälan"
+
+Success message:
+
+"Tack! Katrineholm FRAMÅT kommer att kontakta dig med information om hur du kan skriva under namninsamlingen på papper."
+
+Send the request to:
+
+info@katrineholmframat.se
+
+If direct email sending is not possible in a frontend-only application, use a mailto link to info@katrineholmframat.se with all entered information in the email body and also store the request locally as backup.
+
+-------------------------------------------------
+
+8. Keep everything else
+
+Keep all current functionality:
+
+• Camera background
+
+• GPS
+
+• Compass
+
+• AR visualization
+
+• All 29 turbines
+
+• SWEREF99 TM conversion
+
+• Spinning blades
+
+• Blinking aviation lights
+
+• Wind sound
+
+• PWA support
+
+• Swedish interface
+
+• iPhone Safari compatibility

@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { bearingDegrees, distanceMeters, formatDistance, isNightTime } from "@/lib/geo";
 import type { TurbineSweref } from "@/lib/turbines";
 import { swerefToWgs84 } from "@/lib/sweref";
+import { hashSeed } from "@/lib/prng";
 
 interface ARSceneProps {
   userLat: number;
@@ -22,6 +23,10 @@ interface TurbineObject {
   light: THREE.Sprite;
   glow: THREE.Sprite;
   scaleDamp: number;
+  bladeRadPerSec: number;
+  blinkPeriodMs: number;
+  blinkOnMs: number;
+  blinkOffsetMs: number;
 }
 
 interface CanvasLabel {
@@ -36,13 +41,16 @@ const MAX_RENDER_DISTANCE_M = 9000;
 // Meter -> scenens enheter. Vald så att den visuella storleken/avstånden
 // matchar kamerans FOV/klippplan (samma skala som tidigare, enklare modell).
 const METERS_TO_UNITS = 0.9;
-// Rotorns hastighet — 8–15 varv/minut är realistiskt för stora verk (250 m).
-const BLADE_RPM = 11;
-const BLADE_RAD_PER_SEC = (BLADE_RPM * Math.PI * 2) / 60;
-// Synkroniserat blinkmönster för flyghinderbelysning: 0,2 s på / 1,8 s av,
-// baserat på väggklockan så att alla 29 verk blinkar exakt i takt.
-const BLINK_CYCLE_MS = 2000;
-const BLINK_ON_MS = 200;
+// Rotorns hastighet — 6–14 varv/minut, olika för varje verk (deterministiskt
+// baserat på verkets namn) så att de inte alla snurrar exakt lika snabbt.
+const BLADE_RPM_MIN = 6;
+const BLADE_RPM_MAX = 14;
+// Flyghinderbelysningen blinkar ungefär var 1:a sekund, men INTE synkront —
+// varje verk har en egen liten periodvariation och fasförskjutning
+// (deterministiskt baserat på namnet) så blinkningen känns naturlig.
+const BLINK_PERIOD_MIN_MS = 900;
+const BLINK_PERIOD_MAX_MS = 1150;
+const BLINK_ON_MS = 150;
 
 function createCanvasLabel(): CanvasLabel {
   const canvas = document.createElement("canvas");
@@ -74,8 +82,8 @@ function drawLabel(label: CanvasLabel, title: string, subtitle: string) {
   const y = (canvas.height - boxHeight) / 2;
   const radius = 20;
 
-  ctx.fillStyle = "rgba(9, 20, 28, 0.72)";
-  ctx.strokeStyle = "rgba(120, 220, 200, 0.55)";
+  ctx.fillStyle = "rgba(12, 10, 8, 0.72)";
+  ctx.strokeStyle = "rgba(255, 139, 1, 0.6)";
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(x + radius, y);
@@ -87,11 +95,11 @@ function drawLabel(label: CanvasLabel, title: string, subtitle: string) {
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "#eafff7";
+  ctx.fillStyle = "#fff5eb";
   ctx.font = "600 40px Inter, sans-serif";
   ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 20);
 
-  ctx.fillStyle = "#9be8d4";
+  ctx.fillStyle = "#ffb347";
   ctx.font = "400 30px Inter, sans-serif";
   ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 24);
 
@@ -181,7 +189,35 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
       glow.renderOrder = 997;
       scene.add(glow);
 
-      return { turbine, lat, lon, group, bladesGroup, label, distanceLabel, light, glow, scaleDamp: 1 };
+      // Deterministisk men olikartad rotorhastighet och blinkfas per verk,
+      // baserad på verkets namn — samma verk får alltid samma värden, men
+      // olika verk skiljer sig åt (ingen global synkronisering).
+      const rpm = BLADE_RPM_MIN + hashSeed(`${turbine.name}:rpm`) * (BLADE_RPM_MAX - BLADE_RPM_MIN);
+      const bladeRadPerSec = (rpm * Math.PI * 2) / 60;
+      const blinkPeriodMs =
+        BLINK_PERIOD_MIN_MS + hashSeed(`${turbine.name}:period`) * (BLINK_PERIOD_MAX_MS - BLINK_PERIOD_MIN_MS);
+      const blinkOffsetMs = hashSeed(`${turbine.name}:phase`) * blinkPeriodMs;
+
+      // Varje rotor startar med en egen, stabil bladvinkel istället för att
+      // alla 29 verk pekar likadant vid start.
+      bladesGroup.rotation.z = hashSeed(`${turbine.name}:startAngle`) * Math.PI * 2;
+
+      return {
+        turbine,
+        lat,
+        lon,
+        group,
+        bladesGroup,
+        label,
+        distanceLabel,
+        light,
+        glow,
+        scaleDamp: 1,
+        bladeRadPerSec,
+        blinkPeriodMs,
+        blinkOnMs: BLINK_ON_MS,
+        blinkOffsetMs,
+      };
     });
 
     sceneStateRef.current = { scene, camera, renderer, objects };
@@ -257,15 +293,17 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
       // istället för att följa skärmen när telefonen tiltas.
       state.camera.quaternion.copy(quaternionRef.current);
 
-      // Alla 29 verk blinkar exakt synkront: baserat på väggklockan istället
-      // för en lokal fasräknare, så mönstret (0,2 s på / 1,8 s av) alltid är
-      // detsamma oavsett bildfrekvens eller när scenen monterades.
-      const blinkOn = isNightTime() && Date.now() % BLINK_CYCLE_MS < BLINK_ON_MS;
-
-      const bladeDelta = BLADE_RAD_PER_SEC * dt;
+      // Varje verk blinkar oberoende av de andra: egen periodlängd + egen
+      // fasförskjutning (satt en gång per verk ovan), baserat på väggklockan
+      // så mönstret är stabilt oavsett bildfrekvens — men INTE synkront
+      // mellan verken, precis som riktiga flyghinderljus i ett vindkraftpark.
+      const night = isNightTime();
+      const now = Date.now();
 
       for (const obj of state.objects) {
-        obj.bladesGroup.rotation.z += bladeDelta;
+        obj.bladesGroup.rotation.z += obj.bladeRadPerSec * dt;
+        const phase = (now + obj.blinkOffsetMs) % obj.blinkPeriodMs;
+        const blinkOn = night && phase < obj.blinkOnMs;
         obj.light.visible = blinkOn;
         obj.glow.visible = blinkOn;
       }
