@@ -1,0 +1,2 @@
+- [PWA AR without WebXR](ar-without-webxr.md) — bearing/distance + compass heading positions Three.js objects around the camera; works broadly, no WebXR needed.
+- [iOS compass permission gesture](ios-compass-permission.md) — DeviceOrientationEvent.requestPermission() must be called synchronously from a user-gesture handler, not after an await chain.
