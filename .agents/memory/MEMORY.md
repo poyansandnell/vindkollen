@@ -4,3 +4,4 @@
 - [Procedural rotor blade orientation](procedural-rotor-orientation.md) — build fanned blades in the local XY plane with no extra tilt so their spin axis (Z) naturally faces the viewer after Object3D.lookAt.
 - [Manual toggle vs derived mode coupling](manual-toggle-vs-derived-mode-coupling.md) — a manual on/off toggle silently gets overridden if a visual effect checks `toggle || presetMode === "x"` instead of the toggle alone.
 - [iOS Safari audio speaker routing](ios-audio-speaker-routing.md) — route Web Audio via MediaStreamAudioDestinationNode + hidden `<audio>` element to force main-speaker (not earpiece) playback.
+- [WebGL canvas photo capture](webgl-canvas-photo-capture.md) — avoid `preserveDrawingBuffer` (risks context loss → black overlay); capture toDataURL synchronously right after render() instead.

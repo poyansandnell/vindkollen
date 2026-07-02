@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import * as THREE from "three";
 import { bearingDegrees, distanceMeters, formatDistance } from "@/lib/geo";
 import type { TurbineSweref } from "@/lib/turbines";
@@ -17,8 +17,18 @@ interface ARSceneProps {
   visibility: VisibilityLevel;
   nightMode: boolean;
   shadowFlicker: boolean;
-  /** Extern ref som får Three.js-renderarens canvas, t.ex. för Fotomontage-fångst. */
-  canvasRef?: React.MutableRefObject<HTMLCanvasElement | null>;
+}
+
+export interface ARSceneHandle {
+  /**
+   * Fångar aktuell bildruta från Three.js-scenen (vindkraftverk, etiketter,
+   * skuggor, sol) som en PNG data-URL, med transparent bakgrund där kameran
+   * ska lysa igenom. Fångas synkront direkt efter en renderad bildruta i
+   * animationsloopen — undviker `preserveDrawingBuffer` (som ökar risken för
+   * att WebGL-kontexten tappas på mobila GPU:er, vilket tidigare kunde göra
+   * att hela kameravyn plötsligt försvann bakom en ogenomskinlig canvas).
+   */
+  capturePhoto: () => Promise<string | null>;
 }
 
 interface TurbineObject {
@@ -205,18 +215,20 @@ function clamp(v: number, min: number, max: number): number {
  * GPS, och skuggorna är förenklade halvtransparenta ellipser, inte en exakt
  * skuggberäkning.
  */
-export function ARScene({
-  userLat,
-  userLon,
-  quaternionRef,
-  turbines,
-  sunMode,
-  realScale,
-  visibility,
-  nightMode,
-  shadowFlicker,
-  canvasRef,
-}: ARSceneProps) {
+export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
+  {
+    userLat,
+    userLon,
+    quaternionRef,
+    turbines,
+    sunMode,
+    realScale,
+    visibility,
+    nightMode,
+    shadowFlicker,
+  },
+  forwardedRef,
+) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneStateRef = useRef<{
     scene: THREE.Scene;
@@ -230,9 +242,29 @@ export function ARScene({
   } | null>(null);
   const userRef = useRef({ lat: userLat, lon: userLon });
   const modeRef = useRef({ sunMode, realScale, visibility, nightMode, shadowFlicker });
+  // Väntande Fotomontage-förfrågan — löses in synkront direkt efter nästa
+  // renderade bildruta i animationsloopen (se `animate`), istället för att
+  // sätta `preserveDrawingBuffer: true` på renderaren. Att läsa canvasen i
+  // samma JS-cykel som `renderer.render()` fungerar utan preserveDrawingBuffer
+  // (webbläsaren hinner inte rensa/kompositera bufferten emellan), och
+  // undviker den extra GPU-minnesbelastning som tidigare kunde göra att hela
+  // kameravyn plötsligt försvann bakom en ogenomskinlig canvas (förlorad
+  // WebGL-kontext).
+  const pendingCaptureRef = useRef<((dataUrl: string | null) => void) | null>(null);
 
   userRef.current = { lat: userLat, lon: userLon };
   modeRef.current = { sunMode, realScale, visibility, nightMode, shadowFlicker };
+
+  useImperativeHandle(forwardedRef, () => ({
+    capturePhoto: () =>
+      new Promise<string | null>((resolve) => {
+        if (!sceneStateRef.current) {
+          resolve(null);
+          return;
+        }
+        pendingCaptureRef.current = resolve;
+      }),
+  }));
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -240,14 +272,28 @@ export function ARScene({
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(FOV_DEGREES, mount.clientWidth / mount.clientHeight, 1, 20000);
-    // preserveDrawingBuffer krävs för att Fotomontage-funktionen ska kunna
-    // läsa av canvasens innehåll (drawImage) när som helst, inte bara direkt
-    // efter en renderad bildruta.
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+    // Ingen `preserveDrawingBuffer` här — se motiveringen vid `pendingCaptureRef`
+    // ovan. Att slå på den ökade minnestrycket på mobila GPU:er tillräckligt
+    // för att WebGL-kontexten kunde tappas mitt i en session, vilket gjorde
+    // att hela kameravyn plötsligt doldes bakom en ogenomskinlig canvas.
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     mount.appendChild(renderer.domElement);
-    if (canvasRef) canvasRef.current = renderer.domElement;
+
+    // Om WebGL-kontexten ändå skulle tappas (t.ex. GPU-minnestryck på äldre
+    // mobiler) döljer vi canvasen istället för att låta den bli en stängd,
+    // ogenomskinlig svart ruta ovanpå kamerabilden — då syns i alla fall
+    // "verkligheten" i kameran igen, även om AR-lagret tillfälligt saknas.
+    function handleContextLost(event: Event) {
+      event.preventDefault();
+      renderer.domElement.style.visibility = "hidden";
+    }
+    function handleContextRestored() {
+      renderer.domElement.style.visibility = "visible";
+    }
+    renderer.domElement.addEventListener("webglcontextlost", handleContextLost, false);
+    renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored, false);
 
     const ambient = new THREE.AmbientLight(0xffffff, 1.1);
     scene.add(ambient);
@@ -576,6 +622,19 @@ export function ARScene({
       }
 
       state.renderer.render(state.scene, state.camera);
+
+      // Fotomontage-fångst: läs canvasen direkt här, i samma JS-cykel som
+      // render()-anropet ovan, medan bufferten fortfarande innehåller den
+      // nyss ritade bildrutan (se motivering vid `pendingCaptureRef`).
+      if (pendingCaptureRef.current) {
+        const resolve = pendingCaptureRef.current;
+        pendingCaptureRef.current = null;
+        try {
+          resolve(state.renderer.domElement.toDataURL("image/png"));
+        } catch {
+          resolve(null);
+        }
+      }
     }
     raf = requestAnimationFrame(animate);
 
@@ -590,6 +649,8 @@ export function ARScene({
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", handleResize);
+      renderer.domElement.removeEventListener("webglcontextlost", handleContextLost, false);
+      renderer.domElement.removeEventListener("webglcontextrestored", handleContextRestored, false);
       glowTexture.dispose();
       shadowTexture.dispose();
       sunTexture.dispose();
@@ -627,7 +688,7 @@ export function ARScene({
   }, [turbines]);
 
   return <div ref={mountRef} className="absolute inset-0" />;
-}
+});
 
 /**
  * Bygger en lättviktig men proportionsriktig procedurell vindkraftsmodell:

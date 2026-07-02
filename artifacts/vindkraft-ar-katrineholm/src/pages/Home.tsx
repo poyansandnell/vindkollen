@@ -4,7 +4,7 @@ import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useCameraStream } from "@/hooks/useCameraStream";
 import { useWindSound } from "@/hooks/useWindSound";
 import { CameraBackground } from "@/components/CameraBackground";
-import { ARScene } from "@/components/ARScene";
+import { ARScene, type ARSceneHandle } from "@/components/ARScene";
 import { MapView } from "@/components/MapView";
 import { PetitionModal } from "@/components/PetitionModal";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -46,7 +46,7 @@ export default function Home() {
   const [photoError, setPhotoError] = useState<string | null>(null);
 
   const videoElRef = useRef<HTMLVideoElement | null>(null);
-  const arCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const arSceneRef = useRef<ARSceneHandle | null>(null);
 
   const geo = useGeolocation(started);
   const orientation = useDeviceOrientation(started);
@@ -86,11 +86,16 @@ export default function Home() {
 
   const handleStart = useCallback(async () => {
     setStarting(true);
+    // Ljud på som standard: startas direkt från samma knapptryckning (giltigt
+    // användargest för iOS Safaris ljuduppspelningsregler), innan ev. await
+    // nedan, så AudioContext skapas/låses upp synkront i gestens "kontext".
+    void wind.toggle();
     if (orientation.needsPermission) {
       await orientation.requestPermission();
     }
     setStarted(true);
     setStarting(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orientation]);
 
   const handleCalibrate = useCallback(() => {
@@ -104,17 +109,31 @@ export default function Home() {
   // etiketter, skuggor, sol och valt visualiseringsläge) till en enda bild,
   // och ritar sedan på vattenstämpel + ansvarsfriskrivning. Görs helt lokalt
   // i en dold <canvas> — inga externa bibliotek eller nätverksanrop.
-  const handleCapturePhoto = useCallback(() => {
+  const handleCapturePhoto = useCallback(async () => {
     setPhotoError(null);
     try {
       const video = videoElRef.current;
-      const arCanvas = arCanvasRef.current;
-      if (!video || !arCanvas) {
+      if (!video || !arSceneRef.current) {
         setPhotoError("Kunde inte ta bild — kameran eller AR-vyn är inte redo.");
         return;
       }
-      const width = video.videoWidth || arCanvas.width || 1080;
-      const height = video.videoHeight || arCanvas.height || 1920;
+      // Fångar AR-scenens canvas via ARScene:s imperativa handtag (synkront
+      // efter nästa renderade bildruta) istället för en delad `canvasRef`
+      // + `preserveDrawingBuffer`, se motivering i ARScene.tsx.
+      const arDataUrl = await arSceneRef.current.capturePhoto();
+      if (!arDataUrl) {
+        setPhotoError("Kunde inte ta bild — AR-vyn är inte redo.");
+        return;
+      }
+      const arImage = new Image();
+      await new Promise<void>((resolve, reject) => {
+        arImage.onload = () => resolve();
+        arImage.onerror = () => reject(new Error("ar-image-load-failed"));
+        arImage.src = arDataUrl;
+      });
+
+      const width = video.videoWidth || arImage.width || 1080;
+      const height = video.videoHeight || arImage.height || 1920;
 
       const out = document.createElement("canvas");
       out.width = width;
@@ -142,9 +161,9 @@ export default function Home() {
       }
       ctx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
 
-      // AR-scenen (vindkraftverk, etiketter, sol, skuggor) — canvasen har
+      // AR-scenen (vindkraftverk, etiketter, sol, skuggor) — bilden har
       // alpha-transparent bakgrund, så kamerabilden lyser igenom naturligt.
-      ctx.drawImage(arCanvas, 0, 0, width, height);
+      ctx.drawImage(arImage, 0, 0, width, height);
 
       // Vattenstämpel.
       const pad = Math.round(width * 0.035);
@@ -187,6 +206,7 @@ export default function Home() {
 
           {ready && (
             <ARScene
+              ref={arSceneRef}
               userLat={geo.lat!}
               userLon={geo.lon!}
               quaternionRef={orientation.quaternionRef}
@@ -196,7 +216,6 @@ export default function Home() {
               visibility={visibility}
               nightMode={nightMode}
               shadowFlicker={shadowFlicker}
-              canvasRef={arCanvasRef}
             />
           )}
 
@@ -293,7 +312,7 @@ export default function Home() {
               onClick={() => setShowPetition(true)}
               className="w-full rounded-full bg-[#FF8B01] py-3.5 text-sm font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/30 hover:bg-[#FFB347]"
             >
-              Jag vill bli kontaktad
+              Jag vill skriva på för att få till folkomröstning
             </button>
             {ready && (
               <button
