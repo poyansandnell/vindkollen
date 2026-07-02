@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { TurbineSweref } from "@/lib/turbines";
 import { swerefToWgs84 } from "@/lib/sweref";
 import { distanceMeters, formatDistance } from "@/lib/geo";
@@ -12,6 +12,10 @@ interface MapViewProps {
 
 const METERS_PER_DEGREE_LAT = 111320;
 const MAX_TILES = 20;
+
+// Katrineholms centrum — visas som en distinkt "stad"-etikett på kartan,
+// separat från vindkraftverkens markörer.
+const KATRINEHOLM = { lat: 58.9959, lon: 16.2072 };
 
 // Web Mercator (samma projektion som "slippy map"-plattor, t.ex. OSM/Esri).
 function lon2tileX(lon: number, z: number) {
@@ -30,6 +34,37 @@ function tileY2lat(y: number, z: number) {
 }
 
 export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerSize, setContainerSize] = useState({ width: 1, height: 1 });
+
+  // Håller reda på den faktiska pixelstorleken (och därmed bildförhållandet)
+  // på kartcontainern, så att projektionen kan anpassas vid rotation/resize
+  // istället för att sträckas ut med en fast fyrkantig vy.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setContainerSize({ width: rect.width, height: rect.height });
+      }
+    };
+
+    update();
+
+    const resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(el);
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, []);
+
   const points = useMemo(() => {
     const wgs = turbines.map((t) => ({ turbine: t, ...swerefToWgs84(t.easting, t.northing) }));
 
@@ -37,23 +72,47 @@ export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
     const lons = wgs.map((p) => p.lon);
     if (userLat !== null) lats.push(userLat);
     if (userLon !== null) lons.push(userLon);
+    lats.push(KATRINEHOLM.lat);
+    lons.push(KATRINEHOLM.lon);
 
-    const minLat = Math.min(...lats);
-    const maxLat = Math.max(...lats);
-    const minLon = Math.min(...lons);
-    const maxLon = Math.max(...lons);
+    const minLatRaw = Math.min(...lats);
+    const maxLatRaw = Math.max(...lats);
+    const minLonRaw = Math.min(...lons);
+    const maxLonRaw = Math.max(...lons);
 
-    const padLat = (maxLat - minLat) * 0.18 || 0.003;
-    const padLon = (maxLon - minLon) * 0.18 || 0.003;
+    const padLat = (maxLatRaw - minLatRaw) * 0.18 || 0.003;
+    const padLon = (maxLonRaw - minLonRaw) * 0.18 || 0.003;
 
-    const bounds = {
-      minLat: minLat - padLat,
-      maxLat: maxLat + padLat,
-      minLon: minLon - padLon,
-      maxLon: maxLon + padLon,
-    };
+    const minLat = minLatRaw - padLat;
+    const maxLat = maxLatRaw + padLat;
+    const minLon = minLonRaw - padLon;
+    const maxLon = maxLonRaw + padLon;
 
-    const metersPerDegreeLon = METERS_PER_DEGREE_LAT * Math.cos((((minLat + maxLat) / 2) * Math.PI) / 180);
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLon = (minLon + maxLon) / 2;
+    const metersPerDegreeLon = METERS_PER_DEGREE_LAT * Math.cos((centerLat * Math.PI) / 180);
+
+    // Bredda den kortare geografiska dimensionen (i grader) så att kartans
+    // bildförhållande i meter matchar containerns faktiska bildförhållande
+    // i pixlar. Då kan projektionen sedan skalas 1:1 utan att sträckas ut
+    // olika mycket i x- och y-led (dvs. utan distorsion vid rotation).
+    const latMeters = (maxLat - minLat) * METERS_PER_DEGREE_LAT;
+    const lonMeters = (maxLon - minLon) * metersPerDegreeLon;
+    const containerAspect = containerSize.width / containerSize.height || 1;
+    const boundsAspect = lonMeters / latMeters || 1;
+
+    let bounds = { minLat, maxLat, minLon, maxLon };
+    if (boundsAspect > containerAspect) {
+      // Geografiska boxen är "bredare" än containern — öka höjden (latitud).
+      const targetLatMeters = lonMeters / containerAspect;
+      const extraLatDeg = (targetLatMeters - latMeters) / METERS_PER_DEGREE_LAT / 2;
+      bounds = { minLat: minLat - extraLatDeg, maxLat: maxLat + extraLatDeg, minLon, maxLon };
+    } else if (boundsAspect < containerAspect) {
+      // Geografiska boxen är "smalare" än containern — öka bredden (longitud).
+      const targetLonMeters = latMeters * containerAspect;
+      const extraLonDeg = (targetLonMeters - lonMeters) / metersPerDegreeLon / 2;
+      bounds = { minLat, maxLat, minLon: minLon - extraLonDeg, maxLon: maxLon + extraLonDeg };
+    }
 
     function project(lat: number, lon: number) {
       const x = ((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * 100;
@@ -70,6 +129,8 @@ export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
 
     const userPoint =
       userLat !== null && userLon !== null ? project(userLat, userLon) : null;
+
+    const cityPoint = project(KATRINEHOLM.lat, KATRINEHOLM.lon);
 
     // Hitta högsta zoomnivå (mest detaljerad flygfoto) där antalet plattor
     // som täcker vår bounding box fortfarande är rimligt (prestanda/nätverk).
@@ -109,8 +170,8 @@ export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
       }
     }
 
-    return { turbinePoints, userPoint, metersPerDegreeLon, tiles };
-  }, [turbines, userLat, userLon]);
+    return { turbinePoints, userPoint, cityPoint, metersPerDegreeLon, tiles };
+  }, [turbines, userLat, userLon, containerSize]);
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-[#0d0d0d]">
@@ -123,7 +184,7 @@ export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
           Stäng
         </button>
       </div>
-      <div className="relative flex-1 overflow-hidden bg-[#0a0a0a]">
+      <div ref={containerRef} className="relative flex-1 overflow-hidden bg-[#0a0a0a]">
         {/* Flygfoto/satellitbakgrund (Esri World Imagery, kräver ingen API-nyckel). */}
         <div className="absolute inset-0">
           {points.tiles.map((tile) => (
@@ -157,6 +218,21 @@ export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
               <circle cx={p.x} cy={p.y} r="1.3" fill="#ff5b5b" stroke="#fff" strokeWidth="0.25" />
             </g>
           ))}
+
+          {/* Katrineholm stadsmarkör — visuellt skild från vindkraftverkens
+              röda punkter för att tydliggöra att det är en ort, inte ett verk. */}
+          <g>
+            <rect
+              x={points.cityPoint.x - 1.1}
+              y={points.cityPoint.y - 1.1}
+              width="2.2"
+              height="2.2"
+              fill="#ffffff"
+              stroke="#0d0d0d"
+              strokeWidth="0.3"
+              transform={`rotate(45 ${points.cityPoint.x} ${points.cityPoint.y})`}
+            />
+          </g>
         </svg>
 
         <div className="absolute inset-0">
@@ -170,6 +246,13 @@ export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
               {p.distance !== null && <span className="text-[#FFB347]"> · {formatDistance(p.distance)}</span>}
             </div>
           ))}
+
+          <div
+            className="absolute -translate-x-1/2 translate-y-2 whitespace-nowrap rounded-md border border-white/40 bg-black/80 px-2 py-1 text-[13px] font-bold tracking-wide text-white shadow-[0_0_6px_rgba(0,0,0,0.8)]"
+            style={{ left: `${points.cityPoint.x}%`, top: `${points.cityPoint.y}%` }}
+          >
+            Katrineholm
+          </div>
         </div>
       </div>
       <div className="border-t border-white/10 bg-[#0d0d0d] px-4 py-3 text-xs text-white/70">

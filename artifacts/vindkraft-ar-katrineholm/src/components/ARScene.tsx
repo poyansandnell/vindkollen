@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { bearingDegrees, distanceMeters, formatDistance, isNightTime } from "@/lib/geo";
+import { bearingDegrees, distanceMeters, formatDistance } from "@/lib/geo";
 import type { TurbineSweref } from "@/lib/turbines";
 import { swerefToWgs84 } from "@/lib/sweref";
 import { getCurrentSunPosition } from "@/lib/sunPosition";
@@ -15,6 +15,7 @@ interface ARSceneProps {
   sunMode: SunMode;
   realScale: boolean;
   visibility: VisibilityLevel;
+  nightMode: boolean;
 }
 
 interface TurbineObject {
@@ -185,7 +186,16 @@ function clamp(v: number, min: number, max: number): number {
  * GPS, och skuggorna är förenklade halvtransparenta ellipser, inte en exakt
  * skuggberäkning.
  */
-export function ARScene({ userLat, userLon, quaternionRef, turbines, sunMode, realScale, visibility }: ARSceneProps) {
+export function ARScene({
+  userLat,
+  userLon,
+  quaternionRef,
+  turbines,
+  sunMode,
+  realScale,
+  visibility,
+  nightMode,
+}: ARSceneProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneStateRef = useRef<{
     scene: THREE.Scene;
@@ -197,10 +207,10 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines, sunMode, re
     sunSprite: THREE.Sprite;
   } | null>(null);
   const userRef = useRef({ lat: userLat, lon: userLon });
-  const modeRef = useRef({ sunMode, realScale, visibility });
+  const modeRef = useRef({ sunMode, realScale, visibility, nightMode });
 
   userRef.current = { lat: userLat, lon: userLon };
-  modeRef.current = { sunMode, realScale, visibility };
+  modeRef.current = { sunMode, realScale, visibility, nightMode };
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -439,14 +449,17 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines, sunMode, re
       // istället för att följa skärmen när telefonen tiltas.
       state.camera.quaternion.copy(quaternionRef.current);
 
-      // "Kväll"-läget tvingar mörker + blinkande ljus oavsett verklig klocka;
-      // annars styrs blinket av faktisk tid på dygnet (22:00–06:00).
-      const night = curMode === "evening" || isNightTime();
+      // Blinkande flyghinderljus styrs av det manuella Nattläge-valet (aldrig
+      // av den faktiska klockan) eller av "Kväll"-visualiseringsläget, som
+      // också kräver blinkande ljus. Ingen automatisk tidsbaserad omkoppling.
+      const { nightMode: curNightMode } = modeRef.current;
+      const night = curNightMode || curMode === "evening";
       const now = Date.now();
 
-      // Mörklägg scenen kvällstid — dämpar omgivningsljus/riktat ljus, vilket
-      // gör kameraströmmen och 3D-objekten mörkare tillsammans.
-      const eveningDim = curMode === "evening";
+      // Mörklägg scenen — dämpar omgivningsljus/riktat ljus, vilket gör
+      // kameraströmmen och 3D-objekten mörkare tillsammans. Styrs av samma
+      // manuella Nattläge-val, oavsett verklig tid på dygnet.
+      const eveningDim = curNightMode || curMode === "evening";
       state.ambient.intensity = eveningDim ? 0.32 : 1.1;
       state.sunLight.intensity = eveningDim ? 0.12 : 0.6;
       state.sunSprite.visible = !eveningDim;

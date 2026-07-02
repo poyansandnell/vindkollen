@@ -11,6 +11,8 @@ interface VisualizationControlsProps {
   onToggleVisibilityOpen: () => void;
   soundOn: boolean;
   onToggleSound: () => void;
+  nightMode: boolean;
+  onToggleNightMode: () => void;
   onClose: () => void;
 }
 
@@ -62,6 +64,8 @@ export function VisualizationControls({
   onToggleVisibilityOpen,
   soundOn,
   onToggleSound,
+  nightMode,
+  onToggleNightMode,
   onClose,
 }: VisualizationControlsProps) {
   return (
@@ -117,6 +121,19 @@ export function VisualizationControls({
             ))}
           </div>
         )}
+
+        <h2 className="mb-3 text-base font-semibold text-[#FFB347]">Nattläge</h2>
+        <div className="mb-1 grid grid-cols-2 gap-2">
+          <SegButton active={nightMode} onClick={() => !nightMode && onToggleNightMode()}>
+            🌙 Nattläge PÅ
+          </SegButton>
+          <SegButton active={!nightMode} onClick={() => nightMode && onToggleNightMode()}>
+            ☀️ Dagsläge
+          </SegButton>
+        </div>
+        <p className="-mt-2 mb-4 text-[11px] text-white/50">
+          Styr blinkande flyghinderljus och mörkläggning manuellt — ändras inte automatiskt med klockan.
+        </p>
 
         <h2 className="mb-3 text-base font-semibold text-[#FFB347]">Ljud</h2>
         <div className="mb-2 grid grid-cols-2 gap-2">

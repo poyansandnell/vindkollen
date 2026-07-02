@@ -1,0 +1,95 @@
+Fix these issues only:
+
+1. Night mode toggle is broken
+
+The user must be able to turn night mode on and off manually.
+
+Add a clear toggle/segmented control:
+
+🌙 Nattläge PÅ
+☀️ Dagsläge
+
+When the user selects Dagsläge:
+- remove the dark camera filter
+- show daytime colors
+- do not force night mode based only on current time
+- keep aviation lights optional/visible only if the selected visualization mode requires it
+
+When the user selects Nattläge PÅ:
+- darken the camera/AR view
+- show blinking red aviation obstruction lights clearly
+
+Do not automatically re-enable night mode after the user has manually selected Dagsläge.
+
+2. Map proportions are wrong
+
+The map appears stretched or distorted depending on whether the phone is portrait or landscape.
+
+Fix the map layout:
+- preserve correct aspect ratio
+- make the map responsive to viewport size
+- update map size on orientation change
+- use ResizeObserver or window resize/orientationchange
+- call map.invalidateSize() after layout changes
+- avoid CSS transform scaling that distorts the map
+- make the map fill its container without stretching coordinates
+
+3. Katrineholm city label
+
+Add a clear city label on the map at the approximate centre of Katrineholm:
+
+"Katrineholm"
+
+Use coordinates approximately:
+lat: 58.9959
+lon: 16.2072
+
+Make the label visible above/near the dense urban area.
+Style it as a city label, not as a turbine marker:
+- white text
+- subtle dark outline/background
+- slightly larger than turbine labels
+- should remain readable on satellite/dark map
+
+4. Improve sound
+
+The turbine sound is too quiet or not working.
+
+Fix the audio so it works on iPhone Safari:
+- start/resume AudioContext only after user taps the sound button
+- handle suspended AudioContext with ctx.resume()
+- keep the sound unlocked after user interaction
+- show button state clearly: "Ljud PÅ" / "Ljud AV"
+
+Increase turbine/wind sound volume, but keep it safe:
+- add wind ambience
+- add low-frequency rumble
+- add rhythmic blade whoosh
+- make the whoosh sound like wind hitting large turbine blades
+- volume should increase when turbines are closer or when user faces several turbines
+- cap maximum volume so it never becomes painfully loud
+
+Suggested relative levels:
+- ambience gain around 0.08–0.14
+- blade whoosh gain around 0.10–0.22
+- low rumble gain around 0.03–0.08
+
+Add a text indicator when sound is on:
+"Vindljud aktivt"
+
+5. Keep everything else unchanged
+
+Do not remove:
+- 29 turbines
+- GPS
+- compass
+- AR view
+- spinning blades
+- blinking lights
+- orange theme
+- satellite/aerial map
+- welcome screen
+- Katrineholm FRAMÅT logo placeholder
+- contact form
+- PWA support
+- iPhone Safari support

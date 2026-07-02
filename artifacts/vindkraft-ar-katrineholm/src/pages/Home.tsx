@@ -31,6 +31,9 @@ export default function Home() {
   const [realScale, setRealScale] = useState(false);
   const [visibility, setVisibility] = useState<VisibilityLevel>("clear");
   const [visibilityOpen, setVisibilityOpen] = useState(false);
+  // Startvärdet matchar den faktiska klockan vid appstart, men efter det är
+  // läget helt manuellt — ingen bakgrundstimer skriver över användarens val.
+  const [nightMode, setNightMode] = useState(() => isNightTime());
 
   const geo = useGeolocation(started);
   const orientation = useDeviceOrientation(started);
@@ -72,7 +75,6 @@ export default function Home() {
   }, [orientation]);
 
   const ready = started && geo.lat !== null && geo.lon !== null && orientation.hasFix && camera.stream;
-  const night = isNightTime();
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#090909] text-white">
@@ -93,10 +95,11 @@ export default function Home() {
               sunMode={sunMode}
               realScale={realScale}
               visibility={visibility}
+              nightMode={nightMode}
             />
           )}
 
-          {ready && sunMode === "evening" && (
+          {ready && (nightMode || sunMode === "evening") && (
             <div className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-b from-[#0a1030]/55 via-[#0a1030]/35 to-[#0a1030]/60" />
           )}
 
@@ -133,7 +136,13 @@ export default function Home() {
               <p className="text-sm text-white/90">Katrineholm · {TURBINES.length} verk</p>
             </div>
             <div className="flex items-center gap-2">
-              {night && (
+              {wind.playing && (
+                <span className="flex items-center gap-1.5 rounded-full bg-[#FF8B01]/20 px-2.5 py-1 text-[11px] text-[#FFB347]">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FFB347]" />
+                  Vindljud aktivt
+                </span>
+              )}
+              {nightMode && (
                 <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-2.5 py-1 text-[11px] text-red-200">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
                   Nattläge
@@ -200,6 +209,8 @@ export default function Home() {
           onToggleVisibilityOpen={() => setVisibilityOpen((v) => !v)}
           soundOn={wind.playing}
           onToggleSound={wind.toggle}
+          nightMode={nightMode}
+          onToggleNightMode={() => setNightMode((v) => !v)}
           onClose={() => setShowControls(false)}
         />
       )}
