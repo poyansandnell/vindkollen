@@ -19,34 +19,48 @@ interface WindNodes {
   directionLfo: OscillatorNode;
   directionGain: GainNode;
   masterGain: GainNode;
+  makeupGain: GainNode;
   compressor: DynamicsCompressorNode;
+  limiter: WaveShaperNode;
+  streamDestination: MediaStreamAudioDestinationNode;
 }
 
-// Volymnivåerna är kraftigt höjda jämfört med tidigare version — målet är ett
-// påtagligt, uppslukande ljudlandskap som påminner om att stå i närheten av
-// moderna 250 m-verk (Vestas V162-6.2MW, navhöjd 169 m), snarare än ett
-// diskret bakgrundssus. Projektets egen bullerutredning anger som mest ca
-// 40 dBA ekvivalent ljudnivå vid närmaste bostad i värsta scenariot — det
-// används här bara som inspiration för ljudkaraktären (aerodynamiskt bredbandigt
-// brus, lågfrekvent mull, rytmisk bladpassage), inte som en exakt kalibrerad
-// decibelnivå (webbljud kan inte återge en fysisk dB-nivå ändå).
-// En DynamicsCompressorNode (masterbuss) håller allt inom säkert, klipp-fritt
-// utrymme även när flera lager summeras på hög volym.
-const AMBIENCE_BASE = 0.32;
-const AMBIENCE_MAX = 0.62;
-const WHOOSH_BASE = 0.38;
-const WHOOSH_MAX = 0.78;
-const WHOOSH2_BASE = 0.22;
-const WHOOSH2_MAX = 0.48;
-const RUMBLE_BASE = 0.22;
-const RUMBLE_MAX = 0.46;
+// Volymnivåerna är kraftigt höjda jämfört med en tidigare version — målet är
+// ett omedelbart märkbart, uppslukande ljudlandskap som påminner om att stå
+// utomhus nära flera stora, moderna 250 m-verk (Vestas V162-6.2MW, navhöjd
+// 169 m) i drift, snarare än ett diskret bakgrundssus. Projektets egen
+// bullerutredning anger som mest ca 40 dBA ekvivalent ljudnivå vid närmaste
+// bostad i värsta scenariot — det används här bara som inspiration för
+// ljudkaraktären (aerodynamiskt bredbandigt brus, lågfrekvent mull, rytmisk
+// bladpassage), inte som en exakt kalibrerad decibelnivå (webbljud kan inte
+// återge en fysisk dB-nivå ändå; se `lib/soundLevel.ts` för den separata,
+// informativa dBA-uppskattningen som INTE styr denna volym).
+//
+// Den stora volymökningen uppnås inte bara genom råa gain-värden, utan
+// framför allt genom en hårdare kompressor (lägre tröskel/högre ratio) +
+// en makeup-gain-nod efteråt som lyfter den komprimerade signalen tillbaka
+// upp mot fullt utslag — en klassisk "loudness"-teknik som ger ett tätt,
+// kraftfullt ljud utan att det digitalt klipper. En sista mjuk klippnings-
+// (WaveShaper-)nod fungerar som ett absolut säkerhetsnät mot överstyrning.
+const AMBIENCE_BASE = 0.55;
+const AMBIENCE_MAX = 0.95;
+const WHOOSH_BASE = 0.68;
+const WHOOSH_MAX = 1.15;
+const WHOOSH2_BASE = 0.4;
+const WHOOSH2_MAX = 0.72;
+const RUMBLE_BASE = 0.36;
+const RUMBLE_MAX = 0.66;
 const PROXIMITY_RANGE_M = 3500;
+// Flera närliggande verk kombineras (se updateProximity) till en total
+// "närhetsfaktor" som kan överstiga 1 — så att många verk nära inpå
+// tillsammans låter tydligt kraftfullare än ett enda ensamt verk.
+const MAX_COMBINED_PROXIMITY = 1.9;
 
 /**
  * Genererar ett kraftigt, uppslukande vindkraftsljud helt proceduralt med Web
  * Audio API — inga externa ljudfiler behövs:
  *
- * - Bred, kontinuerlig vindsvep-ambience (filtrerat brus).
+ * - Bred, kraftfull, kontinuerlig vindsvep-ambience (filtrerat brus).
  * - Två oberoende bladsvisch-lager med olika takt/frekvens, för att låta som
  *   flera verk (t.ex. flera i närheten) som kombineras till ett tätare,
  *   kraftigare ljudlandskap snarare än ett enda rent tonalt mönster.
@@ -54,20 +68,34 @@ const PROXIMITY_RANGE_M = 3500;
  * - En långsam "vindriktnings"-LFO som moduleras in på master-volymen, så att
  *   ljudet naturligt sväller och avtar lite över tid — som om vindriktningen
  *   ändras — utan att kännas mekaniskt konstant.
- * - Volymen ökar ju närmare användaren är närmaste verk.
- * - En DynamicsCompressorNode på masterbussen förhindrar klippning även vid
- *   dessa betydligt högre volymnivåer.
+ * - Volymen ökar ju närmare användaren är verken, och flera verk inom räckhåll
+ *   kombineras till en högre total volym (se updateProximity).
+ * - En hård DynamicsCompressorNode + makeup-gain ger hög upplevd ljudstyrka,
+ *   och en avslutande mjuk klippningskurva (WaveShaper) garanterar att inget
+ *   digitalt klipper eller distorderar oavsett hur högt insignalen drivs.
  *
- * iPhone Safari (och andra webbläsare med autoplay-policy) kräver att
- * AudioContext startas/återupptas inom en direkt användarinteraktion —
- * `toggle()` anropas alltid från en knapptryckning, och vi anropar uttryck-
- * ligen `ctx.resume()` om kontexten är avstängd/suspenderad innan ljudet
- * startas, så att ljudet "låses upp" permanent efter första tryckningen.
+ * iPhone Safari-specifikt: den slutliga signalen skickas INTE direkt till
+ * `ctx.destination`, utan till en `MediaStreamAudioDestinationNode` som
+ * spelas upp via ett dolt `<audio>`-element. Rå `AudioContext.destination`-
+ * uppspelning kan på iOS ibland hamna i "recording/voice"-ljudkategorin
+ * (rutas till telefonens LUR-högtalare istället för huvudhögtalaren) —
+ * genom att spela upp via ett riktigt `<audio>`-element tvingas Safari att
+ * använda den vanliga mediauppspelningsrutten (huvudhögtalaren). Ingen
+ * mikrofon/inspelning används någonstans i appen, vilket annars är den
+ * vanligaste orsaken till att iOS växlar ljudkategori.
+ *
+ * AudioContext återskapas varje gång användaren trycker på "Ljud PÅ" (istället
+ * för att återanvända en gammal kontext) — detta ger en garanterat ren
+ * ljudsession på iOS Safari, som annars kan fastna i fel uppspelningsläge om
+ * kameran startats/stoppats emellanåt. `toggle()` anropas alltid direkt från
+ * en knapptryckning, vilket är ett giltigt tillfälle att både skapa och
+ * återuppta/låsa upp AudioContext permanent.
  */
 export function useWindSound() {
   const [playing, setPlaying] = useState(false);
   const ctxRef = useRef<AudioContext | null>(null);
   const nodesRef = useRef<WindNodes | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -84,7 +112,14 @@ export function useWindSound() {
       } catch {
         // redan stoppad — ignorera.
       }
+      if (audioElRef.current) {
+        audioElRef.current.pause();
+        audioElRef.current.srcObject = null;
+        audioElRef.current.remove();
+        audioElRef.current = null;
+      }
       ctxRef.current?.close();
+      ctxRef.current = null;
     };
   }, []);
 
@@ -101,6 +136,38 @@ export function useWindSound() {
     return buffer;
   }
 
+  /**
+   * Mjuk mättnadskurva (tanh) som sista säkerhetsnät — klämmer signalen
+   * naturligt mot ±1 istället för att hårt klippa/distordera, oavsett hur
+   * mycket gain som drivs in i den tidigare kedjan.
+   */
+  function makeSoftClipCurve(): Float32Array {
+    const n = 4096;
+    const curve = new Float32Array(n);
+    const k = 1.6;
+    const norm = Math.tanh(k);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(k * x) / norm;
+    }
+    return curve;
+  }
+
+  function stopAllNodes(nodes: WindNodes) {
+    try {
+      nodes.windSource.stop();
+      nodes.whooshSource.stop();
+      nodes.whoosh2Source.stop();
+      nodes.lfo.stop();
+      nodes.lfo2.stop();
+      nodes.rumbleOsc.stop();
+      nodes.rumbleOsc2.stop();
+      nodes.directionLfo.stop();
+    } catch {
+      // ignorera om redan stoppad.
+    }
+  }
+
   async function toggle() {
     if (playing) {
       const nodes = nodesRef.current;
@@ -108,19 +175,11 @@ export function useWindSound() {
       if (nodes && ctx) {
         nodes.masterGain.gain.setTargetAtTime(0, ctx.currentTime, 0.3);
         setTimeout(() => {
-          try {
-            nodes.windSource.stop();
-            nodes.whooshSource.stop();
-            nodes.whoosh2Source.stop();
-            nodes.lfo.stop();
-            nodes.lfo2.stop();
-            nodes.rumbleOsc.stop();
-            nodes.rumbleOsc2.stop();
-            nodes.directionLfo.stop();
-          } catch {
-            // ignorera om redan stoppad.
-          }
+          stopAllNodes(nodes);
           nodesRef.current = null;
+          if (audioElRef.current) {
+            audioElRef.current.pause();
+          }
         }, 500);
       }
       setPlaying(false);
@@ -133,9 +192,20 @@ export function useWindSound() {
       // Web Audio saknas i den här webbläsaren — misslyckas tyst utan krasch.
       return;
     }
+
+    // Skapar alltid en ny AudioContext vid start (se motivering i
+    // jsdoc-kommentaren ovan) för en garanterat ren ljudsession på iOS Safari.
+    if (ctxRef.current) {
+      try {
+        await ctxRef.current.close();
+      } catch {
+        // ignorera.
+      }
+      ctxRef.current = null;
+    }
     let ctx: AudioContext;
     try {
-      ctx = ctxRef.current ?? new AudioContextCtor();
+      ctx = new AudioContextCtor();
     } catch {
       return;
     }
@@ -154,20 +224,58 @@ export function useWindSound() {
       }
     }
 
-    // Masterbuss: allt ljud går genom en kompressor innan destinationen, så
-    // att de betydligt högre volymnivåerna nedan aldrig klipper — den håller
-    // toppar under kontroll medan den övergripande upplevda styrkan förblir hög.
+    // Masterbuss: signalkedjan är masterGain -> compressor (hård, låg
+    // tröskel) -> makeupGain (lyfter tillbaka upplevd volym) -> limiter
+    // (mjuk klippningskurva, sista säkerhetsnätet) -> streamDestination,
+    // som spelas upp via ett dolt <audio>-element (se `startAudioElement`
+    // nedan) istället för direkt till `ctx.destination`, för att garantera
+    // huvudhögtalar-routing på iPhone.
     const compressor = ctx.createDynamicsCompressor();
-    compressor.threshold.value = -8;
-    compressor.knee.value = 6;
-    compressor.ratio.value = 12;
-    compressor.attack.value = 0.004;
-    compressor.release.value = 0.25;
+    compressor.threshold.value = -26;
+    compressor.knee.value = 8;
+    compressor.ratio.value = 18;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.22;
+
+    const makeupGain = ctx.createGain();
+    makeupGain.gain.value = 2.7;
+
+    const limiter = ctx.createWaveShaper();
+    limiter.curve = makeSoftClipCurve() as Float32Array<ArrayBuffer>;
+    limiter.oversample = "4x";
+
+    const streamDestination = ctx.createMediaStreamDestination();
+
     const masterGain = ctx.createGain();
     masterGain.gain.value = 0;
     masterGain.connect(compressor);
-    compressor.connect(ctx.destination);
+    compressor.connect(makeupGain);
+    makeupGain.connect(limiter);
+    limiter.connect(streamDestination);
     masterGain.gain.setTargetAtTime(1, ctx.currentTime, 0.6);
+
+    // Dolt <audio>-element som faktiskt spelar upp ljudet. Att gå via ett
+    // riktigt medieelement (istället för `ctx.destination`) är den kända
+    // lösningen för att tvinga iOS Safari att använda huvudhögtalaren i
+    // stället för telefonlur-högtalaren, särskilt i appar som även använder
+    // kameran. Ingen ljudinspelning/mikrofon används här.
+    let audioEl = audioElRef.current;
+    if (!audioEl) {
+      audioEl = document.createElement("audio");
+      audioEl.setAttribute("playsinline", "true");
+      audioEl.style.display = "none";
+      document.body.appendChild(audioEl);
+      audioElRef.current = audioEl;
+    }
+    audioEl.srcObject = streamDestination.stream;
+    audioEl.muted = false;
+    audioEl.volume = 1;
+    try {
+      await audioEl.play();
+    } catch {
+      // Om uppspelning nekas fortsätter ljudgrafen ändå att köra —
+      // användaren kan behöva trycka igen, men inget kraschar.
+    }
 
     // Långsam "vindriktnings"-variation — moduleras in på hela masterbussen
     // så att den totala volymen sväller/avtar naturligt över tid, som om
@@ -210,7 +318,7 @@ export function useWindSound() {
     whooshLowpass.type = "lowpass";
     whooshLowpass.frequency.value = 2200;
     const whooshGain = ctx.createGain();
-    whooshGain.gain.value = 0.05;
+    whooshGain.gain.value = 0.08;
     whooshSource.connect(whooshFilter);
     whooshFilter.connect(whooshLowpass);
     whooshLowpass.connect(whooshGain);
@@ -221,7 +329,7 @@ export function useWindSound() {
     lfo.type = "sine";
     lfo.frequency.value = 0.6;
     const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 0.22;
+    lfoGain.gain.value = 0.3;
     lfo.connect(lfoGain);
     lfoGain.connect(whooshGain.gain);
     lfo.start();
@@ -241,7 +349,7 @@ export function useWindSound() {
     whoosh2Filter.frequency.value = 620;
     whoosh2Filter.Q.value = 0.7;
     const whoosh2Gain = ctx.createGain();
-    whoosh2Gain.gain.value = 0.04;
+    whoosh2Gain.gain.value = 0.06;
     whoosh2Source.connect(whoosh2Filter);
     whoosh2Filter.connect(whoosh2Gain);
     whoosh2Gain.connect(masterGain);
@@ -251,7 +359,7 @@ export function useWindSound() {
     lfo2.type = "sine";
     lfo2.frequency.value = 0.52;
     const lfo2Gain = ctx.createGain();
-    lfo2Gain.gain.value = 0.16;
+    lfo2Gain.gain.value = 0.22;
     lfo2.connect(lfo2Gain);
     lfo2Gain.connect(whoosh2Gain.gain);
     lfo2.start();
@@ -295,26 +403,42 @@ export function useWindSound() {
       directionLfo,
       directionGain,
       masterGain,
+      makeupGain,
       compressor,
+      limiter,
+      streamDestination,
     };
     setPlaying(true);
   }
 
   /**
-   * Uppdaterar volym och svischtakt baserat på avstånd till närmaste verk
+   * Uppdaterar volym och svischtakt baserat på avstånd till samtliga verk
    * (meter) och rotorernas genomsnittliga varvtal (RPM). Anropas löpande när
    * GPS-position eller vindkraftsdata ändras — påverkar bara befintliga
-   * ljudnoder, startar inget nytt ljud. Volymen ökar tydligt ju närmare
-   * användaren är, men hålls alltid inom det klipp-fria intervall som
-   * masterbussens kompressor garanterar.
+   * ljudnoder, startar inget nytt ljud.
+   *
+   * Istället för att bara titta på det närmaste verket summeras ett bidrag
+   * från varje verk inom räckhåll (`PROXIMITY_RANGE_M`) — flera närliggande
+   * verk kombineras därmed till en tydligt högre total volym än ett enda
+   * ensamt verk, precis som ett riktigt vindkraftverksområde låter kraftigare
+   * ju fler verk som är i drift nära lyssnaren. Varje bidrag använder en
+   * uppmjukad (kvadratrotsliknande) avtagandekurva så att volymen förblir
+   * tydligt hörbar även på medelavstånd, istället för att nästan tystna.
    */
-  function updateProximity(nearestDistanceMeters: number | null, avgRpm: number) {
+  function updateProximity(distancesMeters: number[], avgRpm: number) {
     const nodes = nodesRef.current;
     const ctx = ctxRef.current;
     if (!nodes || !ctx) return;
 
-    const dist = nearestDistanceMeters === null ? PROXIMITY_RANGE_M : Math.max(nearestDistanceMeters, 60);
-    const proximity = Math.max(0, Math.min(1 - dist / PROXIMITY_RANGE_M, 1)); // 0 = långt bort, 1 = mycket nära
+    const distances = distancesMeters.length > 0 ? distancesMeters : [PROXIMITY_RANGE_M];
+    let combined = 0;
+    for (const raw of distances) {
+      const d = Math.max(raw, 60);
+      if (d >= PROXIMITY_RANGE_M) continue;
+      const linear = 1 - d / PROXIMITY_RANGE_M; // 0 = utom räckhåll, 1 = precis vid tornet
+      combined += Math.pow(linear, 0.55); // mjukare avtagande — hörbart även på medelavstånd
+    }
+    const proximity = Math.min(combined, MAX_COMBINED_PROXIMITY);
 
     const windTarget = AMBIENCE_BASE + proximity * (AMBIENCE_MAX - AMBIENCE_BASE);
     const whooshTarget = WHOOSH_BASE + proximity * (WHOOSH_MAX - WHOOSH_BASE);

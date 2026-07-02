@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useCameraStream } from "@/hooks/useCameraStream";
@@ -10,11 +10,17 @@ import { PetitionModal } from "@/components/PetitionModal";
 import { PermissionGate } from "@/components/PermissionGate";
 import { InfoPanel } from "@/components/InfoPanel";
 import { VisualizationControls } from "@/components/VisualizationControls";
+import { SoundLevelPanel } from "@/components/SoundLevelPanel";
+import { PhotoMontageModal } from "@/components/PhotoMontageModal";
 import { TURBINES } from "@/lib/turbines";
 import { distanceMeters, isNightTime } from "@/lib/geo";
 import { swerefToWgs84 } from "@/lib/sweref";
 import { getBladeRpm } from "@/lib/turbineAnimation";
+import { estimateSoundLevel } from "@/lib/soundLevel";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
+
+const PHOTO_WATERMARK_TEXT = "Katrineholm FRAMÅT – Vindkraft AR";
+const PHOTO_DISCLAIMER_TEXT = "Fotomontage/visualisering. GPS, kompass, terräng, väder och sikt kan påverka precisionen.";
 
 const AVG_RPM = TURBINES.reduce((sum, t) => sum + getBladeRpm(t.name), 0) / TURBINES.length;
 
@@ -26,6 +32,7 @@ export default function Home() {
   const [showInfo, setShowInfo] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [calibrated, setCalibrated] = useState(false);
+  const [showSoundLevel, setShowSoundLevel] = useState(false);
 
   const [sunMode, setSunMode] = useState<SunMode>("current");
   const [realScale, setRealScale] = useState(false);
@@ -34,6 +41,12 @@ export default function Home() {
   // Startvärdet matchar den faktiska klockan vid appstart, men efter det är
   // läget helt manuellt — ingen bakgrundstimer skriver över användarens val.
   const [nightMode, setNightMode] = useState(() => isNightTime());
+  const [shadowFlicker, setShadowFlicker] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const arCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const geo = useGeolocation(started);
   const orientation = useDeviceOrientation(started);
@@ -45,17 +58,29 @@ export default function Home() {
     [geo.error, orientation.error, camera.error],
   );
 
-  // Uppdatera vindljudets volym/svischtakt när GPS-position ändras — högre
-  // volym ju närmare användaren är närmaste verk, aldrig överdrivet högt.
+  // Beräknar en informativ dBA-uppskattning baserat på GPS-avstånd till
+  // samtliga verk. Rent visningssyfte — styr aldrig ljuduppspelningen.
+  const soundLevelEstimate = useMemo(() => {
+    if (geo.lat === null || geo.lon === null) {
+      return { totalDba: -Infinity, nearestDistanceM: null, contributingCount: 0 };
+    }
+    const distances = TURBINES.map((t) => {
+      const { lat, lon } = swerefToWgs84(t.easting, t.northing);
+      return distanceMeters(geo.lat as number, geo.lon as number, lat, lon);
+    });
+    return estimateSoundLevel(distances);
+  }, [geo.lat, geo.lon]);
+
+  // Uppdatera vindljudets volym/svischtakt när GPS-position ändras. Alla
+  // verks avstånd skickas med (inte bara det närmaste) så att flera
+  // närliggande verk kombineras till ett kraftigare, tätare ljudlandskap.
   useEffect(() => {
     if (!wind.playing || geo.lat === null || geo.lon === null) return;
-    let nearest: number | null = null;
-    for (const t of TURBINES) {
+    const distances = TURBINES.map((t) => {
       const { lat, lon } = swerefToWgs84(t.easting, t.northing);
-      const d = distanceMeters(geo.lat, geo.lon, lat, lon);
-      if (nearest === null || d < nearest) nearest = d;
-    }
-    wind.updateProximity(nearest, AVG_RPM);
+      return distanceMeters(geo.lat as number, geo.lon as number, lat, lon);
+    });
+    wind.updateProximity(distances, AVG_RPM);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wind.playing, geo.lat, geo.lon]);
 
@@ -74,6 +99,80 @@ export default function Home() {
     window.setTimeout(() => setCalibrated(false), 1800);
   }, [orientation]);
 
+  // Fotomontage: sammanfogar kameraströmmens aktuella bildruta med Three.js-
+  // scenens canvas (som redan innehåller vindkraftverk, namn/avstånds-
+  // etiketter, skuggor, sol och valt visualiseringsläge) till en enda bild,
+  // och ritar sedan på vattenstämpel + ansvarsfriskrivning. Görs helt lokalt
+  // i en dold <canvas> — inga externa bibliotek eller nätverksanrop.
+  const handleCapturePhoto = useCallback(() => {
+    setPhotoError(null);
+    try {
+      const video = videoElRef.current;
+      const arCanvas = arCanvasRef.current;
+      if (!video || !arCanvas) {
+        setPhotoError("Kunde inte ta bild — kameran eller AR-vyn är inte redo.");
+        return;
+      }
+      const width = video.videoWidth || arCanvas.width || 1080;
+      const height = video.videoHeight || arCanvas.height || 1920;
+
+      const out = document.createElement("canvas");
+      out.width = width;
+      out.height = height;
+      const ctx = out.getContext("2d");
+      if (!ctx) {
+        setPhotoError("Kunde inte ta bild — canvas stöds inte.");
+        return;
+      }
+
+      // Kamerabild (object-cover-liknande beskärning så proportionerna
+      // matchar det som faktiskt syns på skärmen).
+      const videoAspect = video.videoWidth / video.videoHeight || width / height;
+      const targetAspect = width / height;
+      let sx = 0;
+      let sy = 0;
+      let sw = video.videoWidth || width;
+      let sh = video.videoHeight || height;
+      if (videoAspect > targetAspect) {
+        sw = sh * targetAspect;
+        sx = ((video.videoWidth || width) - sw) / 2;
+      } else {
+        sh = sw / targetAspect;
+        sy = ((video.videoHeight || height) - sh) / 2;
+      }
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
+
+      // AR-scenen (vindkraftverk, etiketter, sol, skuggor) — canvasen har
+      // alpha-transparent bakgrund, så kamerabilden lyser igenom naturligt.
+      ctx.drawImage(arCanvas, 0, 0, width, height);
+
+      // Vattenstämpel.
+      const pad = Math.round(width * 0.035);
+      ctx.textBaseline = "alphabetic";
+      ctx.font = `600 ${Math.round(width * 0.032)}px Inter, sans-serif`;
+      ctx.textAlign = "left";
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillText(PHOTO_WATERMARK_TEXT, pad + 1, height - pad + 1);
+      ctx.fillStyle = "#FF8B01";
+      ctx.fillText(PHOTO_WATERMARK_TEXT, pad, height - pad);
+
+      // Ansvarsfriskrivning längst ned, på egen rad med halvtransparent fält
+      // för läsbarhet oavsett bakgrund.
+      const disclaimerFontSize = Math.round(width * 0.02);
+      ctx.font = `400 ${disclaimerFontSize}px Inter, sans-serif`;
+      const barHeight = disclaimerFontSize * 2.6;
+      ctx.fillStyle = "rgba(9,9,9,0.55)";
+      ctx.fillRect(0, height - barHeight, width, barHeight);
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.textAlign = "center";
+      ctx.fillText(PHOTO_DISCLAIMER_TEXT, width / 2, height - barHeight / 2 + disclaimerFontSize / 3);
+
+      setCapturedPhoto(out.toDataURL("image/png"));
+    } catch {
+      setPhotoError("Kunde inte skapa fotomontage. Försök igen.");
+    }
+  }, []);
+
   const ready = started && geo.lat !== null && geo.lon !== null && orientation.hasFix && camera.stream;
 
   return (
@@ -84,7 +183,7 @@ export default function Home() {
 
       {started && (
         <>
-          <CameraBackground stream={camera.stream} />
+          <CameraBackground stream={camera.stream} videoRef={videoElRef} />
 
           {ready && (
             <ARScene
@@ -96,6 +195,8 @@ export default function Home() {
               realScale={realScale}
               visibility={visibility}
               nightMode={nightMode}
+              shadowFlicker={shadowFlicker}
+              canvasRef={arCanvasRef}
             />
           )}
 
@@ -160,6 +261,13 @@ export default function Home() {
                 </button>
               )}
               <button
+                onClick={() => setShowSoundLevel((v) => !v)}
+                aria-pressed={showSoundLevel}
+                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+              >
+                🔊 dBA
+              </button>
+              <button
                 onClick={() => setShowControls(true)}
                 aria-pressed={showControls}
                 className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
@@ -169,6 +277,16 @@ export default function Home() {
             </div>
           </div>
 
+          {ready && showSoundLevel && (
+            <SoundLevelPanel estimate={soundLevelEstimate} onClose={() => setShowSoundLevel(false)} />
+          )}
+
+          {ready && photoError && (
+            <div className="pointer-events-none absolute inset-x-0 top-[5.25rem] z-30 flex justify-center px-4">
+              <span className="rounded-full bg-red-500/20 px-4 py-1.5 text-xs text-red-200 shadow-lg">{photoError}</span>
+            </div>
+          )}
+
           {/* Bottom controls */}
           <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-10">
             <button
@@ -177,6 +295,14 @@ export default function Home() {
             >
               Jag vill bli kontaktad
             </button>
+            {ready && (
+              <button
+                onClick={handleCapturePhoto}
+                className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
+              >
+                📸 Fotomontage
+              </button>
+            )}
             <div className="flex gap-3">
               <button
                 onClick={() => setShowMap(true)}
@@ -200,6 +326,16 @@ export default function Home() {
       )}
       {showPetition && <PetitionModal onClose={() => setShowPetition(false)} />}
       {showInfo && <InfoPanel onClose={() => setShowInfo(false)} />}
+      {capturedPhoto && (
+        <PhotoMontageModal
+          imageDataUrl={capturedPhoto}
+          onRetake={() => {
+            setCapturedPhoto(null);
+            handleCapturePhoto();
+          }}
+          onClose={() => setCapturedPhoto(null)}
+        />
+      )}
       {showControls && (
         <VisualizationControls
           sunMode={sunMode}
@@ -214,6 +350,8 @@ export default function Home() {
           onToggleSound={wind.toggle}
           nightMode={nightMode}
           onToggleNightMode={() => setNightMode((v) => !v)}
+          shadowFlicker={shadowFlicker}
+          onToggleShadowFlicker={() => setShadowFlicker((v) => !v)}
           onClose={() => setShowControls(false)}
         />
       )}

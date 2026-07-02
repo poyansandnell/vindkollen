@@ -25,9 +25,14 @@ A Swedish-language progressive web app that lets people in Katrineholm point the
 - `src/lib/sweref.ts` — proj4-based SWEREF99 TM ↔ WGS84 conversion.
 - `src/lib/geo.ts` — haversine distance, bearing, angle normalization, night-time check, Swedish distance formatting.
 - `src/hooks/useGeolocation.ts`, `useCompassHeading.ts`, `useCameraStream.ts`, `useWindSound.ts` — device sensor/media hooks.
-- `src/components/ARScene.tsx` — the Three.js AR overlay (turbine meshes, name/distance labels, blinking red aviation light at night).
-- `src/components/CameraBackground.tsx`, `MapView.tsx`, `PetitionModal.tsx`, `PermissionGate.tsx` — supporting UI.
-- `src/pages/Home.tsx` — wires camera + AR + GPS + compass + permission gate + top/bottom UI chrome together.
+- `src/components/ARScene.tsx` — the Three.js AR overlay (turbine meshes, name/distance labels, blinking red aviation light at night, sun-synced lighting, Skuggflimmer blade-shadow flicker, exposes its canvas via `canvasRef` for Fotomontage capture).
+- `src/components/CameraBackground.tsx`, `MapView.tsx`, `PetitionModal.tsx`, `PermissionGate.tsx` — supporting UI. `CameraBackground` accepts an optional `videoRef` to expose its `<video>` element for Fotomontage capture.
+- `src/components/VisualizationControls.tsx` — sun/scale/visibility/night mode toggles, plus the Skuggflimmer toggle + info tooltip.
+- `src/components/SoundLevelPanel.tsx` — live "🔊 Beräknad ljudnivå" dBA estimate panel (informational only, never controls playback volume).
+- `src/components/PhotoMontageModal.tsx` — Fotomontage capture preview with Spara/Ta ny bild/Dela (Web Share API) actions.
+- `src/lib/soundLevel.ts` — dBA estimation from GPS distance to every turbine, logarithmic combination, severity color coding, exact disclaimer text.
+- `src/lib/visualizationTypes.ts` — shared visualization mode types, incl. `shadowFlickerActive()` gating (only active in "current"/"low" sun modes).
+- `src/pages/Home.tsx` — wires camera + AR + GPS + compass + permission gate + top/bottom UI chrome + dBA panel + Fotomontage capture together.
 
 ## Architecture decisions
 
@@ -40,7 +45,10 @@ A Swedish-language progressive web app that lets people in Katrineholm point the
 
 - Camera-based AR view showing 29 wind turbines at true bearing/distance from the user, each labeled with name + distance.
 - Blinking red aviation obstruction lights on turbines at night (22:00–06:00).
-- Optional procedurally generated wind sound (Web Audio, no audio files).
+- Optional procedurally generated wind sound (Web Audio, no audio files), always routed through the device's main speaker (never the earpiece) even on iOS Safari.
+- Live "🔊 Beräknad ljudnivå" dBA panel estimating sound exposure from turbine distance (informational only, does not affect playback).
+- "🌗 Skuggflimmer" (shadow flicker) mode simulating blade-shadow flicker, only active in "Aktuell sol"/"Låg sol" sun modes, with an info tooltip explaining the effect.
+- "📸 Fotomontage": captures a composite photo (camera + AR overlay + watermark + disclaimer) with Spara/Ta ny bild/Dela (Web Share API) actions.
 - Map view (SVG-based) showing all turbines and the user's position.
 - "Skriv under för folkomröstning" petition button/modal referencing the real 2022 Katrineholm wind-power referendum.
 - Fully Swedish-language UI; installable as a PWA.

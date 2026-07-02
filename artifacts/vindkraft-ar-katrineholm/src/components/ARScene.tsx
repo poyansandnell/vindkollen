@@ -5,7 +5,7 @@ import type { TurbineSweref } from "@/lib/turbines";
 import { swerefToWgs84 } from "@/lib/sweref";
 import { getCurrentSunPosition } from "@/lib/sunPosition";
 import { getBladeRpm, getBladeStartAngleRad, getBlinkOffsetMs, getBlinkPeriodMs, BLINK_ON_MS } from "@/lib/turbineAnimation";
-import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
+import { shadowFlickerActive, type SunMode, type VisibilityLevel } from "@/lib/visualizationTypes";
 
 interface ARSceneProps {
   userLat: number;
@@ -16,6 +16,9 @@ interface ARSceneProps {
   realScale: boolean;
   visibility: VisibilityLevel;
   nightMode: boolean;
+  shadowFlicker: boolean;
+  /** Extern ref som får Three.js-renderarens canvas, t.ex. för Fotomontage-fångst. */
+  canvasRef?: React.MutableRefObject<HTMLCanvasElement | null>;
 }
 
 interface TurbineObject {
@@ -30,6 +33,7 @@ interface TurbineObject {
   glow: THREE.Sprite;
   shadow: THREE.Mesh;
   shadowMaterial: THREE.MeshBasicMaterial;
+  shadowBaseOpacity: number;
   materials: (THREE.MeshStandardMaterial | THREE.MeshBasicMaterial)[];
   scaleDamp: number;
   bladeRadPerSec: number;
@@ -210,6 +214,8 @@ export function ARScene({
   realScale,
   visibility,
   nightMode,
+  shadowFlicker,
+  canvasRef,
 }: ARSceneProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneStateRef = useRef<{
@@ -223,10 +229,10 @@ export function ARScene({
     sunGlow: THREE.Sprite;
   } | null>(null);
   const userRef = useRef({ lat: userLat, lon: userLon });
-  const modeRef = useRef({ sunMode, realScale, visibility, nightMode });
+  const modeRef = useRef({ sunMode, realScale, visibility, nightMode, shadowFlicker });
 
   userRef.current = { lat: userLat, lon: userLon };
-  modeRef.current = { sunMode, realScale, visibility, nightMode };
+  modeRef.current = { sunMode, realScale, visibility, nightMode, shadowFlicker };
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -234,10 +240,14 @@ export function ARScene({
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(FOV_DEGREES, mount.clientWidth / mount.clientHeight, 1, 20000);
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    // preserveDrawingBuffer krävs för att Fotomontage-funktionen ska kunna
+    // läsa av canvasens innehåll (drawImage) när som helst, inte bara direkt
+    // efter en renderad bildruta.
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     mount.appendChild(renderer.domElement);
+    if (canvasRef) canvasRef.current = renderer.domElement;
 
     const ambient = new THREE.AmbientLight(0xffffff, 1.1);
     scene.add(ambient);
@@ -343,6 +353,7 @@ export function ARScene({
         glow,
         shadow,
         shadowMaterial,
+        shadowBaseOpacity: 0,
         materials,
         scaleDamp: 1,
         bladeRadPerSec,
@@ -437,7 +448,8 @@ export function ARScene({
         mat.opacity = opacity;
       }
       const shadowBaseOpacity = 0.85;
-      obj.shadowMaterial.opacity = shadowBaseOpacity * opacity;
+      obj.shadowBaseOpacity = shadowBaseOpacity * opacity;
+      obj.shadowMaterial.opacity = obj.shadowBaseOpacity;
     }
 
     layoutObjects();
@@ -491,8 +503,10 @@ export function ARScene({
       // det manuella Nattläge-valet, oavsett verklig tid på dygnet eller
       // valt "Kväll"-visualiseringsläge.
       const eveningDim = curNightMode;
-      state.ambient.intensity = eveningDim ? 0.32 : 1.1;
-      state.sunLight.intensity = eveningDim ? 0.12 : 0.6;
+      // Lägre omgivningsljus i förhållande till riktat solljus ger tydligare
+      // skillnad mellan verkens belysta och skuggade sida (bättre realism).
+      state.ambient.intensity = eveningDim ? 0.32 : 0.62;
+      state.sunLight.intensity = eveningDim ? 0.12 : 1.0;
 
       // Den virtuella solen är helt dold i "Kväll"-visualiseringsläget (oavsett
       // Dag-/Nattläge), och i manuellt Nattläge — men INTE i "Ingen skugga"-
@@ -537,12 +551,28 @@ export function ARScene({
         }
       }
 
+      // "Skuggflimmer": den blinkande skugga som uppstår när solen passerar
+      // bakom roterande rotorblad. Simuleras genom att modulera markskuggans
+      // opacitet i takt med rotorbladens rotation (3 blad -> 3 pulser/varv),
+      // istället för att kräva en separat, tyngre skuggberäkning. Endast
+      // aktivt i "Aktuell sol"/"Låg sol" och bara där en markskugga redan
+      // beräknats vara synlig (dvs. innanför det beräknade skuggområdet) —
+      // stängs annars automatiskt av helt naturligt via `obj.shadow.visible`.
+      const { shadowFlicker: curShadowFlicker } = modeRef.current;
+      const flickerActive = shadowFlickerActive(curShadowFlicker, curMode);
       for (const obj of state.objects) {
         obj.bladesGroup.rotation.z += obj.bladeRadPerSec * dt;
         const phase = (now + obj.blinkOffsetMs) % obj.blinkPeriodMs;
         const blinkOn = night && phase < obj.blinkOnMs;
         obj.light.visible = blinkOn;
         obj.glow.visible = blinkOn;
+
+        if (flickerActive && obj.shadow.visible) {
+          const flicker = 0.55 + 0.45 * Math.cos(obj.bladesGroup.rotation.z * 3);
+          obj.shadowMaterial.opacity = obj.shadowBaseOpacity * flicker;
+        } else if (obj.shadowMaterial.opacity !== obj.shadowBaseOpacity) {
+          obj.shadowMaterial.opacity = obj.shadowBaseOpacity;
+        }
       }
 
       state.renderer.render(state.scene, state.camera);

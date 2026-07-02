@@ -1,4 +1,8 @@
-import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
+import { useState } from "react";
+import { shadowFlickerActive, type SunMode, type VisibilityLevel } from "@/lib/visualizationTypes";
+
+const SHADOW_FLICKER_INFO_TEXT =
+  "Skuggflimmer är den blinkande skugga som kan uppstå när solen passerar bakom roterande rotorblad. Visualiseringen är en förenklad uppskattning och inte en exakt beräkning.";
 
 interface VisualizationControlsProps {
   sunMode: SunMode;
@@ -13,6 +17,8 @@ interface VisualizationControlsProps {
   onToggleSound: () => void;
   nightMode: boolean;
   onToggleNightMode: () => void;
+  shadowFlicker: boolean;
+  onToggleShadowFlicker: () => void;
   onClose: () => void;
 }
 
@@ -66,8 +72,12 @@ export function VisualizationControls({
   onToggleSound,
   nightMode,
   onToggleNightMode,
+  shadowFlicker,
+  onToggleShadowFlicker,
   onClose,
 }: VisualizationControlsProps) {
+  const [shadowFlickerInfoOpen, setShadowFlickerInfoOpen] = useState(false);
+  const flickerActive = shadowFlickerActive(shadowFlicker, sunMode);
   return (
     <div className="absolute inset-0 z-40 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
@@ -99,6 +109,38 @@ export function VisualizationControls({
           </p>
         )}
         {sunMode !== "current" && sunMode !== "low" && <div className="mb-4" />}
+
+        <div className="mb-1 flex items-center gap-2">
+          <h2 className="text-base font-semibold text-[#FFB347]">🌗 Skuggflimmer</h2>
+          <button
+            onClick={() => setShadowFlickerInfoOpen((v) => !v)}
+            aria-pressed={shadowFlickerInfoOpen}
+            aria-label="Om skuggflimmer"
+            className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[11px] text-white/80 hover:bg-white/20"
+          >
+            i
+          </button>
+        </div>
+        {shadowFlickerInfoOpen && (
+          <p className="mb-2 rounded-xl border border-[#FF8B01]/30 bg-[#FF8B01]/10 p-3 text-xs leading-relaxed text-[#FFB347]">
+            {SHADOW_FLICKER_INFO_TEXT}
+          </p>
+        )}
+        <div className="mb-1 grid grid-cols-2 gap-2">
+          <SegButton active={shadowFlicker} onClick={() => !shadowFlicker && onToggleShadowFlicker()}>
+            🌗 Skuggflimmer PÅ
+          </SegButton>
+          <SegButton active={!shadowFlicker} onClick={() => shadowFlicker && onToggleShadowFlicker()}>
+            🚫 Skuggflimmer AV
+          </SegButton>
+        </div>
+        <p className="-mt-2 mb-4 text-[11px] leading-relaxed text-white/50">
+          {sunMode === "current" || sunMode === "low"
+            ? flickerActive
+              ? "Aktivt — visas när verket har en beräknad markskugga."
+              : "Slå på för att visa flimrande rotorbladsskuggor."
+            : "Kräver soläge \"Aktuell sol\" eller \"Låg sol\" för att aktiveras."}
+        </p>
 
         <div className="mb-4 grid grid-cols-2 gap-2">
           <SegButton active={realScale} onClick={() => onRealScaleChange(!realScale)}>

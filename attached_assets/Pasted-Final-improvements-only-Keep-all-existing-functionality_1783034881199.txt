@@ -1,0 +1,183 @@
+Final improvements only. Keep all existing functionality unchanged.
+
+====================================================
+1. AUDIO
+====================================================
+
+Keep the increased sound volume.
+
+Very important:
+
+Ensure audio always plays through the iPhone's MAIN SPEAKER, never through the telephone earpiece.
+
+Optimize specifically for iPhone Safari.
+
+If necessary:
+- recreate AudioContext after the user presses "Ljud PÅ"
+- resume AudioContext correctly
+- avoid microphone/input usage
+- use standard media playback so Safari routes audio to the loudspeaker
+
+The sound should feel like standing outdoors near several operating utility-scale wind turbines.
+
+Use:
+
+• powerful wind ambience
+• deep low-frequency rumble
+• realistic aerodynamic blade "whoosh"
+• slight random variation between turbines
+• louder sound when facing or approaching several turbines
+• smooth distance attenuation
+• never clip or distort
+
+====================================================
+2. LIVE ESTIMATED SOUND LEVEL
+====================================================
+
+Add a live information panel:
+
+🔊 Beräknad ljudnivå
+
+Display:
+
+Beräknad ljudnivå:
+XX.X dBA
+
+Update continuously while the user moves.
+
+Estimate using:
+
+• user GPS position
+• distance to every turbine
+• project turbine sound power level
+• logarithmic combination of multiple turbines
+• realistic distance attenuation
+
+Also display:
+
+Närmaste vindkraftverk:
+XXX meter
+
+Antal vindkraftverk som bidrar:
+XX
+
+Colour code:
+
+🟢 Under 30 dBA
+
+🟡 30–35 dBA
+
+🟠 35–40 dBA
+
+🔴 Över 40 dBA
+
+Show this disclaimer:
+
+"Denna ljudnivå är en förenklad uppskattning baserad på projektets bullerunderlag och användarens GPS-position. Den ersätter inte en officiell bullerberäkning."
+
+This estimated dBA value is informational only and must NOT control playback volume.
+
+====================================================
+3. SKUGGFLIMMER
+====================================================
+
+Add an optional mode:
+
+🌗 Skuggflimmer
+
+Only active in:
+
+• Aktuell sol
+
+• Låg sol
+
+Features:
+
+• animate rotating blade shadows
+• synchronize with blade rotation
+• calculate using current virtual sun direction
+• moving semi-transparent shadows
+• automatically disable outside calculated shadow area
+
+Improve realism:
+
+• virtual sun illuminates turbines
+• illuminated side brighter
+• shaded side darker
+• realistic tower shadows
+• rotating blade shadows
+
+Information button:
+
+"Skuggflimmer är den blinkande skugga som kan uppstå när solen passerar bakom roterande rotorblad. Visualiseringen är en förenklad uppskattning och inte en exakt beräkning."
+
+====================================================
+4. PHOTO MONTAGE
+====================================================
+
+Add a new button:
+
+📸 Fotomontage
+
+When pressed:
+
+• capture current camera image
+• freeze current AR scene
+• render all visible turbines into the image
+• preserve GPS position
+• preserve compass direction
+• preserve approximate real-world scale
+• preserve lighting
+• preserve shadows
+• preserve selected visualization mode
+
+Add labels:
+
+• turbine name
+• approximate distance
+
+Watermark:
+
+"Katrineholm FRAMÅT – Vindkraft AR"
+
+Bottom disclaimer:
+
+"Fotomontage/visualisering. GPS, kompass, terräng, väder och sikt kan påverka precisionen."
+
+Buttons afterwards:
+
+• Spara bild
+
+• Ta ny bild
+
+• Dela
+
+Use Web Share API where supported.
+
+====================================================
+5. KEEP EVERYTHING ELSE
+====================================================
+
+Keep all current functionality:
+
+• AR camera
+• GPS
+• compass
+• all 29 turbines
+• SWEREF99 TM conversion
+• spinning blades
+• different rotor start positions
+• different rotor speeds
+• blinking aviation lights
+• virtual sun
+• low sun mode
+• evening mode
+• satellite map
+• orange theme
+• welcome screen
+• Katrineholm FRAMÅT logo
+• contact form
+• PWA
+• iPhone Safari support
+
+The application must remain stable and never crash if GPS, compass, motion, camera or audio permissions are denied.
