@@ -3,13 +3,18 @@ import * as THREE from "three";
 import { bearingDegrees, distanceMeters, formatDistance, isNightTime } from "@/lib/geo";
 import type { TurbineSweref } from "@/lib/turbines";
 import { swerefToWgs84 } from "@/lib/sweref";
-import { hashSeed } from "@/lib/prng";
+import { getCurrentSunPosition } from "@/lib/sunPosition";
+import { getBladeRpm, getBladeStartAngleRad, getBlinkOffsetMs, getBlinkPeriodMs, BLINK_ON_MS } from "@/lib/turbineAnimation";
+import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
 
 interface ARSceneProps {
   userLat: number;
   userLon: number;
   quaternionRef: React.MutableRefObject<THREE.Quaternion>;
   turbines: TurbineSweref[];
+  sunMode: SunMode;
+  realScale: boolean;
+  visibility: VisibilityLevel;
 }
 
 interface TurbineObject {
@@ -22,11 +27,15 @@ interface TurbineObject {
   distanceLabel: CanvasLabel;
   light: THREE.Sprite;
   glow: THREE.Sprite;
+  shadow: THREE.Mesh;
+  shadowMaterial: THREE.MeshBasicMaterial;
+  materials: (THREE.MeshStandardMaterial | THREE.MeshBasicMaterial)[];
   scaleDamp: number;
   bladeRadPerSec: number;
   blinkPeriodMs: number;
   blinkOnMs: number;
   blinkOffsetMs: number;
+  renderDistM: number;
 }
 
 interface CanvasLabel {
@@ -41,16 +50,12 @@ const MAX_RENDER_DISTANCE_M = 9000;
 // Meter -> scenens enheter. Vald så att den visuella storleken/avstånden
 // matchar kamerans FOV/klippplan (samma skala som tidigare, enklare modell).
 const METERS_TO_UNITS = 0.9;
-// Rotorns hastighet — 6–14 varv/minut, olika för varje verk (deterministiskt
-// baserat på verkets namn) så att de inte alla snurrar exakt lika snabbt.
-const BLADE_RPM_MIN = 6;
-const BLADE_RPM_MAX = 14;
-// Flyghinderbelysningen blinkar ungefär var 1:a sekund, men INTE synkront —
-// varje verk har en egen liten periodvariation och fasförskjutning
-// (deterministiskt baserat på namnet) så blinkningen känns naturlig.
-const BLINK_PERIOD_MIN_MS = 900;
-const BLINK_PERIOD_MAX_MS = 1150;
-const BLINK_ON_MS = 150;
+
+const TOTAL_HEIGHT_M = 250;
+const LOW_SUN_ALTITUDE_DEG = 5;
+const LOW_SUN_AZIMUTH_DEG = 245; // sydväst/väster
+const MAX_SHADOW_LENGTH_M = 5000;
+const MIN_SHADOW_ALTITUDE_DEG = 2.5; // undviker division nära noll / oändliga skuggor
 
 function createCanvasLabel(): CanvasLabel {
   const canvas = document.createElement("canvas");
@@ -70,7 +75,6 @@ function drawLabel(label: CanvasLabel, title: string, subtitle: string) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // pill background
   const paddingX = 28;
   ctx.font = "600 40px Inter, sans-serif";
   const titleWidth = ctx.measureText(title).width;
@@ -120,6 +124,52 @@ function createGlowTexture(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(canvas);
 }
 
+/** Elliptisk, halvtransparent skugga: mörkast nära basen, tonar bort mot spetsen. */
+function createShadowTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d")!;
+  const gradient = ctx.createRadialGradient(40, 32, 0, 40, 32, 210);
+  gradient.addColorStop(0, "rgba(5, 5, 5, 0.55)");
+  gradient.addColorStop(0.45, "rgba(5, 5, 5, 0.28)");
+  gradient.addColorStop(1, "rgba(5, 5, 5, 0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return new THREE.CanvasTexture(canvas);
+}
+
+function createSunTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d")!;
+  const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gradient.addColorStop(0, "rgba(255, 244, 214, 0.95)");
+  gradient.addColorStop(0.35, "rgba(255, 200, 120, 0.55)");
+  gradient.addColorStop(1, "rgba(255, 180, 80, 0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return new THREE.CanvasTexture(canvas);
+}
+
+/** Skuggans längd i meter enligt ShadowLength = Höjd / tan(solhöjd), begränsad till 5000 m. */
+function computeShadowLengthM(sunAltitudeDeg: number): number {
+  const altitude = Math.max(sunAltitudeDeg, MIN_SHADOW_ALTITUDE_DEG);
+  const length = TOTAL_HEIGHT_M / Math.tan((altitude * Math.PI) / 180);
+  return Math.min(Math.max(length, 0), MAX_SHADOW_LENGTH_M);
+}
+
+function opacityForVisibility(visibility: VisibilityLevel, distM: number): number {
+  if (visibility === "clear") return 1;
+  if (visibility === "haze") return clamp(1 - distM / 11000, 0.55, 1);
+  return clamp(1 - distM / 5500, 0.18, 1); // dimma
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(Math.max(v, min), max);
+}
+
 /**
  * AR-vy: renderar Three.js-objekt ovanpå kameraströmmen. Varje vindkraftverk
  * placeras EN gång i en fast världsposition utifrån bäring (från norr) och
@@ -129,18 +179,28 @@ function createGlowTexture(): THREE.CanvasTexture {
  * förankrade i verkligheten/horisonten när telefonen tiltas, istället för
  * att följa skärmen. Detta är en enkel men robust "AR utan markörer"-teknik
  * som inte kräver WebXR (brett webbläsarstöd).
+ *
+ * Sol/skugga, verklig-storlek och synlighet är rena visualiseringslägen och
+ * approximationer — solens position beräknas ungefärligt utifrån datum/tid/
+ * GPS, och skuggorna är förenklade halvtransparenta ellipser, inte en exakt
+ * skuggberäkning.
  */
-export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARSceneProps) {
+export function ARScene({ userLat, userLon, quaternionRef, turbines, sunMode, realScale, visibility }: ARSceneProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneStateRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
     renderer: THREE.WebGLRenderer;
     objects: TurbineObject[];
+    ambient: THREE.AmbientLight;
+    sunLight: THREE.DirectionalLight;
+    sunSprite: THREE.Sprite;
   } | null>(null);
   const userRef = useRef({ lat: userLat, lon: userLon });
+  const modeRef = useRef({ sunMode, realScale, visibility });
 
   userRef.current = { lat: userLat, lon: userLon };
+  modeRef.current = { sunMode, realScale, visibility };
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -155,15 +215,35 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
 
     const ambient = new THREE.AmbientLight(0xffffff, 1.1);
     scene.add(ambient);
-    const sun = new THREE.DirectionalLight(0xffffff, 0.6);
-    sun.position.set(5, 10, 5);
-    scene.add(sun);
+    const sunLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    sunLight.position.set(5, 10, 5);
+    scene.add(sunLight);
 
     const glowTexture = createGlowTexture();
+    const shadowTexture = createShadowTexture();
+    const sunTexture = createSunTexture();
+
+    const sunSpriteMat = new THREE.SpriteMaterial({
+      map: sunTexture,
+      transparent: true,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const sunSprite = new THREE.Sprite(sunSpriteMat);
+    sunSprite.renderOrder = 1;
+    sunSprite.scale.setScalar(900);
+    scene.add(sunSprite);
+
+    // Skuggplan: bas vid x=0 (verkets fot), sträcker sig mot +lokal X, ligger
+    // platt på marken (Y=0 lokalt). Rotation runt världens Y-axel styr sedan
+    // vilken kompassriktning skuggan pekar i (bort från solen).
+    const shadowGeo = new THREE.PlaneGeometry(1, 1);
+    shadowGeo.translate(0.5, 0, 0);
+    shadowGeo.rotateX(-Math.PI / 2);
 
     const objects: TurbineObject[] = turbines.map((turbine) => {
       const { lat, lon } = swerefToWgs84(turbine.easting, turbine.northing);
-      const { group, bladesGroup } = buildTurbineMesh(turbine);
+      const { group, bladesGroup, materials } = buildTurbineMesh(turbine);
       scene.add(group);
       const label = createCanvasLabel();
       label.sprite.scale.set(34, 8.5, 1);
@@ -189,18 +269,27 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
       glow.renderOrder = 997;
       scene.add(glow);
 
+      const shadowMaterial = new THREE.MeshBasicMaterial({
+        map: shadowTexture,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0,
+      });
+      const shadow = new THREE.Mesh(shadowGeo, shadowMaterial);
+      shadow.renderOrder = 1;
+      scene.add(shadow);
+
       // Deterministisk men olikartad rotorhastighet och blinkfas per verk,
       // baserad på verkets namn — samma verk får alltid samma värden, men
       // olika verk skiljer sig åt (ingen global synkronisering).
-      const rpm = BLADE_RPM_MIN + hashSeed(`${turbine.name}:rpm`) * (BLADE_RPM_MAX - BLADE_RPM_MIN);
+      const rpm = getBladeRpm(turbine.name);
       const bladeRadPerSec = (rpm * Math.PI * 2) / 60;
-      const blinkPeriodMs =
-        BLINK_PERIOD_MIN_MS + hashSeed(`${turbine.name}:period`) * (BLINK_PERIOD_MAX_MS - BLINK_PERIOD_MIN_MS);
-      const blinkOffsetMs = hashSeed(`${turbine.name}:phase`) * blinkPeriodMs;
+      const blinkPeriodMs = getBlinkPeriodMs(turbine.name);
+      const blinkOffsetMs = getBlinkOffsetMs(turbine.name, blinkPeriodMs);
 
       // Varje rotor startar med en egen, stabil bladvinkel istället för att
       // alla 29 verk pekar likadant vid start.
-      bladesGroup.rotation.z = hashSeed(`${turbine.name}:startAngle`) * Math.PI * 2;
+      bladesGroup.rotation.z = getBladeStartAngleRad(turbine.name);
 
       return {
         turbine,
@@ -212,15 +301,19 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
         distanceLabel,
         light,
         glow,
+        shadow,
+        shadowMaterial,
+        materials,
         scaleDamp: 1,
         bladeRadPerSec,
         blinkPeriodMs,
         blinkOnMs: BLINK_ON_MS,
         blinkOffsetMs,
+        renderDistM: 0,
       };
     });
 
-    sceneStateRef.current = { scene, camera, renderer, objects };
+    sceneStateRef.current = { scene, camera, renderer, objects, ambient, sunLight, sunSprite };
 
     // Placera varje verk i en fast världsposition utifrån bäring/avstånd.
     // Körs initialt samt varje gång användarens GPS-position uppdateras
@@ -234,7 +327,10 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
         const bearingRad = (bearing * Math.PI) / 180;
 
         const renderDist = Math.min(dist, MAX_RENDER_DISTANCE_M);
-        const scaleDamp = 1 - Math.min(renderDist / MAX_RENDER_DISTANCE_M, 1) * 0.55;
+        const { realScale: useRealScale } = modeRef.current;
+        const scaleDamp = useRealScale
+          ? 1 - Math.min(renderDist / MAX_RENDER_DISTANCE_M, 1) * 0.85
+          : 1 - Math.min(renderDist / MAX_RENDER_DISTANCE_M, 1) * 0.55;
         const planeDist = 400 + renderDist * 0.12;
 
         const x = Math.sin(bearingRad) * planeDist;
@@ -245,6 +341,7 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
         obj.group.scale.setScalar(scaleDamp);
         obj.group.lookAt(0, y, 0);
         obj.scaleDamp = scaleDamp;
+        obj.renderDistM = dist;
 
         const totalHeightUnits = obj.turbine.heightMeters * METERS_TO_UNITS;
         const hubHeightUnits = obj.turbine.hubHeightMeters * METERS_TO_UNITS;
@@ -262,14 +359,56 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
 
         drawLabel(obj.label, obj.turbine.name, "");
         drawLabel(obj.distanceLabel, formatDistance(dist), "");
+
+        layoutShadow(obj, x, y, z, scaleDamp);
+        applyVisibility(obj, dist);
       }
     }
+
+    function layoutShadow(obj: TurbineObject, x: number, y: number, z: number, scaleDamp: number) {
+      const { sunMode: mode } = modeRef.current;
+      if (mode === "evening" || mode === "none") {
+        obj.shadow.visible = false;
+        return;
+      }
+      const { altitudeDeg, azimuthDeg } = getSunAngles(mode);
+      if (altitudeDeg <= 0) {
+        obj.shadow.visible = false;
+        return;
+      }
+      const shadowLengthM = computeShadowLengthM(altitudeDeg);
+      const shadowLengthUnits = shadowLengthM * METERS_TO_UNITS * scaleDamp;
+      const widthUnits = Math.max(obj.turbine.rotorDiameterMeters * 0.55 * METERS_TO_UNITS * scaleDamp, 8);
+
+      // Skuggan pekar bort från solen (azimut + 180°), i samma öst/väst/nord-
+      // konvention som används för bäring/placering i övrigt i scenen.
+      const shadowAzimuthRad = ((azimuthDeg + 180) * Math.PI) / 180;
+      obj.shadow.position.set(x, y + 0.3, z);
+      obj.shadow.rotation.y = Math.PI / 2 - shadowAzimuthRad;
+      obj.shadow.scale.set(shadowLengthUnits, 1, widthUnits);
+      obj.shadow.visible = true;
+    }
+
+    function applyVisibility(obj: TurbineObject, distM: number) {
+      const { visibility: vis } = modeRef.current;
+      const opacity = opacityForVisibility(vis, distM);
+      for (const mat of obj.materials) {
+        mat.transparent = opacity < 1;
+        mat.opacity = opacity;
+      }
+      const shadowBaseOpacity = 0.85;
+      obj.shadowMaterial.opacity = shadowBaseOpacity * opacity;
+    }
+
     layoutObjects();
 
     let raf = 0;
     let lastLayoutLat = userRef.current.lat;
     let lastLayoutLon = userRef.current.lon;
     let lastTimestamp: number | null = null;
+    let lastMode = modeRef.current.sunMode;
+    let lastRealScale = modeRef.current.realScale;
+    let lastVisibility = modeRef.current.visibility;
 
     function animate(timestamp: number) {
       raf = requestAnimationFrame(animate);
@@ -280,11 +419,18 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
       lastTimestamp = timestamp;
 
       // Räkna bara om placeringen när GPS-positionen faktiskt förflyttat sig
-      // märkbart, istället för varje bildruta — sparar prestanda.
+      // märkbart, eller om ett visualiseringsläge ändrats, istället för varje
+      // bildruta — sparar prestanda.
       const { lat: uLat, lon: uLon } = userRef.current;
-      if (Math.abs(uLat - lastLayoutLat) > 1e-6 || Math.abs(uLon - lastLayoutLon) > 1e-6) {
+      const { sunMode: curMode, realScale: curRealScale, visibility: curVisibility } = modeRef.current;
+      const moved = Math.abs(uLat - lastLayoutLat) > 1e-6 || Math.abs(uLon - lastLayoutLon) > 1e-6;
+      const modeChanged = curMode !== lastMode || curRealScale !== lastRealScale || curVisibility !== lastVisibility;
+      if (moved || modeChanged) {
         lastLayoutLat = uLat;
         lastLayoutLon = uLon;
+        lastMode = curMode;
+        lastRealScale = curRealScale;
+        lastVisibility = curVisibility;
         layoutObjects();
       }
 
@@ -293,12 +439,29 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
       // istället för att följa skärmen när telefonen tiltas.
       state.camera.quaternion.copy(quaternionRef.current);
 
-      // Varje verk blinkar oberoende av de andra: egen periodlängd + egen
-      // fasförskjutning (satt en gång per verk ovan), baserat på väggklockan
-      // så mönstret är stabilt oavsett bildfrekvens — men INTE synkront
-      // mellan verken, precis som riktiga flyghinderljus i ett vindkraftpark.
-      const night = isNightTime();
+      // "Kväll"-läget tvingar mörker + blinkande ljus oavsett verklig klocka;
+      // annars styrs blinket av faktisk tid på dygnet (22:00–06:00).
+      const night = curMode === "evening" || isNightTime();
       const now = Date.now();
+
+      // Mörklägg scenen kvällstid — dämpar omgivningsljus/riktat ljus, vilket
+      // gör kameraströmmen och 3D-objekten mörkare tillsammans.
+      const eveningDim = curMode === "evening";
+      state.ambient.intensity = eveningDim ? 0.32 : 1.1;
+      state.sunLight.intensity = eveningDim ? 0.12 : 0.6;
+      state.sunSprite.visible = !eveningDim;
+      if (!eveningDim) {
+        const { altitudeDeg, azimuthDeg } = getSunAngles(curMode);
+        const altRad = (altitudeDeg * Math.PI) / 180;
+        const azRad = (azimuthDeg * Math.PI) / 180;
+        const sunDist = 9000;
+        const horiz = Math.cos(altRad) * sunDist;
+        const sunX = Math.sin(azRad) * horiz;
+        const sunZ = -Math.cos(azRad) * horiz;
+        const sunY = Math.sin(altRad) * sunDist;
+        state.sunSprite.position.set(sunX, Math.max(sunY, 40), sunZ);
+        state.sunSprite.visible = altitudeDeg > -2;
+      }
 
       for (const obj of state.objects) {
         obj.bladesGroup.rotation.z += obj.bladeRadPerSec * dt;
@@ -324,6 +487,10 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", handleResize);
       glowTexture.dispose();
+      shadowTexture.dispose();
+      sunTexture.dispose();
+      shadowGeo.dispose();
+      sunSpriteMat.dispose();
       for (const obj of objects) {
         obj.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
@@ -334,12 +501,22 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
         });
         obj.light.material.dispose();
         obj.glow.material.dispose();
+        obj.shadowMaterial.dispose();
         obj.label.texture.dispose();
         obj.distanceLabel.texture.dispose();
       }
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
+
+    function getSunAngles(mode: SunMode): { altitudeDeg: number; azimuthDeg: number } {
+      if (mode === "low") {
+        return { altitudeDeg: LOW_SUN_ALTITUDE_DEG, azimuthDeg: LOW_SUN_AZIMUTH_DEG };
+      }
+      // "current" (och fallback för "none"/"evening" om anropad, ofarligt).
+      const { lat, lon } = userRef.current;
+      return getCurrentSunPosition(new Date(), lat, lon);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turbines]);
 
@@ -360,7 +537,11 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
  * ligger i ett eget `bladesGroup` som bara roterar runt sin egen lokala
  * Z-axel (navets rotationsaxel) — resten av verket står stilla.
  */
-function buildTurbineMesh(turbine: TurbineSweref): { group: THREE.Group; bladesGroup: THREE.Group } {
+function buildTurbineMesh(turbine: TurbineSweref): {
+  group: THREE.Group;
+  bladesGroup: THREE.Group;
+  materials: THREE.MeshStandardMaterial[];
+} {
   const group = new THREE.Group();
   const M = METERS_TO_UNITS;
 
@@ -412,5 +593,5 @@ function buildTurbineMesh(turbine: TurbineSweref): { group: THREE.Group; bladesG
   bladesGroup.position.set(0, hubY, hubZ - hubRadius * 0.35);
   group.add(bladesGroup);
 
-  return { group, bladesGroup };
+  return { group, bladesGroup, materials: [towerMat, nacelleMat, bladeMat] };
 }

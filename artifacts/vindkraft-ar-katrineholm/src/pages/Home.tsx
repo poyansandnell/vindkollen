@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useCameraStream } from "@/hooks/useCameraStream";
@@ -9,8 +9,14 @@ import { MapView } from "@/components/MapView";
 import { PetitionModal } from "@/components/PetitionModal";
 import { PermissionGate } from "@/components/PermissionGate";
 import { InfoPanel } from "@/components/InfoPanel";
+import { VisualizationControls } from "@/components/VisualizationControls";
 import { TURBINES } from "@/lib/turbines";
-import { isNightTime } from "@/lib/geo";
+import { distanceMeters, isNightTime } from "@/lib/geo";
+import { swerefToWgs84 } from "@/lib/sweref";
+import { getBladeRpm } from "@/lib/turbineAnimation";
+import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
+
+const AVG_RPM = TURBINES.reduce((sum, t) => sum + getBladeRpm(t.name), 0) / TURBINES.length;
 
 export default function Home() {
   const [started, setStarted] = useState(false);
@@ -18,7 +24,13 @@ export default function Home() {
   const [showMap, setShowMap] = useState(false);
   const [showPetition, setShowPetition] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showControls, setShowControls] = useState(false);
   const [calibrated, setCalibrated] = useState(false);
+
+  const [sunMode, setSunMode] = useState<SunMode>("current");
+  const [realScale, setRealScale] = useState(false);
+  const [visibility, setVisibility] = useState<VisibilityLevel>("clear");
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
 
   const geo = useGeolocation(started);
   const orientation = useDeviceOrientation(started);
@@ -29,6 +41,20 @@ export default function Home() {
     () => [geo.error, orientation.error, camera.error].filter((e): e is string => Boolean(e)),
     [geo.error, orientation.error, camera.error],
   );
+
+  // Uppdatera vindljudets volym/svischtakt när GPS-position ändras — högre
+  // volym ju närmare användaren är närmaste verk, aldrig överdrivet högt.
+  useEffect(() => {
+    if (!wind.playing || geo.lat === null || geo.lon === null) return;
+    let nearest: number | null = null;
+    for (const t of TURBINES) {
+      const { lat, lon } = swerefToWgs84(t.easting, t.northing);
+      const d = distanceMeters(geo.lat, geo.lon, lat, lon);
+      if (nearest === null || d < nearest) nearest = d;
+    }
+    wind.updateProximity(nearest, AVG_RPM);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wind.playing, geo.lat, geo.lon]);
 
   const handleStart = useCallback(async () => {
     setStarting(true);
@@ -64,7 +90,14 @@ export default function Home() {
               userLon={geo.lon!}
               quaternionRef={orientation.quaternionRef}
               turbines={TURBINES}
+              sunMode={sunMode}
+              realScale={realScale}
+              visibility={visibility}
             />
+          )}
+
+          {ready && sunMode === "evening" && (
+            <div className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-b from-[#0a1030]/55 via-[#0a1030]/35 to-[#0a1030]/60" />
           )}
 
           {!ready && (
@@ -115,13 +148,11 @@ export default function Home() {
                 </button>
               )}
               <button
-                onClick={wind.toggle}
-                aria-pressed={wind.playing}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                  wind.playing ? "bg-[#FF8B01] text-[#090909]" : "bg-white/10 text-white"
-                }`}
+                onClick={() => setShowControls(true)}
+                aria-pressed={showControls}
+                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
               >
-                {wind.playing ? "Vindljud på" : "Vindljud av"}
+                ⚙️ Visning
               </button>
             </div>
           </div>
@@ -157,6 +188,21 @@ export default function Home() {
       )}
       {showPetition && <PetitionModal onClose={() => setShowPetition(false)} />}
       {showInfo && <InfoPanel onClose={() => setShowInfo(false)} />}
+      {showControls && (
+        <VisualizationControls
+          sunMode={sunMode}
+          onSunModeChange={setSunMode}
+          realScale={realScale}
+          onRealScaleChange={setRealScale}
+          visibility={visibility}
+          onVisibilityChange={setVisibility}
+          visibilityOpen={visibilityOpen}
+          onToggleVisibilityOpen={() => setVisibilityOpen((v) => !v)}
+          soundOn={wind.playing}
+          onToggleSound={wind.toggle}
+          onClose={() => setShowControls(false)}
+        />
+      )}
     </div>
   );
 }

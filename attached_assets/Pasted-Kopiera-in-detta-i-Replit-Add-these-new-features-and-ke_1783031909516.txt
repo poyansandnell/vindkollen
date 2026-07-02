@@ -1,0 +1,165 @@
+Kopiera in detta i Replit:
+
+Add these new features and keep all existing functionality.
+1. Visualiseringsläge
+Add a control panel called:
+"Visualiseringsläge"
+Use six large segmented buttons:
+☀️ Aktuell sol
+🌅 Låg sol
+🌙 Kväll
+🚫 Ingen skugga
+📏 Verklig storlek
+👁️ Synlighet
+Only one sun/shadow mode can be active at a time:
+- Aktuell sol
+- Låg sol
+- Kväll
+- Ingen skugga
+"Verklig storlek" and "Synlighet" should be separate toggle buttons.
+-------------------------------------------------
+2. Aktuell sol
+Calculate current sun position automatically using:
+- current date
+- current time
+- user GPS position
+Show:
+- sun direction
+- sun altitude
+- approximate shadow direction
+- approximate shadow length
+-------------------------------------------------
+3. Låg sol
+Use:
+- sun altitude: 5 degrees
+- sun direction: southwest/west
+Show long shadows.
+Warning text:
+"Vid låg sol kan skuggan från ett 250 meter högt vindkraftverk sträcka sig flera kilometer. Visualiseringen är ungefärlig."
+-------------------------------------------------
+4. Kväll
+Darken the camera/AR environment.
+Enable clear blinking red aviation obstruction lights.
+Hide sun shadows.
+Show evening atmosphere.
+-------------------------------------------------
+5. Ingen skugga
+Hide all turbine shadows.
+Keep turbines, blades, lights and AR unchanged.
+-------------------------------------------------
+6. Shadow calculation
+Use:
+ShadowLength = TotalHeight / tan(SunAltitude)
+Use:
+TotalHeight = 250 meters.
+Cap maximum shadow length at 5000 meters.
+Draw long semi-transparent elliptical shadows extending away from the sun direction.
+Shadows should:
+- start at the turbine base
+- stretch away from the sun
+- fade out gradually
+- be darker near the turbine
+- become longer when sun altitude is lower
+Add note:
+"Skuggor visas som ungefärlig visualisering, inte som exakt skuggberäkning."
+-------------------------------------------------
+7. Sun visualization
+Render a simple sun in the sky.
+In "Aktuell sol":
+- place it based on calculated current sun position.
+In "Låg sol":
+- place it close to the horizon.
+In "Kväll":
+- hide the sun.
+-------------------------------------------------
+8. Sound controls
+Add a control panel called:
+"Ljud"
+Use two buttons:
+🔊 Ljud PÅ
+🔇 Ljud AV
+When sound is ON:
+- play realistic wind ambience
+- add subtle turbine blade whoosh
+- vary the whoosh slightly with rotor speed
+- increase volume slightly when user is closer to turbines
+- fade sound naturally with distance
+- never make it excessively loud
+-------------------------------------------------
+9. Verklig storlek toggle
+Add a toggle button:
+📏 Verklig storlek
+When ON:
+- use real-world scale as much as possible
+- keep turbine visual size based on actual height, distance and field of view
+- show a small label:
+  "Skala: verklig storlek, ungefärlig GPS/kompass"
+When OFF:
+- allow slightly enhanced visibility so turbines are easier to see on screen
+- show:
+  "Skala: förstärkt visning"
+Default should be OFF so users can see the turbines clearly.
+-------------------------------------------------
+10. Synlighet toggle
+Add a toggle button:
+👁️ Synlighet
+When opened, show three options:
+Klart väder
+Dis
+Dimma
+Effects:
+- Klart väder: turbines are sharp and visible at long distance
+- Dis: turbines fade slightly with distance
+- Dimma: turbines fade strongly with distance
+This should affect turbine opacity and shadow visibility, not the camera feed itself too aggressively.
+Default:
+Klart väder
+-------------------------------------------------
+11. Keep existing app content
+Keep the welcome screen with Katrineholm FRAMÅT logo placeholder.
+Keep this info text:
+"Detta är de vindkraftverk som Ericsberg/Katrineholm Vind vill bygga norr om Katrineholm."
+Keep this risk text:
+"Om dessa verk byggs finns en risk att det öppnar för betydligt större vindkraftsparker i Katrineholms kommun."
+Keep this comparison text:
+"Som jämförelse presenterade Holmen tidigare planer på upp till 77 vindkraftverk i området kring Simonstorp i Norrköpings och Finspångs kommuner. Projektet omarbetades senare till 32 verk. Norrköpings kommun valde därefter att använda sitt kommunala veto mot den del av etableringen som berörde kommunen."
+-------------------------------------------------
+12. Keep contact form correct
+Do not call it a digital signature.
+Keep main button:
+"Jag vill bli kontaktad"
+Form title:
+"Folkomröstning om vindkraft 2026"
+Form text:
+"En giltig namninsamling för en kommunal folkomröstning kräver underskrifter på papper. Skicka in din intresseanmälan så kontaktar Katrineholm FRAMÅT dig med information om hur och var du kan skriva under."
+Fields:
+- För- och efternamn, required
+- Telefonnummer, required
+- E-post, optional
+- Ort, optional
+Submit button:
+"Skicka intresseanmälan"
+Success message:
+"Tack! Katrineholm FRAMÅT kommer att kontakta dig med information om hur du kan skriva under namninsamlingen på papper."
+Send/fallback email to:
+info@katrineholmframat.se
+If direct email is not possible in frontend-only app, use mailto with the form data and store the request locally as backup.
+-------------------------------------------------
+13. Keep all technical functionality
+Keep:
+- camera background
+- GPS
+- compass
+- AR visualization
+- all 29 turbines
+- SWEREF99 TM to WGS84 conversion
+- spinning blades
+- randomized stable rotor start positions
+- different rotor speeds
+- blinking aviation lights
+- satellite/aerial map
+- orange theme #FF8B01
+- PWA support
+- Swedish UI
+- iPhone Safari support
+Make sure the app does not crash if GPS, compass, motion permission or audio permission is missing.
