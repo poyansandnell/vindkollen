@@ -10,13 +10,13 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
     <div className="absolute inset-0 z-30 flex flex-col justify-between overflow-y-auto bg-[#090909] px-6 py-10 text-white">
       <div className="mx-auto w-full max-w-md text-center">
         {/*
-          Logotyp för Katrineholm FRAMÅT. Om en riktig logotypfil finns, lägg den i
-          public/logo.png (ersätter den nuvarande) — <img> nedan används automatiskt då.
+          Logotyp för Katrineholm FRAMÅT (transparent SVG). Om en ny logotypfil finns, lägg den i
+          public/logo.svg (ersätter den nuvarande) — <img> nedan används automatiskt då.
           Faller tillbaka till textbaserad logotyp om bilden saknas.
         */}
         <div className="mx-auto flex flex-col items-center justify-center" role="img" aria-label="Katrineholm FRAMÅT">
           <img
-            src="/logo.png"
+            src="/logo.svg"
             alt="Katrineholm FRAMÅT"
             className="h-20 w-auto object-contain"
             onError={(e) => {
@@ -73,6 +73,15 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
           Försvarsmakten. Underlaget avser Ericsbergs Vind 1–5 i Katrineholms kommun och omfattar totalt 29
           vindkraftverk med maximal totalhöjd 250 meter.
         </p>
+        <a
+          href="/samradsyttrande-forsvarsmakten.pdf"
+          target="_blank"
+          rel="noopener noreferrer"
+          download="Ericsbergs-samradsyttrande-forsvarsmakten.pdf"
+          className="mx-auto flex w-fit items-center gap-1.5 rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 px-4 py-2 text-[11px] font-medium text-[#FFB347] transition hover:bg-[#FF8B01]/20"
+        >
+          📄 Visa/ladda ner underlaget (PDF)
+        </a>
         <p className="text-center text-[10px] text-white/25">
           Visualiseringen bygger på koordinater och uppgifter från det bifogade underlaget.
         </p>
