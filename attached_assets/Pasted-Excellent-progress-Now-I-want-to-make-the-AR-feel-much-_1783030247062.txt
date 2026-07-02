@@ -1,0 +1,85 @@
+Excellent progress. Now I want to make the AR feel much more realistic and professional.
+
+1. Real 3D wind turbine model
+Replace the simple geometric turbine model with a more realistic modern wind turbine model.
+Use a lightweight glTF/GLB-style model if possible, or build a more realistic procedural model with:
+- tall tapered tower
+- nacelle
+- hub
+- three long aerodynamic blades
+- correct proportions for a 250 meter total-height turbine
+- rotor diameter 162 meters
+- hub height 169 meters
+
+The model must still be lightweight enough to run smoothly on iPhone Safari.
+
+2. Rotor blades
+The blades are currently rotating around the wrong axis.
+Rotate them around the turbine hub axis, like a real wind turbine.
+The rotor should face the user correctly and rotate realistically at approximately 8–15 RPM.
+Only the rotor/blade group should rotate, not the whole turbine.
+
+3. Aviation warning lights
+The red aviation warning lights must blink like real obstacle lights.
+Use synchronized blinking:
+- 0.2 seconds ON
+- 1.8 seconds OFF
+- all turbines blink simultaneously
+At night, the red light should also create a subtle glow around the nacelle.
+
+4. Stable AR positioning
+The turbines still drift even when the phone is standing still.
+Improve stabilization by:
+- using DeviceOrientationEvent carefully
+- applying smoothing / low-pass filtering
+- ignoring very small sensor movements
+- reducing jitter
+- locking the horizon after calibration
+The turbines should appear fixed in the landscape, not floating around.
+
+5. Horizon and vertical position
+The turbines should remain attached to the real horizon.
+When the phone tilts up or down, they should move naturally in perspective, but not follow the screen like stickers.
+Add or improve the button:
+“Kalibrera horisont”
+When clicked, store the current pitch/beta angle as the horizon reference.
+
+6. Petition popup text
+Replace the current petition dialog with this Swedish text:
+
+Title:
+Folkomröstning om vindkraft 2026
+
+Text:
+Vi behöver din hjälp.
+
+Vi samlar nu in namnunderskrifter för att kräva en kommunal folkomröstning om vindkraftsetableringen norr om Katrineholm.
+
+Om du vill skriva under fyller du i dina uppgifter nedan så kontaktar vi dig för en fysisk underskrift enligt svensk lag.
+
+Fields:
+Namn
+Telefonnummer
+E-post
+Ort
+
+Button:
+Jag vill skriva under
+
+Confirmation text after submit:
+Tack! Vi kontaktar dig för fysisk underskrift.
+
+7. General
+Keep all existing functionality:
+- camera background
+- GPS
+- compass
+- all 29 turbines
+- SWEREF99 TM to WGS84 conversion
+- blinking aviation lights
+- wind sound
+- map view
+- PWA support
+- Swedish UI
+
+Do not introduce runtime errors. Make sure the app works on iPhone Safari.

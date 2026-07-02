@@ -17,24 +17,38 @@ export interface DeviceOrientationApi {
   quaternionRef: React.MutableRefObject<THREE.Quaternion>;
 }
 
+// Dödzon: sensorbrus på bråkdelar av en grad ska inte alls påverka
+// den utjämnade riktningen — annars "skimrar" objekten även när telefonen
+// ligger helt stilla på ett bord.
+const DEADZONE_DEG = 0.06;
+
+/** Tidsbaserad exponentiell utjämningsfaktor (oberoende av sensorns frekvens). */
+function timeSmoothingFactor(tau: number, dt: number): number {
+  if (dt <= 0) return 0;
+  return 1 - Math.exp(-dt / tau);
+}
+
 function smoothCircular(prevRef: React.MutableRefObject<number | null>, raw: number, factor: number): number {
   if (prevRef.current === null) {
     prevRef.current = raw;
-  } else {
-    let diff = raw - prevRef.current;
-    if (diff > 180) diff -= 360;
-    if (diff < -180) diff += 360;
-    prevRef.current = (prevRef.current + diff * factor + 360) % 360;
+    return prevRef.current;
   }
+  let diff = raw - prevRef.current;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  if (Math.abs(diff) < DEADZONE_DEG) return prevRef.current;
+  prevRef.current = (prevRef.current + diff * factor + 360) % 360;
   return prevRef.current;
 }
 
 function smoothLinear(prevRef: React.MutableRefObject<number | null>, raw: number, factor: number): number {
   if (prevRef.current === null) {
     prevRef.current = raw;
-  } else {
-    prevRef.current = prevRef.current + (raw - prevRef.current) * factor;
+    return prevRef.current;
   }
+  const diff = raw - prevRef.current;
+  if (Math.abs(diff) < DEADZONE_DEG) return prevRef.current;
+  prevRef.current = prevRef.current + diff * factor;
   return prevRef.current;
 }
 
@@ -63,6 +77,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   const screenAngleRef = useRef(0);
   const quaternionRef = useRef(new THREE.Quaternion());
   const hasFixRef = useRef(false);
+  const lastEventTimeRef = useRef<number | null>(null);
 
   const updateScreenAngle = useCallback(() => {
     const orientationApi = (screen as unknown as { orientation?: { angle: number } }).orientation;
@@ -84,9 +99,21 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
 
     if (heading === null || event.beta === null || event.gamma === null || Number.isNaN(heading)) return;
 
-    const smoothedHeading = smoothCircular(headingRef, heading, 0.25);
-    const smoothedBeta = smoothLinear(betaRef, event.beta, 0.3);
-    const smoothedGamma = smoothLinear(gammaRef, event.gamma, 0.3);
+    // Tidsbaserad låg-passfiltrering: räknar om utjämningsfaktorn utifrån
+    // faktisk tid sedan förra avläsningen, så resultatet blir stabilt även
+    // om sensorns frekvens varierar (15–60 Hz beroende på enhet). Pitch/roll
+    // (beta/gamma) utjämnas mer (längre tidskonstant) än gir, eftersom
+    // vertikal drift stör horisontkänslan mest.
+    const now = performance.now();
+    const dt = lastEventTimeRef.current === null ? 1 / 60 : Math.min((now - lastEventTimeRef.current) / 1000, 0.5);
+    lastEventTimeRef.current = now;
+
+    const headingFactor = timeSmoothingFactor(0.15, dt);
+    const pitchRollFactor = timeSmoothingFactor(0.35, dt);
+
+    const smoothedHeading = smoothCircular(headingRef, heading, headingFactor);
+    const smoothedBeta = smoothLinear(betaRef, event.beta, pitchRollFactor);
+    const smoothedGamma = smoothLinear(gammaRef, event.gamma, pitchRollFactor);
 
     // Konvertera tillbaka till en "alpha" som ger rätt gir i standardformeln.
     const alphaForQuaternion = (360 - smoothedHeading) % 360;

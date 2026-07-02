@@ -20,6 +20,7 @@ interface TurbineObject {
   label: CanvasLabel;
   distanceLabel: CanvasLabel;
   light: THREE.Sprite;
+  glow: THREE.Sprite;
   scaleDamp: number;
 }
 
@@ -32,9 +33,16 @@ interface CanvasLabel {
 
 const FOV_DEGREES = 65;
 const MAX_RENDER_DISTANCE_M = 9000;
-// Ungefärlig rotationshastighet för stora vindkraftverk (grader/sekund) —
-// motsvarar ca 4 varv per minut, sakta och realistiskt.
-const BLADE_DEG_PER_SEC = 24;
+// Meter -> scenens enheter. Vald så att den visuella storleken/avstånden
+// matchar kamerans FOV/klippplan (samma skala som tidigare, enklare modell).
+const METERS_TO_UNITS = 0.9;
+// Rotorns hastighet — 8–15 varv/minut är realistiskt för stora verk (250 m).
+const BLADE_RPM = 11;
+const BLADE_RAD_PER_SEC = (BLADE_RPM * Math.PI * 2) / 60;
+// Synkroniserat blinkmönster för flyghinderbelysning: 0,2 s på / 1,8 s av,
+// baserat på väggklockan så att alla 29 verk blinkar exakt i takt.
+const BLINK_CYCLE_MS = 2000;
+const BLINK_ON_MS = 200;
 
 function createCanvasLabel(): CanvasLabel {
   const canvas = document.createElement("canvas");
@@ -90,6 +98,20 @@ function drawLabel(label: CanvasLabel, title: string, subtitle: string) {
   label.texture.needsUpdate = true;
 }
 
+function createGlowTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d")!;
+  const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gradient.addColorStop(0, "rgba(255, 60, 60, 0.85)");
+  gradient.addColorStop(0.4, "rgba(255, 40, 40, 0.35)");
+  gradient.addColorStop(1, "rgba(255, 40, 40, 0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return new THREE.CanvasTexture(canvas);
+}
+
 /**
  * AR-vy: renderar Three.js-objekt ovanpå kameraströmmen. Varje vindkraftverk
  * placeras EN gång i en fast världsposition utifrån bäring (från norr) och
@@ -129,9 +151,11 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
     sun.position.set(5, 10, 5);
     scene.add(sun);
 
+    const glowTexture = createGlowTexture();
+
     const objects: TurbineObject[] = turbines.map((turbine) => {
       const { lat, lon } = swerefToWgs84(turbine.easting, turbine.northing);
-      const { group, bladesGroup } = buildTurbineMesh(turbine.heightMeters);
+      const { group, bladesGroup } = buildTurbineMesh(turbine);
       scene.add(group);
       const label = createCanvasLabel();
       label.sprite.scale.set(34, 8.5, 1);
@@ -140,14 +164,24 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
       distanceLabel.sprite.scale.set(24, 6, 1);
       scene.add(distanceLabel.sprite);
 
-      const lightGeo = new THREE.CircleGeometry(1, 16);
-      const lightMat = new THREE.SpriteMaterial({ color: 0xff2a2a, transparent: true, depthTest: false });
+      const lightMat = new THREE.SpriteMaterial({ color: 0xff3030, transparent: true, depthTest: false });
       const light = new THREE.Sprite(lightMat);
       light.renderOrder = 998;
-      lightGeo.dispose();
       scene.add(light);
 
-      return { turbine, lat, lon, group, bladesGroup, label, distanceLabel, light, scaleDamp: 1 };
+      // Mjuk glöd runt navcellen vid nattblink — simulerar ljusspridning
+      // utan att behöva en riktig realtidsljuskälla per verk (prestanda).
+      const glowMat = new THREE.SpriteMaterial({
+        map: glowTexture,
+        transparent: true,
+        depthTest: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const glow = new THREE.Sprite(glowMat);
+      glow.renderOrder = 997;
+      scene.add(glow);
+
+      return { turbine, lat, lon, group, bladesGroup, label, distanceLabel, light, glow, scaleDamp: 1 };
     });
 
     sceneStateRef.current = { scene, camera, renderer, objects };
@@ -176,13 +210,19 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
         obj.group.lookAt(0, y, 0);
         obj.scaleDamp = scaleDamp;
 
-        const labelHeight = obj.turbine.heightMeters * scaleDamp * 0.42 - 8;
+        const totalHeightUnits = obj.turbine.heightMeters * METERS_TO_UNITS;
+        const hubHeightUnits = obj.turbine.hubHeightMeters * METERS_TO_UNITS;
+        const labelHeight = totalHeightUnits * scaleDamp * 0.42 - 8;
         obj.label.sprite.position.set(x, y + labelHeight + 34 * scaleDamp, z);
         obj.label.sprite.scale.set(34 * scaleDamp, 8.5 * scaleDamp, 1);
         obj.distanceLabel.sprite.position.set(x, y + labelHeight + 22 * scaleDamp, z);
         obj.distanceLabel.sprite.scale.set(24 * scaleDamp, 6 * scaleDamp, 1);
-        obj.light.position.set(x, y + obj.turbine.heightMeters * scaleDamp * 0.86, z);
+
+        const lightY = y + hubHeightUnits * scaleDamp * 1.02;
+        obj.light.position.set(x, lightY, z);
         obj.light.scale.setScalar(6 * scaleDamp);
+        obj.glow.position.set(x, lightY, z);
+        obj.glow.scale.setScalar(26 * scaleDamp);
 
         drawLabel(obj.label, obj.turbine.name, "");
         drawLabel(obj.distanceLabel, formatDistance(dist), "");
@@ -191,7 +231,6 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
     layoutObjects();
 
     let raf = 0;
-    let blinkPhase = 0;
     let lastLayoutLat = userRef.current.lat;
     let lastLayoutLon = userRef.current.lon;
     let lastTimestamp: number | null = null;
@@ -218,14 +257,17 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
       // istället för att följa skärmen när telefonen tiltas.
       state.camera.quaternion.copy(quaternionRef.current);
 
-      blinkPhase += dt * 3.2;
-      const blinkOn = isNightTime() && Math.sin(blinkPhase) > 0.75;
+      // Alla 29 verk blinkar exakt synkront: baserat på väggklockan istället
+      // för en lokal fasräknare, så mönstret (0,2 s på / 1,8 s av) alltid är
+      // detsamma oavsett bildfrekvens eller när scenen monterades.
+      const blinkOn = isNightTime() && Date.now() % BLINK_CYCLE_MS < BLINK_ON_MS;
 
-      const bladeDelta = THREE.MathUtils.degToRad(BLADE_DEG_PER_SEC) * dt;
+      const bladeDelta = BLADE_RAD_PER_SEC * dt;
 
       for (const obj of state.objects) {
         obj.bladesGroup.rotation.z += bladeDelta;
         obj.light.visible = blinkOn;
+        obj.glow.visible = blinkOn;
       }
 
       state.renderer.render(state.scene, state.camera);
@@ -243,6 +285,7 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", handleResize);
+      glowTexture.dispose();
       for (const obj of objects) {
         obj.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
@@ -251,6 +294,8 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
             else child.material.dispose();
           }
         });
+        obj.light.material.dispose();
+        obj.glow.material.dispose();
         obj.label.texture.dispose();
         obj.distanceLabel.texture.dispose();
       }
@@ -263,46 +308,71 @@ export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARScenePr
   return <div ref={mountRef} className="absolute inset-0" />;
 }
 
-function buildTurbineMesh(heightMeters: number): { group: THREE.Group; bladesGroup: THREE.Group } {
+/**
+ * Bygger en lättviktig men proportionsriktig procedurell vindkraftsmodell:
+ * konisk torn, navcell, nav och tre rotorblad. Proportionerna hämtas från
+ * verkets riktiga mått (navhöjd + rotordiameter) så en 250 m-turbin med
+ * 169 m navhöjd och 162 m rotordiameter ser rätt ut. Modellen byggs av
+ * enkla primitiver (inga externa glTF-tillgångar att ladda ner) för att
+ * hålla den snabb att rendera på t.ex. iPhone Safari.
+ *
+ * "Framåt" för hela gruppen är den lokala -Z-axeln (samma konvention som
+ * `Object3D.lookAt` använder), så när gruppen roteras för att vetta mot
+ * kameran hamnar navet/rotorn korrekt vänd mot betraktaren. Rotorbladen
+ * ligger i ett eget `bladesGroup` som bara roterar runt sin egen lokala
+ * Z-axel (navets rotationsaxel) — resten av verket står stilla.
+ */
+function buildTurbineMesh(turbine: TurbineSweref): { group: THREE.Group; bladesGroup: THREE.Group } {
   const group = new THREE.Group();
-  const scale = heightMeters / 100;
+  const M = METERS_TO_UNITS;
 
-  const towerGeo = new THREE.CylinderGeometry(1.2 * scale, 2.2 * scale, 70 * scale, 10);
-  const towerMat = new THREE.MeshStandardMaterial({ color: 0xe9edf0, roughness: 0.6 });
+  const hubY = turbine.hubHeightMeters * M;
+  const rotorRadius = (turbine.rotorDiameterMeters / 2) * M;
+
+  // Konisk torn — bredare vid basen, smalare upptill (realistisk proportion).
+  const towerBaseR = 3.1 * M;
+  const towerTopR = 1.5 * M;
+  const towerGeo = new THREE.CylinderGeometry(towerTopR, towerBaseR, hubY, 14);
+  towerGeo.translate(0, hubY / 2, 0);
+  const towerMat = new THREE.MeshStandardMaterial({ color: 0xe9edf0, roughness: 0.55, metalness: 0.05 });
   const tower = new THREE.Mesh(towerGeo, towerMat);
-  tower.position.y = 35 * scale;
   group.add(tower);
 
-  const nacelleGeo = new THREE.BoxGeometry(9 * scale, 4 * scale, 4 * scale);
-  const nacelleMat = new THREE.MeshStandardMaterial({ color: 0xd7dde0, roughness: 0.5 });
+  // Navcell ovanpå tornet, orienterad längs lokala Z (framåt = -Z).
+  const nacelleLength = 11 * M;
+  const nacelleWidth = 4.2 * M;
+  const nacelleHeight = 4.4 * M;
+  const nacelleGeo = new THREE.BoxGeometry(nacelleWidth, nacelleHeight, nacelleLength);
+  const nacelleMat = new THREE.MeshStandardMaterial({ color: 0xd7dde0, roughness: 0.5, metalness: 0.08 });
   const nacelle = new THREE.Mesh(nacelleGeo, nacelleMat);
-  nacelle.position.y = 70 * scale;
+  const nacelleZ = -nacelleLength * 0.18;
+  nacelle.position.set(0, hubY, nacelleZ);
   group.add(nacelle);
 
-  const hubGeo = new THREE.SphereGeometry(2 * scale, 12, 12);
+  // Nav längst fram på navcellen — rotorbladens rotationsaxel går längs
+  // lokala Z genom navets mittpunkt.
+  const hubRadius = 2.6 * M;
+  const hubGeo = new THREE.SphereGeometry(hubRadius, 16, 16);
   const hub = new THREE.Mesh(hubGeo, nacelleMat);
-  hub.position.set(5 * scale, 70 * scale, 0);
+  const hubZ = nacelleZ - nacelleLength / 2 - hubRadius * 0.5;
+  hub.position.set(0, hubY, hubZ);
   group.add(hub);
 
-  const bladeGeo = new THREE.BoxGeometry(1.4 * scale, 40 * scale, 0.6 * scale);
-  bladeGeo.translate(0, 20 * scale, 0);
-  const bladeMat = new THREE.MeshStandardMaterial({ color: 0xf5f7f8, roughness: 0.4 });
+  // Rotorblad — tre stycken, tunna och avsmalnande mot spetsen, monterade
+  // med roten mot navet och spetsen utåt (roterar runt navets Z-axel).
+  const bladeLength = Math.max(rotorRadius - hubRadius * 0.5, 1);
+  const bladeGeo = new THREE.CylinderGeometry(0.3 * M, 2.4 * M, bladeLength, 4);
+  bladeGeo.translate(0, bladeLength / 2, 0);
+  const bladeMat = new THREE.MeshStandardMaterial({ color: 0xf5f7f8, roughness: 0.35 });
 
-  // bladesGroup roterar kontinuerligt runt sin lokala Z-axel för att
-  // simulera rotorbladens rörelse. Den ligger inuti "rotor" som bara ger
-  // den fasta orienteringen (vriden 90° för att peka framåt).
   const bladesGroup = new THREE.Group();
   for (let i = 0; i < 3; i++) {
     const blade = new THREE.Mesh(bladeGeo, bladeMat);
     blade.rotation.z = (i * Math.PI * 2) / 3;
     bladesGroup.add(blade);
   }
-
-  const rotor = new THREE.Group();
-  rotor.add(bladesGroup);
-  rotor.position.set(5 * scale, 70 * scale, 0);
-  rotor.rotation.x = Math.PI / 2;
-  group.add(rotor);
+  bladesGroup.position.set(0, hubY, hubZ - hubRadius * 0.35);
+  group.add(bladesGroup);
 
   return { group, bladesGroup };
 }
