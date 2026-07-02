@@ -154,6 +154,21 @@ function createSunTexture(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(canvas);
 }
 
+/** Bred, mjuk varm gloria runt en lågt stående sol (t.ex. "Låg sol"-läget). */
+function createSunGlowTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d")!;
+  const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gradient.addColorStop(0, "rgba(255, 180, 90, 0.55)");
+  gradient.addColorStop(0.4, "rgba(255, 140, 60, 0.22)");
+  gradient.addColorStop(1, "rgba(255, 120, 40, 0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return new THREE.CanvasTexture(canvas);
+}
+
 /** Skuggans längd i meter enligt ShadowLength = Höjd / tan(solhöjd), begränsad till 5000 m. */
 function computeShadowLengthM(sunAltitudeDeg: number): number {
   const altitude = Math.max(sunAltitudeDeg, MIN_SHADOW_ALTITUDE_DEG);
@@ -205,6 +220,7 @@ export function ARScene({
     ambient: THREE.AmbientLight;
     sunLight: THREE.DirectionalLight;
     sunSprite: THREE.Sprite;
+    sunGlow: THREE.Sprite;
   } | null>(null);
   const userRef = useRef({ lat: userLat, lon: userLon });
   const modeRef = useRef({ sunMode, realScale, visibility, nightMode });
@@ -232,6 +248,20 @@ export function ARScene({
     const glowTexture = createGlowTexture();
     const shadowTexture = createShadowTexture();
     const sunTexture = createSunTexture();
+    const sunGlowTexture = createSunGlowTexture();
+
+    // Mjuk, bred gloria bakom solskivan — extra framträdande i "Låg sol"-läget
+    // för att ge intrycket av en stor, varm solnedgångssol.
+    const sunGlowMat = new THREE.SpriteMaterial({
+      map: sunGlowTexture,
+      transparent: true,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const sunGlow = new THREE.Sprite(sunGlowMat);
+    sunGlow.renderOrder = 0;
+    sunGlow.scale.setScalar(1400);
+    scene.add(sunGlow);
 
     const sunSpriteMat = new THREE.SpriteMaterial({
       map: sunTexture,
@@ -323,7 +353,7 @@ export function ARScene({
       };
     });
 
-    sceneStateRef.current = { scene, camera, renderer, objects, ambient, sunLight, sunSprite };
+    sceneStateRef.current = { scene, camera, renderer, objects, ambient, sunLight, sunSprite, sunGlow };
 
     // Placera varje verk i en fast världsposition utifrån bäring/avstånd.
     // Körs initialt samt varje gång användarens GPS-position uppdateras
@@ -463,8 +493,20 @@ export function ARScene({
       const eveningDim = curNightMode;
       state.ambient.intensity = eveningDim ? 0.32 : 1.1;
       state.sunLight.intensity = eveningDim ? 0.12 : 0.6;
-      state.sunSprite.visible = !eveningDim;
-      if (!eveningDim) {
+
+      // Den virtuella solen är helt dold i "Kväll"-visualiseringsläget (oavsett
+      // Dag-/Nattläge), och i manuellt Nattläge — men INTE i "Ingen skugga"-
+      // läget, som bara stänger av skuggan (se layoutShadow) och annars visar
+      // solen precis som "Aktuell sol". Annars visas den enligt det valda
+      // sol-läget ("Aktuell sol": beräknad från GPS/datum/tid, "Låg sol": fast
+      // låg position). Den rör sig med AR-världen (fast världsposition, bara
+      // kameran roterar), så den ligger kvar i rätt kompassriktning när
+      // telefonen vrids.
+      const sunHidden = eveningDim || curMode === "evening";
+      state.sunSprite.visible = !sunHidden;
+      state.sunGlow.visible = false;
+      if (!sunHidden) {
+        const isLowSun = curMode === "low";
         const { altitudeDeg, azimuthDeg } = getSunAngles(curMode);
         const altRad = (altitudeDeg * Math.PI) / 180;
         const azRad = (azimuthDeg * Math.PI) / 180;
@@ -473,8 +515,26 @@ export function ARScene({
         const sunX = Math.sin(azRad) * horiz;
         const sunZ = -Math.cos(azRad) * horiz;
         const sunY = Math.sin(altRad) * sunDist;
+        const sunVisible = altitudeDeg > -2;
         state.sunSprite.position.set(sunX, Math.max(sunY, 40), sunZ);
-        state.sunSprite.visible = altitudeDeg > -2;
+        state.sunSprite.visible = sunVisible;
+
+        // Solen lyser scenens riktade ljus i samma riktning som den visuella
+        // solen står i, så att skuggningen på verken (och skuggornas riktning,
+        // beräknad separat i layoutShadow) hör ihop med var solen faktiskt syns.
+        state.sunLight.position.set(sunX, Math.max(sunY, 40), sunZ);
+
+        // "Låg sol" visas som en stor, varm solnedgångssol med mjuk gloria.
+        // "Aktuell sol" är en mindre, ljusare dagssol utan extra gloria.
+        const sunScale = isLowSun ? 1500 : 900;
+        state.sunSprite.scale.setScalar(sunScale);
+        (state.sunSprite.material as THREE.SpriteMaterial).color.set(isLowSun ? 0xffa552 : 0xfff4e0);
+
+        state.sunGlow.visible = sunVisible && isLowSun;
+        if (isLowSun) {
+          state.sunGlow.position.copy(state.sunSprite.position);
+          state.sunGlow.scale.setScalar(sunScale * 3.2);
+        }
       }
 
       for (const obj of state.objects) {
@@ -503,8 +563,10 @@ export function ARScene({
       glowTexture.dispose();
       shadowTexture.dispose();
       sunTexture.dispose();
+      sunGlowTexture.dispose();
       shadowGeo.dispose();
       sunSpriteMat.dispose();
+      sunGlowMat.dispose();
       for (const obj of objects) {
         obj.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
