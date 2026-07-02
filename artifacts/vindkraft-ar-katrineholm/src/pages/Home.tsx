@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useGeolocation } from "@/hooks/useGeolocation";
-import { useCompassHeading } from "@/hooks/useCompassHeading";
+import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useCameraStream } from "@/hooks/useCameraStream";
 import { useWindSound } from "@/hooks/useWindSound";
 import { CameraBackground } from "@/components/CameraBackground";
@@ -16,27 +16,34 @@ export default function Home() {
   const [starting, setStarting] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [showPetition, setShowPetition] = useState(false);
+  const [calibrated, setCalibrated] = useState(false);
 
   const geo = useGeolocation(started);
-  const compass = useCompassHeading(started);
+  const orientation = useDeviceOrientation(started);
   const camera = useCameraStream(started);
   const wind = useWindSound();
 
   const errors = useMemo(
-    () => [geo.error, compass.error, camera.error].filter((e): e is string => Boolean(e)),
-    [geo.error, compass.error, camera.error],
+    () => [geo.error, orientation.error, camera.error].filter((e): e is string => Boolean(e)),
+    [geo.error, orientation.error, camera.error],
   );
 
   const handleStart = useCallback(async () => {
     setStarting(true);
-    if (compass.needsPermission) {
-      await compass.requestPermission();
+    if (orientation.needsPermission) {
+      await orientation.requestPermission();
     }
     setStarted(true);
     setStarting(false);
-  }, [compass]);
+  }, [orientation]);
 
-  const ready = started && geo.lat !== null && geo.lon !== null && compass.heading !== null && camera.stream;
+  const handleCalibrate = useCallback(() => {
+    orientation.calibrateHorizon();
+    setCalibrated(true);
+    window.setTimeout(() => setCalibrated(false), 1800);
+  }, [orientation]);
+
+  const ready = started && geo.lat !== null && geo.lon !== null && orientation.hasFix && camera.stream;
   const night = isNightTime();
 
   return (
@@ -53,7 +60,7 @@ export default function Home() {
             <ARScene
               userLat={geo.lat!}
               userLon={geo.lon!}
-              headingDeg={compass.heading!}
+              quaternionRef={orientation.quaternionRef}
               turbines={TURBINES}
             />
           )}
@@ -64,7 +71,7 @@ export default function Home() {
               <p className="text-sm text-emerald-100">
                 {!camera.stream && "Startar kameran…"}
                 {camera.stream && geo.lat === null && "Hämtar GPS-position…"}
-                {camera.stream && geo.lat !== null && compass.heading === null && "Läser av kompass — rör telefonen i en åtta-rörelse."}
+                {camera.stream && geo.lat !== null && !orientation.hasFix && "Läser av kompass — rör telefonen i en åtta-rörelse."}
               </p>
               {errors.length > 0 && (
                 <div className="mt-2 max-w-xs rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-xs text-red-200">
@@ -73,6 +80,14 @@ export default function Home() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {ready && calibrated && (
+            <div className="pointer-events-none absolute inset-x-0 top-24 z-30 flex justify-center">
+              <span className="rounded-full bg-emerald-500/90 px-4 py-1.5 text-xs font-medium text-emerald-950 shadow-lg">
+                Horisont kalibrerad!
+              </span>
             </div>
           )}
 
@@ -88,6 +103,14 @@ export default function Home() {
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
                   Nattläge
                 </span>
+              )}
+              {ready && (
+                <button
+                  onClick={handleCalibrate}
+                  className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-emerald-50 transition hover:bg-white/20"
+                >
+                  Kalibrera horisont
+                </button>
               )}
               <button
                 onClick={wind.toggle}

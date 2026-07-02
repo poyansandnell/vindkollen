@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { bearingDegrees, distanceMeters, formatDistance, isNightTime, normalizeAngle } from "@/lib/geo";
+import { bearingDegrees, distanceMeters, formatDistance, isNightTime } from "@/lib/geo";
 import type { TurbineSweref } from "@/lib/turbines";
 import { swerefToWgs84 } from "@/lib/sweref";
 
 interface ARSceneProps {
   userLat: number;
   userLon: number;
-  headingDeg: number;
+  quaternionRef: React.MutableRefObject<THREE.Quaternion>;
   turbines: TurbineSweref[];
 }
 
@@ -16,9 +16,11 @@ interface TurbineObject {
   lat: number;
   lon: number;
   group: THREE.Group;
+  bladesGroup: THREE.Group;
   label: CanvasLabel;
   distanceLabel: CanvasLabel;
   light: THREE.Sprite;
+  scaleDamp: number;
 }
 
 interface CanvasLabel {
@@ -30,6 +32,9 @@ interface CanvasLabel {
 
 const FOV_DEGREES = 65;
 const MAX_RENDER_DISTANCE_M = 9000;
+// Ungefärlig rotationshastighet för stora vindkraftverk (grader/sekund) —
+// motsvarar ca 4 varv per minut, sakta och realistiskt.
+const BLADE_DEG_PER_SEC = 24;
 
 function createCanvasLabel(): CanvasLabel {
   const canvas = document.createElement("canvas");
@@ -87,11 +92,15 @@ function drawLabel(label: CanvasLabel, title: string, subtitle: string) {
 
 /**
  * AR-vy: renderar Three.js-objekt ovanpå kameraströmmen. Varje vindkraftverk
- * placeras utifrån bäring och avstånd relativt användarens position och
- * enhetens kompassriktning — en enkel men robust "AR utan markörer"-teknik
+ * placeras EN gång i en fast världsposition utifrån bäring (från norr) och
+ * avstånd relativt användarens GPS-position. Själva kameran roteras varje
+ * bildruta utifrån enhetens fullständiga orientering (gir, pitch och roll)
+ * — precis som en riktig kamera — vilket gör att verken upplevs som fast
+ * förankrade i verkligheten/horisonten när telefonen tiltas, istället för
+ * att följa skärmen. Detta är en enkel men robust "AR utan markörer"-teknik
  * som inte kräver WebXR (brett webbläsarstöd).
  */
-export function ARScene({ userLat, userLon, headingDeg, turbines }: ARSceneProps) {
+export function ARScene({ userLat, userLon, quaternionRef, turbines }: ARSceneProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneStateRef = useRef<{
     scene: THREE.Scene;
@@ -99,10 +108,8 @@ export function ARScene({ userLat, userLon, headingDeg, turbines }: ARSceneProps
     renderer: THREE.WebGLRenderer;
     objects: TurbineObject[];
   } | null>(null);
-  const headingRef = useRef(headingDeg);
   const userRef = useRef({ lat: userLat, lon: userLon });
 
-  headingRef.current = headingDeg;
   userRef.current = { lat: userLat, lon: userLon };
 
   useEffect(() => {
@@ -124,7 +131,7 @@ export function ARScene({ userLat, userLon, headingDeg, turbines }: ARSceneProps
 
     const objects: TurbineObject[] = turbines.map((turbine) => {
       const { lat, lon } = swerefToWgs84(turbine.easting, turbine.northing);
-      const group = buildTurbineMesh(turbine.heightMeters);
+      const { group, bladesGroup } = buildTurbineMesh(turbine.heightMeters);
       scene.add(group);
       const label = createCanvasLabel();
       label.sprite.scale.set(34, 8.5, 1);
@@ -140,48 +147,34 @@ export function ARScene({ userLat, userLon, headingDeg, turbines }: ARSceneProps
       lightGeo.dispose();
       scene.add(light);
 
-      return { turbine, lat, lon, group, label, distanceLabel, light };
+      return { turbine, lat, lon, group, bladesGroup, label, distanceLabel, light, scaleDamp: 1 };
     });
 
     sceneStateRef.current = { scene, camera, renderer, objects };
 
-    let raf = 0;
-    let blinkPhase = 0;
-
-    function animate() {
-      raf = requestAnimationFrame(animate);
-      const state = sceneStateRef.current;
-      if (!state) return;
+    // Placera varje verk i en fast världsposition utifrån bäring/avstånd.
+    // Körs initialt samt varje gång användarens GPS-position uppdateras
+    // (i animationsloopen, men bara när koordinaterna faktiskt ändrats) —
+    // annars behöver inte positionerna räknas om varje bildruta.
+    function layoutObjects() {
       const { lat: uLat, lon: uLon } = userRef.current;
-      const heading = headingRef.current;
-
-      blinkPhase += 0.05;
-      const blinkOn = isNightTime() && Math.sin(blinkPhase) > 0.75;
-
-      for (const obj of state.objects) {
+      for (const obj of sceneStateRef.current!.objects) {
         const dist = distanceMeters(uLat, uLon, obj.lat, obj.lon);
         const bearing = bearingDegrees(uLat, uLon, obj.lat, obj.lon);
-        const relativeAngle = normalizeAngle(bearing - heading);
+        const bearingRad = (bearing * Math.PI) / 180;
 
-        // Map relative angle + distance to a 3D position around the camera.
-        const angleRad = (relativeAngle * Math.PI) / 180;
         const renderDist = Math.min(dist, MAX_RENDER_DISTANCE_M);
         const scaleDamp = 1 - Math.min(renderDist / MAX_RENDER_DISTANCE_M, 1) * 0.55;
         const planeDist = 400 + renderDist * 0.12;
 
-        const x = Math.sin(angleRad) * planeDist;
-        const z = -Math.cos(angleRad) * planeDist;
+        const x = Math.sin(bearingRad) * planeDist;
+        const z = -Math.cos(bearingRad) * planeDist;
         const y = -8;
 
         obj.group.position.set(x, y, z);
         obj.group.scale.setScalar(scaleDamp);
         obj.group.lookAt(0, y, 0);
-
-        const visible = Math.abs(relativeAngle) < FOV_DEGREES * 0.9;
-        obj.group.visible = visible;
-        obj.label.sprite.visible = visible;
-        obj.distanceLabel.sprite.visible = visible;
-        obj.light.visible = visible && blinkOn;
+        obj.scaleDamp = scaleDamp;
 
         const labelHeight = obj.turbine.heightMeters * scaleDamp * 0.42 - 8;
         obj.label.sprite.position.set(x, y + labelHeight + 34 * scaleDamp, z);
@@ -194,10 +187,50 @@ export function ARScene({ userLat, userLon, headingDeg, turbines }: ARSceneProps
         drawLabel(obj.label, obj.turbine.name, "");
         drawLabel(obj.distanceLabel, formatDistance(dist), "");
       }
+    }
+    layoutObjects();
+
+    let raf = 0;
+    let blinkPhase = 0;
+    let lastLayoutLat = userRef.current.lat;
+    let lastLayoutLon = userRef.current.lon;
+    let lastTimestamp: number | null = null;
+
+    function animate(timestamp: number) {
+      raf = requestAnimationFrame(animate);
+      const state = sceneStateRef.current;
+      if (!state) return;
+
+      const dt = lastTimestamp === null ? 0 : Math.min((timestamp - lastTimestamp) / 1000, 0.25);
+      lastTimestamp = timestamp;
+
+      // Räkna bara om placeringen när GPS-positionen faktiskt förflyttat sig
+      // märkbart, istället för varje bildruta — sparar prestanda.
+      const { lat: uLat, lon: uLon } = userRef.current;
+      if (Math.abs(uLat - lastLayoutLat) > 1e-6 || Math.abs(uLon - lastLayoutLon) > 1e-6) {
+        lastLayoutLat = uLat;
+        lastLayoutLon = uLon;
+        layoutObjects();
+      }
+
+      // Kamerans riktning styrs helt av enhetens sensorer (gir/pitch/roll),
+      // så att verken förblir fast förankrade i verkligheten/horisonten
+      // istället för att följa skärmen när telefonen tiltas.
+      state.camera.quaternion.copy(quaternionRef.current);
+
+      blinkPhase += dt * 3.2;
+      const blinkOn = isNightTime() && Math.sin(blinkPhase) > 0.75;
+
+      const bladeDelta = THREE.MathUtils.degToRad(BLADE_DEG_PER_SEC) * dt;
+
+      for (const obj of state.objects) {
+        obj.bladesGroup.rotation.z += bladeDelta;
+        obj.light.visible = blinkOn;
+      }
 
       state.renderer.render(state.scene, state.camera);
     }
-    animate();
+    raf = requestAnimationFrame(animate);
 
     function handleResize() {
       if (!mount) return;
@@ -230,7 +263,7 @@ export function ARScene({ userLat, userLon, headingDeg, turbines }: ARSceneProps
   return <div ref={mountRef} className="absolute inset-0" />;
 }
 
-function buildTurbineMesh(heightMeters: number): THREE.Group {
+function buildTurbineMesh(heightMeters: number): { group: THREE.Group; bladesGroup: THREE.Group } {
   const group = new THREE.Group();
   const scale = heightMeters / 100;
 
@@ -254,15 +287,22 @@ function buildTurbineMesh(heightMeters: number): THREE.Group {
   const bladeGeo = new THREE.BoxGeometry(1.4 * scale, 40 * scale, 0.6 * scale);
   bladeGeo.translate(0, 20 * scale, 0);
   const bladeMat = new THREE.MeshStandardMaterial({ color: 0xf5f7f8, roughness: 0.4 });
-  const rotor = new THREE.Group();
+
+  // bladesGroup roterar kontinuerligt runt sin lokala Z-axel för att
+  // simulera rotorbladens rörelse. Den ligger inuti "rotor" som bara ger
+  // den fasta orienteringen (vriden 90° för att peka framåt).
+  const bladesGroup = new THREE.Group();
   for (let i = 0; i < 3; i++) {
     const blade = new THREE.Mesh(bladeGeo, bladeMat);
     blade.rotation.z = (i * Math.PI * 2) / 3;
-    rotor.add(blade);
+    bladesGroup.add(blade);
   }
+
+  const rotor = new THREE.Group();
+  rotor.add(bladesGroup);
   rotor.position.set(5 * scale, 70 * scale, 0);
   rotor.rotation.x = Math.PI / 2;
   group.add(rotor);
 
-  return group;
+  return { group, bladesGroup };
 }

@@ -1,2 +1,3 @@
-- [PWA AR without WebXR](ar-without-webxr.md) — bearing/distance + compass heading positions Three.js objects around the camera; works broadly, no WebXR needed.
+- [PWA AR without WebXR](ar-without-webxr.md) — objects at fixed world positions from bearing/distance; camera rotates via device orientation, not objects; works broadly, no WebXR needed.
+- [Device orientation → camera quaternion](device-orientation-camera-quaternion.md) — rotate the AR camera from alpha/beta/gamma (yaw+pitch+roll), not just compass heading, or overlays feel stuck to the screen.
 - [iOS compass permission gesture](ios-compass-permission.md) — DeviceOrientationEvent.requestPermission() must be called synchronously from a user-gesture handler, not after an await chain.
