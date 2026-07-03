@@ -5,3 +5,4 @@
 - [Manual toggle vs derived mode coupling](manual-toggle-vs-derived-mode-coupling.md) — a manual on/off toggle silently gets overridden if a visual effect checks `toggle || presetMode === "x"` instead of the toggle alone.
 - [iOS Safari audio speaker routing](ios-audio-speaker-routing.md) — route Web Audio via MediaStreamAudioDestinationNode + hidden `<audio>` element to force main-speaker (not earpiece) playback.
 - [WebGL canvas photo capture](webgl-canvas-photo-capture.md) — avoid `preserveDrawingBuffer` (risks context loss → black overlay); capture toDataURL synchronously right after render() instead.
+- [In-app browser permission prompts](inapp-browser-permissions.md) — Messenger/Instagram/TikTok webviews often auto-deny camera/GPS without ever prompting; detect UA and tell users to open in Safari/Chrome.

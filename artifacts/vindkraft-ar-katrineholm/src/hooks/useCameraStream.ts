@@ -34,9 +34,20 @@ export function useCameraStream(enabled: boolean): CameraState {
         streamRef.current = stream;
         setState({ stream, error: null, loading: false });
       } catch (err) {
+        const name = err instanceof Error ? err.name : "";
+        const message =
+          name === "NotAllowedError" || name === "PermissionDeniedError"
+            ? "Kamerabehörighet nekad. Tillåt Kamera för den här sidan i webbläsarens inställningar och ladda om."
+            : name === "NotFoundError" || name === "DevicesNotFoundError"
+              ? "Ingen kamera hittades på enheten."
+              : name === "NotReadableError"
+                ? "Kameran kunde inte startas — den kan vara upptagen i en annan app."
+                : err instanceof Error
+                  ? err.message
+                  : "Kunde inte starta kameran.";
         setState({
           stream: null,
-          error: err instanceof Error ? err.message : "Kunde inte starta kameran.",
+          error: message,
           loading: false,
         });
       }

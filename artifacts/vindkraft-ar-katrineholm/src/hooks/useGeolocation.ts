@@ -40,7 +40,15 @@ export function useGeolocation(enabled: boolean): GeoState {
         });
       },
       (err) => {
-        setState((s) => ({ ...s, loading: false, error: err.message || "Kunde inte hämta position." }));
+        const message =
+          err.code === err.PERMISSION_DENIED
+            ? "Platsbehörighet nekad. Tillåt Plats för den här sidan i webbläsarens inställningar och ladda om."
+            : err.code === err.POSITION_UNAVAILABLE
+              ? "Kunde inte fastställa din position just nu. Kontrollera att GPS är påslaget."
+              : err.code === err.TIMEOUT
+                ? "Det tog för lång tid att hämta din position. Försök igen utomhus med fri sikt mot himlen."
+                : err.message || "Kunde inte hämta position.";
+        setState((s) => ({ ...s, loading: false, error: message }));
       },
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 },
     );
