@@ -422,7 +422,10 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         shadowBaseOpacity: 0,
         materials,
         baseOpacity: 1,
-        skyFactor: 1,
+        // Konservativ startpunkt: dolt tills himmelsdetekteringen (ML eller
+        // heuristik) faktiskt bekräftat fri himmel vid verkets skärmposition.
+        // Lerpas snabbt upp/ner varje bildruta i renderloopen, se `animate`.
+        skyFactor: 0,
         scaleDamp: 1,
         bladeRadPerSec,
         blinkPeriodMs,

@@ -28,7 +28,7 @@ A Swedish-language progressive web app that lets people in Katrineholm point the
 - `src/components/ARScene.tsx` — the Three.js AR overlay (turbine meshes, name/distance labels, blinking red aviation light at night, sun-synced lighting, Skuggflimmer blade-shadow flicker, exposes its canvas via `canvasRef` for Fotomontage capture).
 - `src/components/CameraBackground.tsx`, `MapView.tsx`, `PetitionModal.tsx`, `PermissionGate.tsx` — supporting UI. `CameraBackground` accepts an optional `videoRef` to expose its `<video>` element for Fotomontage capture.
 - `src/components/VisualizationControls.tsx` — sun/scale/visibility/night mode toggles, plus the Skuggflimmer toggle + info tooltip.
-- `src/components/SoundLevelPanel.tsx` — live "🔊 Beräknad ljudnivå" dBA estimate panel (informational only, never controls playback volume).
+- `src/components/SoundLevelPanel.tsx` — live "🔊 Beräknad ljudnivå" dBA estimate panel (`SoundLevelBadge` shows "Väntar på GPS…" fallback until a position fix exists).
 - `src/components/PhotoMontageModal.tsx` — Fotomontage capture preview with Spara/Ta ny bild/Dela (Web Share API) actions.
 - `src/lib/soundLevel.ts` — dBA estimation from GPS distance to every turbine, logarithmic combination, severity color coding, exact disclaimer text.
 - `src/lib/visualizationTypes.ts` — shared visualization mode types, incl. `shadowFlickerActive()` gating (only active in "current"/"low" sun modes).
@@ -49,12 +49,14 @@ A Swedish-language progressive web app that lets people in Katrineholm point the
 - Camera-based AR view showing 29 wind turbines at true bearing/distance from the user, each labeled with name + distance.
 - Blinking red aviation obstruction lights on turbines at night (22:00–06:00).
 - Optional procedurally generated wind sound (Web Audio, no audio files), always routed through the device's main speaker (never the earpiece) even on iOS Safari.
-- Live "🔊 Beräknad ljudnivå" dBA panel estimating sound exposure from turbine distance (informational only, does not affect playback).
+- Live "🔊 Beräknad ljudnivå" dBA panel estimating sound exposure from turbine distance. The wind sound's actual playback volume now scales continuously with this same dBA estimate (`soundLevel.ts`'s `dbaToGain`), instead of a plain on/off.
+- Explicit always-visible "🔊 Ljud ute / 🔈 Ljud inne" toggle (bottom controls) that the user controls directly — always starts on "Ljud ute" at app launch. This toggle (not the camera-based sky heuristic) is the sole input to the dBA estimate's indoor attenuation and therefore to the wind sound volume, so the displayed dBA number and the actual sound always agree.
 - "🌗 Skuggflimmer" (shadow flicker) mode simulating blade-shadow flicker, only active in "Aktuell sol"/"Låg sol" sun modes, with an info tooltip explaining the effect.
 - "📸 Fotomontage": captures a composite photo (camera + AR overlay + watermark + disclaimer) with Spara/Ta ny bild/Dela (Web Share API) actions.
-- "🌬️ Infraljud"-monitor: always-visible green/yellow/red badge + expandable panel estimating overall noise/infrasound impact from distance, number of contributing turbines, wind direction (if available), and how long the user has been on-site, with a calm Swedish disclaimer (never claims guaranteed harm).
+- "🌬️ Infraljud"-monitor: always-visible green/yellow/red badge + expandable panel estimating overall noise/infrasound impact (a distinct indicator from the dBA panel above) from distance, number of contributing turbines, wind direction (if available), and how long the user has been on-site, with a calm Swedish disclaimer emphasizing it is an estimated indicator, not a medical measurement (never claims guaranteed harm).
 - Map view (SVG-based) showing all turbines and the user's position.
 - "Skriv under för folkomröstning" petition button/modal referencing the real 2022 Katrineholm wind-power referendum.
+- Turbines only render in the AR view when the camera-based sky detection is confident of a clear outdoor sky view; any uncertainty (including "indoors" classification) hides turbines and shows a large, high-z-index "Gå utomhus" (go outside) message that always renders above all UI chrome (top/bottom bars, badges).
 - Fully Swedish-language UI; installable as a PWA.
 
 ## User preferences

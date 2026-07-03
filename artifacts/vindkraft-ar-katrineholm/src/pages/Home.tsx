@@ -20,7 +20,7 @@ import { TURBINES } from "@/lib/turbines";
 import { distanceMeters, bearingDegrees, isNightTime } from "@/lib/geo";
 import { swerefToWgs84 } from "@/lib/sweref";
 import { getBladeRpm } from "@/lib/turbineAnimation";
-import { estimateSoundLevel } from "@/lib/soundLevel";
+import { estimateSoundLevel, dbaToGain } from "@/lib/soundLevel";
 import { estimateNoiseImpact } from "@/lib/noiseImpact";
 import { useWindDirection } from "@/hooks/useWindDirection";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
@@ -40,6 +40,12 @@ export default function Home() {
   const [calibrated, setCalibrated] = useState(false);
   const [showSoundLevel, setShowSoundLevel] = useState(true);
   const [showNoiseImpact, setShowNoiseImpact] = useState(false);
+  // Explicit manuellt val (INTE kameraheuristiken) för om vindljudet/dBA-
+  // uppskattningen ska räkna som "ute" (full nivå) eller "inne" (kraftigt
+  // dämpad, se `estimateSoundLevel`s `outdoorConfidence`-parameter nedan).
+  // Måste alltid starta som "ute" enligt produktkravet, oavsett vad
+  // kameran/tidigare session råkar tycka om miljön.
+  const [soundEnvironment, setSoundEnvironment] = useState<"ute" | "inne">("ute");
 
   const [sunMode, setSunMode] = useState<SunMode>("current");
   const [realScale, setRealScale] = useState(false);
@@ -73,10 +79,12 @@ export default function Home() {
     [geo.error, orientation.error, camera.error],
   );
 
-  // Beräknar en informativ dBA-uppskattning baserat på GPS-avstånd till
-  // samtliga verk. Rent visningssyfte — styr aldrig ljuduppspelningen.
-  // `sky.outdoorConfidence` dämpar uppskattningen live när användaren
-  // bedöms vara inomhus (se `estimateSoundLevel`).
+  // Beräknar dBA-uppskattningen baserat på GPS-avstånd till samtliga verk.
+  // Dämpningen styrs numera av den explicita "Ljud ute/inne"-väljaren
+  // (`soundEnvironment`) i stället för kameraheuristiken — användaren ska
+  // kunna lita på och kontrollera detta läge själv. Samma tal används både
+  // för visningen (SoundLevelPanel/NoiseImpactMonitor) OCH för att driva
+  // wind.updateProximitys volym nedan, så allt hänger konsekvent ihop.
   const soundLevelEstimate = useMemo(() => {
     if (geo.lat === null || geo.lon === null) {
       return { totalDba: -Infinity, nearestDistanceM: null, contributingCount: 0 };
@@ -85,8 +93,8 @@ export default function Home() {
       const { lat, lon } = swerefToWgs84(t.easting, t.northing);
       return distanceMeters(geo.lat as number, geo.lon as number, lat, lon);
     });
-    return estimateSoundLevel(distances, sky.outdoorConfidence);
-  }, [geo.lat, geo.lon, sky.outdoorConfidence]);
+    return estimateSoundLevel(distances, soundEnvironment === "ute" ? 1 : 0);
+  }, [geo.lat, geo.lon, soundEnvironment]);
 
   // Vindriktning (informativ, om tillgänglig) för infraljud-/bullermonitorn
   // nedan — hämtas från ett fritt väder-API, degraderar tyst till "okänd"
@@ -132,20 +140,17 @@ export default function Home() {
     });
   }, [soundLevelEstimate, geo.lat, geo.lon, windDirection.windFromDeg, exposureNowTick]);
 
-  // Uppdatera vindljudets volym/svischtakt när GPS-position ändras. Alla
-  // verks avstånd skickas med (inte bara det närmaste) så att flera
-  // närliggande verk kombineras till ett kraftigare, tätare ljudlandskap.
-  // `sky.outdoorConfidence` tonar ned ljudet helt (0 = tyst) när användaren
-  // bedöms vara inomhus, och tillbaka upp live så fort hen går ut igen.
+  // Uppdatera vindljudets volym/svischtakt när GPS-position eller den
+  // beräknade ljudnivån ändras. Volymen följer nu KONTINUERLIGT den redan
+  // beräknade (och ev. "Ljud inne"-dämpade) `soundLevelEstimate.totalDba`
+  // via `dbaToGain` — inte en egen, fristående avståndskurva — så att
+  // ljudnivåpanelen och det faktiska ljudet alltid stämmer överens.
+  const windDbaGain = useMemo(() => dbaToGain(soundLevelEstimate.totalDba), [soundLevelEstimate.totalDba]);
   useEffect(() => {
-    if (!wind.playing || geo.lat === null || geo.lon === null) return;
-    const distances = TURBINES.map((t) => {
-      const { lat, lon } = swerefToWgs84(t.easting, t.northing);
-      return distanceMeters(geo.lat as number, geo.lon as number, lat, lon);
-    });
-    wind.updateProximity(distances, AVG_RPM, sky.outdoorConfidence);
+    if (!wind.playing) return;
+    wind.updateProximity(windDbaGain, AVG_RPM);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wind.playing, geo.lat, geo.lon, sky.outdoorConfidence]);
+  }, [wind.playing, windDbaGain]);
 
   const handleStart = useCallback(() => {
     setStarting(true);
@@ -360,17 +365,20 @@ export default function Home() {
 
           {/* "Gå utomhus"-overlay: visas oberoende av `ready` (dvs. även
               medan GPS/kompass fortfarande söker fix) så fort kamerabilden
-              tolkas som en inomhusmiljö — turbinerna skulle ändå tonas bort
-              i AR-vyn (se ARScene/`isPointSky`) och ljudet redan vara tyst
-              (se `sky.outdoorConfidence` ovan), så detta ger en tydlig,
-              stor förklaring istället för en till synes tom/livlös vy. */}
+              tolkas som en inomhusmiljö — turbinerna tonas då ändå bort i
+              AR-vyn (se ARScene/`isPointSky`), så detta ger en tydlig, stor
+              förklaring istället för en till synes tom/livlös vy. Ljudet
+              styrs numera separat av den explicita ute/inne-väljaren, inte
+              av detta automatiska kameraläge. Ligger på ett högre z-index
+              än både topp- och bottenraden (z-20) så att meddelandet ALDRIG
+              hamnar bakom knappar/paneler. */}
           {started && sky.ready && sky.indoors && (
-            <div className="absolute inset-0 z-[15] flex flex-col items-center justify-center gap-4 bg-black/70 px-8 text-center">
-              <span className="text-5xl">🏠➡️🌤️</span>
-              <p className="text-lg font-semibold text-white">Gå utomhus för att se vindkraftverken</p>
-              <p className="max-w-xs text-sm text-white/70">
-                Kameran verkar just nu inte ha fri sikt mot himlen. AR-vyn och ljudet fungerar bara utomhus, med
-                fri sikt över horisonten.
+            <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/85 px-8 text-center">
+              <span className="animate-pulse text-6xl">🏠➡️🌤️</span>
+              <p className="text-xl font-bold text-white">Gå utomhus för att se vindkraftverken</p>
+              <p className="max-w-xs text-sm text-white/80">
+                Kameran verkar just nu inte ha fri sikt mot himlen. AR-vyn visas bara utomhus, med fri sikt över
+                horisonten.
               </p>
             </div>
           )}
@@ -391,7 +399,7 @@ export default function Home() {
                 <p className="text-sm text-white/90">Katrineholm · {TURBINES.length} verk</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <SoundLevelBadge estimate={soundLevelEstimate} indoors={sky.ready && sky.indoors} />
+                <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
                 <NoiseImpactBadge
                   result={noiseImpact}
                   expanded={showNoiseImpact}
@@ -436,6 +444,17 @@ export default function Home() {
                   🔊 Ljudnivå
                 </button>
               )}
+              {/* Explicit, alltid synlig ute/inne-väljare för ljudet — ersätter
+                  det gamla automatiska (kamerastyrda) beteendet. Startar alltid
+                  på "Ljud ute" enligt produktkravet, se `soundEnvironment`s
+                  useState ovan. */}
+              <button
+                onClick={() => setSoundEnvironment((v) => (v === "ute" ? "inne" : "ute"))}
+                aria-pressed={soundEnvironment === "inne"}
+                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
+              >
+                {soundEnvironment === "ute" ? "🔊 Ljud ute" : "🔈 Ljud inne"}
+              </button>
             </div>
           </div>
 
@@ -450,7 +469,7 @@ export default function Home() {
             {ready && showSoundLevel && (
               <SoundLevelPanel
                 estimate={soundLevelEstimate}
-                indoors={sky.ready && sky.indoors}
+                indoors={soundEnvironment === "inne"}
                 onClose={() => setShowSoundLevel(false)}
               />
             )}

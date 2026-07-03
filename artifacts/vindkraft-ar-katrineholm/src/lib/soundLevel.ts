@@ -102,3 +102,29 @@ export const SEVERITY_COLORS: Record<SoundLevelSeverity, { text: string; bg: str
 /** Exakt disclaimer-text enligt produktspecifikationen. */
 export const SOUND_LEVEL_DISCLAIMER =
   "Denna ljudnivå är en förenklad uppskattning baserad på projektets bullerunderlag och användarens GPS-position. Den ersätter inte en officiell bullerberäkning.";
+
+// Referensnivå (dBA) som anses motsvara "full" spelvolym — ungefär den
+// starkaste totala nivån man rimligen kan uppskattas uppleva alldeles intill
+// vindkraftverksområdet. Inget exakt vetenskapligt tak, bara den övre änden
+// av den skala vindljudets volym mappas mot.
+const REFERENCE_MAX_DBA = 55;
+
+/**
+ * Omvandlar en beräknad total dBA-nivå (från `estimateSoundLevel`) till en
+ * normaliserad uppspelningsvolym 0..1 för det procedurella vindljudet i
+ * `useWindSound.ts`. Detta är den ENDA kopplingen mellan den informativa
+ * dBA-uppskattningen och den faktiska ljudvolymen — volymen ska kontinuerligt
+ * följa den beräknade nivån (låg dBA ⇒ tyst, hög dBA ⇒ högt), inte en separat,
+ * fristående av/på-logik.
+ *
+ * Eftersom `totalDba` redan innehåller ev. manuell "Ljud inne"-dämpning (se
+ * `estimateSoundLevel`s `outdoorConfidence`-parameter, som Home.tsx numera
+ * styr via den explicita ute/inne-väljaren snarare än kameraheuristiken),
+ * faller denna gain naturligt ner mot 0 när användaren valt "Ljud inne" —
+ * precis samma siffra som visas i ljudnivåpanelen.
+ */
+export function dbaToGain(totalDba: number): number {
+  if (!Number.isFinite(totalDba)) return 0;
+  const t = (totalDba - AUDIBILITY_FLOOR_DBA) / (REFERENCE_MAX_DBA - AUDIBILITY_FLOOR_DBA);
+  return Math.min(Math.max(t, 0), 1);
+}

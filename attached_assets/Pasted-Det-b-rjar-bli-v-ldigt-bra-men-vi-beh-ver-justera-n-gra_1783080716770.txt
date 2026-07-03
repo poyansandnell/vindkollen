@@ -1,0 +1,50 @@
+Det börjar bli väldigt bra, men vi behöver justera några saker:
+
+1. “Gå utomhus”-informationen måste synas tydligare
+När appen känner att användaren är inomhus ska meddelandet vara mycket tydligare och ligga mer i fokus.
+Exempel:
+🏠➡️🌤️ Gå utomhus för att se vindkraftverken
+Texten ska inte hamna bakom ljudpanelen eller andra knappar.
+
+2. Vindkraftverken ska inte alltid synas
+Vindkraftverken ska bara visas när appen bedömer att de faktiskt borde kunna synas, alltså:
+- fri sikt
+- himmel i bakgrunden
+- inte inomhus
+- inte bakom väggar, tak, träd, hus eller andra objekt
+
+Om kameran ser en vägg, ett tak, ett rum eller en byggnad ska vindkraftverken inte ritas ovanpå detta. Då ska appen istället visa “Gå utomhus”.
+
+3. Ljudet måste följa beräknad dBA
+Vindljudet ska inte bara vara på/av. Volymen ska följa den beräknade ljudnivån:
+- låg dBA = lågt ljud
+- högre dBA = högre ljud
+- inomhus = dämpat ljud
+- utomhus = full beräknad ljudnivå
+
+4. Lägg till en tydlig ljudknapp: Inne / Ute
+Jag vill ha en knapp där användaren kan välja:
+- “Ljud ute”
+- “Ljud inne”
+
+Men appen ska alltid starta i “Ljud ute” som standard, eftersom syftet är att visa hur det kan låta utomhus på platsen.
+
+När användaren väljer “Ljud inne” ska ljudet dämpas enligt inomhuslogiken.
+
+5. Separera vanlig ljudnivå och infraljud
+Det vore bra att ha två olika indikatorer:
+
+A) Ljudnivå dBA
+Visar hörbart vindkraftsljud.
+
+B) Infraljud / lågfrekvent påverkan
+Visas som en egen riskindikator med färg:
+🟢 låg
+🟡 måttlig
+🔴 hög
+
+Texten ska vara försiktig:
+“Detta är en uppskattad indikator, inte en medicinsk mätning. Långvarig exponering för lågfrekvent ljud kan hos vissa personer upplevas som störande och bidra till trötthet, huvudvärk eller sömnproblem.”
+
+6. Viktigt: vindkraftverken får inte ligga framför allt
+Just nu riskerar verken att se ut som att de ligger ovanpå inomhusmiljö eller objekt. De ska bara visas när de faktiskt borde synas i kamerabilden. Om appen är osäker är det bättre att dölja verken än att visa dem fel.

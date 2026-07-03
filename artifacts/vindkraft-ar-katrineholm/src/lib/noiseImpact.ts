@@ -126,9 +126,8 @@ export const NOISE_IMPACT_LEVEL_COLORS: Record<
 };
 
 /**
- * Exakt disclaimer-text enligt produktspecifikationen — får inte omformuleras
- * till att påstå garanterad skada; håll formuleringarna "kan bidra till"/
- * "kan upplevas"/"för känsliga personer".
+ * Exakt disclaimer-text enligt produktspecifikationen (uppdaterad efter
+ * användartester) — får INTE omformuleras eller parafraseras.
  */
 export const NOISE_IMPACT_DISCLAIMER =
-  "Detta är en uppskattad riskindikator, inte en medicinsk mätning. Långvarig exponering för buller och lågfrekvent ljud kan hos vissa personer bidra till störning, trötthet, huvudvärk, tryckkänsla eller sämre sömn. Påverkan varierar beroende på avstånd, väder, vindriktning, bostadens konstruktion och individuell känslighet.";
+  "Detta är en uppskattad indikator, inte en medicinsk mätning. Långvarig exponering för lågfrekvent ljud kan hos vissa personer upplevas som störande och bidra till trötthet, huvudvärk eller sömnproblem.";

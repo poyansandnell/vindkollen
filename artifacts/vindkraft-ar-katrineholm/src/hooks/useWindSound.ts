@@ -29,16 +29,15 @@ interface WindNodes {
   streamDestination: MediaStreamAudioDestinationNode;
 }
 
-// Basvolymen på avstånd är nu avsiktligt mer återhållsam och avtagandet
-// brantare (se `Math.pow(linear, PROXIMITY_CURVE_EXPONENT)` nedan) — närmare
-// verklighetens karaktär, där verkens bullerutredning anger ca 35–40 dBA
-// ekvivalent nivå vid närmaste bostad (ungefär som ett tyst kylskåpssus),
-// snarare än ett ständigt påtagligt dån redan på långt håll. Ju närmare
-// tornen man är desto mer stiger volymen dock tydligt, för att förmedla
-// hur upplevelsen faktiskt förändras när man rör sig genom området.
-// OBS: webbljud kan ändå inte återge en fysisk dB-nivå exakt (beror på
-// telefonens högtalare/volym) — se `lib/soundLevel.ts` för den separata,
-// informativa dBA-uppskattningen som INTE styr denna volym.
+// Bas-/maxvolymen håller ljudet återhållsamt på håll och tydligt kraftigare
+// nära tornen, ungefär som verkens bullerutredning anger (ca 35–40 dBA
+// ekvivalent nivå vid närmaste bostad, som ett tyst kylskåpssus). Var på
+// BASE..MAX-skalan volymen ligger just nu styrs helt av `updateProximity`s
+// `dbaGain`-parameter — dvs. DIREKT av den beräknade dBA-nivån i
+// `lib/soundLevel.ts` (`dbaToGain(totalDba)`), inte av en egen fristående
+// avståndskurva. OBS: webbljud kan ändå inte återge en fysisk dB-nivå exakt
+// (beror på telefonens högtalare/volym) — dBA-uppskattningen är informativ,
+// men den här kopplingen gör att volymen ändå kontinuerligt FÖLJER den.
 //
 // Hög upplevd ljudstyrka (utan att digitalt klippa) uppnås genom en hårdare
 // kompressor (lägre tröskel/högre ratio) + en makeup-gain-nod efteråt som
@@ -52,15 +51,6 @@ const WHOOSH2_BASE = 0.32;
 const WHOOSH2_MAX = 0.8;
 const RUMBLE_BASE = 0.18;
 const RUMBLE_MAX = 0.42;
-// Brantare avtagande än tidigare (var 0.55) — mer likt hur ljud faktiskt
-// dämpas med avstånd i verkligheten (ungefär kvadratiskt), så nivån känns
-// påtagligt lugnare på medel-/långt avstånd men växer märkbart nära tornen.
-const PROXIMITY_CURVE_EXPONENT = 1.3;
-const PROXIMITY_RANGE_M = 3500;
-// Flera närliggande verk kombineras (se updateProximity) till en total
-// "närhetsfaktor" som kan överstiga 1 — så att många verk nära inpå
-// tillsammans låter tydligt kraftfullare än ett enda ensamt verk.
-const MAX_COMBINED_PROXIMITY = 1.9;
 
 /**
  * Genererar ett kraftigt, uppslukande vindkraftsljud helt proceduralt med Web
@@ -74,8 +64,9 @@ const MAX_COMBINED_PROXIMITY = 1.9;
  * - En långsam "vindriktnings"-LFO som moduleras in på master-volymen, så att
  *   ljudet naturligt sväller och avtar lite över tid — som om vindriktningen
  *   ändras — utan att kännas mekaniskt konstant.
- * - Volymen ökar ju närmare användaren är verken, och flera verk inom räckhåll
- *   kombineras till en högre total volym (se updateProximity).
+ * - Volymen följer kontinuerligt den beräknade dBA-nivån (se `updateProximity`
+ *   och `lib/soundLevel.ts`s `dbaToGain`) — högre beräknad nivå (närmare verk,
+ *   fler bidragande verk, "Ljud ute" valt) ⇒ högre volym.
  * - En hård DynamicsCompressorNode + makeup-gain ger hög upplevd ljudstyrka,
  *   och en avslutande mjuk klippningskurva (WaveShaper) garanterar att inget
  *   digitalt klipper eller distorderar oavsett hur högt insignalen drivs.
@@ -460,46 +451,31 @@ export function useWindSound() {
   }
 
   /**
-   * Uppdaterar volym och svischtakt baserat på avstånd till samtliga verk
-   * (meter) och rotorernas genomsnittliga varvtal (RPM). Anropas löpande när
-   * GPS-position eller vindkraftsdata ändras — påverkar bara befintliga
-   * ljudnoder, startar inget nytt ljud.
+   * Uppdaterar volym och svischtakt. Anropas löpande när GPS-position eller
+   * den beräknade ljudnivån ändras — påverkar bara befintliga ljudnoder,
+   * startar inget nytt ljud.
    *
-   * Istället för att bara titta på det närmaste verket summeras ett bidrag
-   * från varje verk inom räckhåll (`PROXIMITY_RANGE_M`) — flera närliggande
-   * verk kombineras därmed till en tydligt högre total volym än ett enda
-   * ensamt verk, precis som ett riktigt vindkraftverksområde låter kraftigare
-   * ju fler verk som är i drift nära lyssnaren. Varje bidrag använder en
-   * uppmjukad (kvadratrotsliknande) avtagandekurva så att volymen förblir
-   * tydligt hörbar även på medelavstånd, istället för att nästan tystna.
-   *
-   * `outdoorFactor` (0..1, standard 1) skalar samtliga målvolymer — används
-   * för att låta ljudet tona ned helt när `useSkyDetection` bedömer att
-   * användaren är inomhus (0 = helt tyst), och tona upp igen live så fort
-   * användaren går ut (1 = full volym). De befintliga `setTargetAtTime`-
-   * övertoningarna nedan ger en mjuk, ca 1-sekunders insvängning, inte ett
-   * abrupt hopp.
+   * `dbaGain` (0..1) kommer från `lib/soundLevel.ts`s `dbaToGain(totalDba)`
+   * och är den ENDA källan till volymens skalning: volymen ska kontinuerligt
+   * följa den beräknade dBA-nivån (låg beräknad nivå ⇒ tyst, hög nivå ⇒
+   * högt), inte en egen, fristående avstånds-/av-på-kurva. Eftersom
+   * `totalDba` redan speglar ev. manuellt vald "Ljud inne" (se Home.tsx),
+   * faller `dbaGain` naturligt mot 0 i det läget — samma logik gäller för
+   * flera nära verk, som redan kombineras logaritmiskt i `combineLevelsDba`
+   * innan de når hit. De befintliga `setTargetAtTime`-övertoningarna nedan
+   * ger en mjuk, ca 1-sekunders insvängning, inte ett abrupt hopp.
    */
-  function updateProximity(distancesMeters: number[], avgRpm: number, outdoorFactor = 1) {
+  function updateProximity(dbaGain: number, avgRpm: number) {
     const nodes = nodesRef.current;
     const ctx = ctxRef.current;
     if (!nodes || !ctx) return;
 
-    const distances = distancesMeters.length > 0 ? distancesMeters : [PROXIMITY_RANGE_M];
-    let combined = 0;
-    for (const raw of distances) {
-      const d = Math.max(raw, 60);
-      if (d >= PROXIMITY_RANGE_M) continue;
-      const linear = 1 - d / PROXIMITY_RANGE_M; // 0 = utom räckhåll, 1 = precis vid tornet
-      combined += Math.pow(linear, 0.55); // mjukare avtagande — hörbart även på medelavstånd
-    }
-    const proximity = Math.min(combined, MAX_COMBINED_PROXIMITY);
-    const muffle = Math.min(Math.max(outdoorFactor, 0), 1);
+    const gain = Math.min(Math.max(dbaGain, 0), 1);
 
-    const windTarget = (AMBIENCE_BASE + proximity * (AMBIENCE_MAX - AMBIENCE_BASE)) * muffle;
-    const whooshTarget = (WHOOSH_BASE + proximity * (WHOOSH_MAX - WHOOSH_BASE)) * muffle;
-    const whoosh2Target = (WHOOSH2_BASE + proximity * (WHOOSH2_MAX - WHOOSH2_BASE)) * muffle;
-    const rumbleTarget = (RUMBLE_BASE + proximity * (RUMBLE_MAX - RUMBLE_BASE)) * muffle;
+    const windTarget = AMBIENCE_BASE + gain * (AMBIENCE_MAX - AMBIENCE_BASE);
+    const whooshTarget = WHOOSH_BASE + gain * (WHOOSH_MAX - WHOOSH_BASE);
+    const whoosh2Target = WHOOSH2_BASE + gain * (WHOOSH2_MAX - WHOOSH2_BASE);
+    const rumbleTarget = RUMBLE_BASE + gain * (RUMBLE_MAX - RUMBLE_BASE);
 
     nodes.windGain.gain.setTargetAtTime(windTarget, ctx.currentTime, 1.2);
     nodes.whooshGain.gain.setTargetAtTime(whooshTarget, ctx.currentTime, 1.2);
