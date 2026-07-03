@@ -20,3 +20,11 @@ A pattern like "if single inference > X ms, count as slow; after N slow samples,
 **Why:** A threshold tuned as if the model needed near-real-time (e.g. under 1s, 3 strikes) will trip on ordinary mobile hardware within the first second or two of every session, permanently falling back to "feature never engages" — which looks like a total feature failure to the end user even though the fallback code path itself works exactly as designed.
 
 **How to apply:** Exclude the first (warm-up) inference from the slow-sample counter, and set the slow threshold against what the *feature* actually needs (e.g. "updates a few times per second" != "30fps"), not an arbitrary conservative ms value.
+
+## 3. Raising grid resolution (finer cells) silently raises texture noise per cell too
+
+Increasing `GRID_ROWS`/`GRID_COLS` for a canvas-downsample heuristic (to improve spatial precision, e.g. matching a treeline boundary) while keeping the same per-cell sample size (`CELL_PX`) shrinks how much of the source video each cell represents — which means *less* averaging/blurring of real-world noise per cell, not more precision for free. A `stdDev`-based "is this smooth like sky" texture threshold tuned for the old, coarser grid will then misfire: real sky (especially hazy/overcast, common near the horizon) can exceed the old threshold purely from finer sampling, not from a real texture change, and gets misclassified as "occluded."
+
+**Why:** This shipped as a real regression — a same-session change that only bumped grid resolution (12x8 → 16x20) made an "occlude behind trees" overlay start rendering as if entire wind turbines against open sky were occluded, turning them visibly red/dashed everywhere instead of only when genuinely behind trees.
+
+**How to apply:** Any time you change a downsample-grid resolution for a brightness/texture heuristic, re-derive (don't just carry over) the texture/brightness thresholds — the effective smoothing ratio (source pixels per cell) changed, so the old thresholds no longer mean the same thing. Retest against synthetic "sky-like" pixel patches with realistic added noise, not just clean averages.

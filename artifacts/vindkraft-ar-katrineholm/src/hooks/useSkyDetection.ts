@@ -157,9 +157,23 @@ function classifyCell(pixels: Uint8ClampedArray, col: number, row: number): bool
   // JUSTERING: Något lägre ljusstyrkekrav (135 istället för 150) för att
   // inte missa mulna, mörka vinterdagar, men kompenserar med strängare
   // krav på "släthet" (lowTexture) för att undvika falska positiva inomhus.
-  const bright = avgLum > 135;
-  const lowTexture = stdDev < 12;
-  return bright && lowTexture && (sat < 0.2 || (blueish && avgB > avgR + 6));
+  //
+  // JUSTERING 2: När GRID_ROWS/GRID_COLS höjdes till 20x16 (för att träffa
+  // trädtoppslinjen mer exakt, se modulens jsdoc) blev varje cell en MYCKET
+  // mindre nedskalning av videobilden (t.ex. höjdled: bara ~4-5x nedskalning
+  // istället för tidigare ~11x). Det bevarar mer verklig brus/textur per
+  // cell — riktig himmel (särskilt disig/molnig himmel nära horisonten,
+  // eller ljus glid mellan sol och sky) fick då ofta stdDev strax över det
+  // gamla 12-gränsvärdet och klassades felaktigt som "ej himmel", vilket i
+  // praktiken gjorde ATT VERKEN SÅG UT SOM OM DE STOD FRAMFÖR TRÄD ÖVERALLT
+  // — hela verk tonades röda (se "Visa dolda"-läget) även med fri sikt mot
+  // horisonten. Höjt stdDev-tak (18) och sänkt ljusstyrkekrav (110)
+  // kompenserar för den mindre nedskalningen utan att ge upp förmågan att
+  // skilja på verklig himmel och lövverk/tak (som har mycket högre textur än
+  // så här, se ovan).
+  const bright = avgLum > 110;
+  const lowTexture = stdDev < 18;
+  return bright && lowTexture && (sat < 0.25 || (blueish && avgB > avgR + 4));
 }
 
 /**
