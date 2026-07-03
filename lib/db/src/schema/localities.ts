@@ -12,6 +12,7 @@ export const localitiesTable = pgTable(
     kommun: text("kommun"),
     region: text("region"),
     population: integer("population"),
+    postcodes: text("postcodes").array().notNull().default([]),
     lat: doublePrecision("lat").notNull(),
     lng: doublePrecision("lng").notNull(),
     source: text("source").notNull(),

@@ -16,6 +16,7 @@ export interface Locality {
   region?: string | null;
   /** @nullable */
   population?: number | null;
+  postcodes?: string[];
   lat: number;
   lng: number;
   /** @nullable */

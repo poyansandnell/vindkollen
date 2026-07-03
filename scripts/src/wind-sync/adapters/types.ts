@@ -57,10 +57,22 @@ export interface NormalizedTurbine {
   lastUpdated: string | null;
 }
 
+export interface NormalizedPostcode {
+  postcode: string;
+  lat: number;
+  lng: number;
+}
+
 export interface CountryWindDataAdapter {
   countryCode: string;
   countryName: string;
   fetchLocalities(): Promise<NormalizedLocality[]>;
   fetchProjectAreas(): Promise<NormalizedProjectArea[]>;
   fetchTurbines(): Promise<NormalizedTurbine[]>;
+  /**
+   * Optional: fetch postcode points for this country so they can be spatially
+   * joined onto the nearest locality (populates `localities.postcodes`).
+   * Countries without a freely fetchable postcode dataset can omit this.
+   */
+  fetchPostcodes?(): Promise<NormalizedPostcode[]>;
 }

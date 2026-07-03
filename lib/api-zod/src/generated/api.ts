@@ -220,6 +220,7 @@ export const SearchLocalitiesResponseItem = zod.object({
   "kommun": zod.string().nullish(),
   "region": zod.string().nullish(),
   "population": zod.number().nullish(),
+  "postcodes": zod.array(zod.string()).optional(),
   "lat": zod.number(),
   "lng": zod.number(),
   "distanceKm": zod.number().nullish()
@@ -242,6 +243,7 @@ export const GetLocalityResponse = zod.object({
   "kommun": zod.string().nullish(),
   "region": zod.string().nullish(),
   "population": zod.number().nullish(),
+  "postcodes": zod.array(zod.string()).optional(),
   "lat": zod.number(),
   "lng": zod.number(),
   "distanceKm": zod.number().nullish()
@@ -337,6 +339,7 @@ export const ListBestLocalitiesToTestResponseItem = zod.object({
   "kommun": zod.string().nullish(),
   "region": zod.string().nullish(),
   "population": zod.number().nullish(),
+  "postcodes": zod.array(zod.string()).optional(),
   "lat": zod.number(),
   "lng": zod.number(),
   "distanceKm": zod.number().nullish()

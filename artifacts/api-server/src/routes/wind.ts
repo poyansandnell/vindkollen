@@ -205,11 +205,24 @@ router.get("/wind/localities/search", async (req, res) => {
   const q = query.q.toLowerCase();
   const term = `%${q}%`;
   const prefixTerm = `${q}%`;
+  // Postal codes are matched digit-only so "123 45" and "12345" both work.
+  const postcodeQuery = q.replace(/\s+/g, "");
+  const postcodePrefixTerm = `${postcodeQuery}%`;
+  const isPostcodeLikeQuery = /^\d+$/.test(postcodeQuery) && postcodeQuery.length >= 2;
+
+  const postcodeMatch = sql`
+    exists (
+      select 1 from unnest(${localitiesTable.postcodes}) as p
+      where p like ${postcodePrefixTerm}
+    )
+  `;
 
   const relevanceRank = sql`
     case
       when lower(${localitiesTable.name}) = ${q} then 0
+      when exists (select 1 from unnest(${localitiesTable.postcodes}) as p where p = ${postcodeQuery}) then 0
       when lower(${localitiesTable.name}) like ${prefixTerm} then 1
+      when ${postcodeMatch} then 1
       when lower(${localitiesTable.name}) like ${term} then 2
       when lower(coalesce(${localitiesTable.kommun}, '')) like ${term} then 3
       else 4
@@ -222,7 +235,9 @@ router.get("/wind/localities/search", async (req, res) => {
     .where(
       and(
         eq(localitiesTable.countryCode, query.countryCode),
-        sql`(lower(${localitiesTable.name}) like ${term} or lower(coalesce(${localitiesTable.kommun}, '')) like ${term} or lower(coalesce(${localitiesTable.region}, '')) like ${term})`,
+        isPostcodeLikeQuery
+          ? sql`(lower(${localitiesTable.name}) like ${term} or lower(coalesce(${localitiesTable.kommun}, '')) like ${term} or lower(coalesce(${localitiesTable.region}, '')) like ${term} or ${postcodeMatch})`
+          : sql`(lower(${localitiesTable.name}) like ${term} or lower(coalesce(${localitiesTable.kommun}, '')) like ${term} or lower(coalesce(${localitiesTable.region}, '')) like ${term})`,
       ),
     )
     .orderBy(relevanceRank, sql`${localitiesTable.population} desc nulls last`)

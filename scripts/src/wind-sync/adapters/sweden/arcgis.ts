@@ -31,6 +31,9 @@ export async function queryArcGisLayer<TAttrs>(
     url.searchParams.set("returnGeometry", "true");
     url.searchParams.set("outSR", "4326");
     url.searchParams.set("f", "json");
+    // Stable ordering is required for resultOffset paging to be correct;
+    // without it, ArcGIS may return duplicate or skipped rows across pages.
+    url.searchParams.set("orderByFields", "OBJECTID");
     url.searchParams.set("resultOffset", String(offset));
     url.searchParams.set("resultRecordCount", String(PAGE_SIZE));
 

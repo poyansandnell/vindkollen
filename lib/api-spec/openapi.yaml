@@ -346,6 +346,9 @@ components:
         kommun: { type: ["string", "null"] }
         region: { type: ["string", "null"] }
         population: { type: ["integer", "null"] }
+        postcodes:
+          type: array
+          items: { type: string }
         lat: { type: number }
         lng: { type: number }
         distanceKm:

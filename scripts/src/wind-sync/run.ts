@@ -19,6 +19,7 @@ const ADAPTERS: CountryWindDataAdapter[] = [swedenAdapter];
 
 const NEAREST_LOCALITY_SEARCH_RADIUS_KM = 60;
 const IMPACT_SCORE_RADIUS_KM = 60;
+const POSTCODE_JOIN_RADIUS_KM = 15;
 
 async function syncCountry(adapter: CountryWindDataAdapter): Promise<void> {
   const log = (msg: string) => console.log(`[wind-sync:${adapter.countryCode}] ${msg}`);
@@ -73,13 +74,53 @@ async function syncCountry(adapter: CountryWindDataAdapter): Promise<void> {
 
   const localityIndex = new SpatialIndex<Locality>(allLocalities, (l) => ({ lat: l.lat, lng: l.lng }));
 
+  if (adapter.fetchPostcodes) {
+    log("fetching postcodes...");
+    const normalizedPostcodes = await adapter.fetchPostcodes();
+    log(`fetched ${normalizedPostcodes.length} postcodes, joining to nearest locality...`);
+
+    const postcodesByLocalityId = new Map<number, Set<string>>();
+    for (const p of normalizedPostcodes) {
+      const nearest = localityIndex.nearest(p.lat, p.lng, POSTCODE_JOIN_RADIUS_KM);
+      if (!nearest) continue;
+      const set = postcodesByLocalityId.get(nearest.item.id) ?? new Set<string>();
+      set.add(p.postcode);
+      postcodesByLocalityId.set(nearest.item.id, set);
+    }
+
+    log(`updating postcodes for ${postcodesByLocalityId.size} localities...`);
+    const localityIds = [...postcodesByLocalityId.keys()];
+    for (let i = 0; i < localityIds.length; i += BATCH) {
+      const batchIds = localityIds.slice(i, i + BATCH);
+      await Promise.all(
+        batchIds.map((localityId) =>
+          db
+            .update(localitiesTable)
+            .set({ postcodes: [...(postcodesByLocalityId.get(localityId) ?? [])].sort() })
+            .where(eq(localitiesTable.id, localityId)),
+        ),
+      );
+      log(`  postcodes ${Math.min(i + BATCH, localityIds.length)}/${localityIds.length}`);
+    }
+
+    for (const locality of allLocalities) {
+      const postcodes = postcodesByLocalityId.get(locality.id);
+      if (postcodes) locality.postcodes = [...postcodes].sort();
+    }
+  }
+
   log("fetching project areas...");
   const normalizedAreas = await adapter.fetchProjectAreas();
   log(`fetched ${normalizedAreas.length} project areas, upserting...`);
 
+  // Defensive dedup: ArcGIS resultOffset pagination can occasionally return
+  // the same feature twice, which would otherwise violate the "ON CONFLICT
+  // DO UPDATE cannot affect row a second time" constraint within one batch.
+  const dedupedAreas = [...new Map(normalizedAreas.map((a) => [a.externalId, a])).values()];
+
   const projectAreas: WindProjectArea[] = [];
-  for (let i = 0; i < normalizedAreas.length; i += BATCH) {
-    const batch = normalizedAreas.slice(i, i + BATCH);
+  for (let i = 0; i < dedupedAreas.length; i += BATCH) {
+    const batch = dedupedAreas.slice(i, i + BATCH);
     const inserted = await db
       .insert(windProjectAreasTable)
       .values(
@@ -157,9 +198,14 @@ async function syncCountry(adapter: CountryWindDataAdapter): Promise<void> {
     allProjectAreas.filter((a) => a.externalId).map((a) => [a.externalId as string, a]),
   );
 
+  // Defensive dedup: ArcGIS resultOffset pagination can occasionally return
+  // the same feature twice, which would otherwise violate the "ON CONFLICT
+  // DO UPDATE cannot affect row a second time" constraint within one batch.
+  const dedupedTurbines = [...new Map(normalizedTurbines.map((t) => [t.externalId, t])).values()];
+
   const turbines: WindTurbine[] = [];
-  for (let i = 0; i < normalizedTurbines.length; i += BATCH) {
-    const batch = normalizedTurbines.slice(i, i + BATCH);
+  for (let i = 0; i < dedupedTurbines.length; i += BATCH) {
+    const batch = dedupedTurbines.slice(i, i + BATCH);
     const inserted = await db
       .insert(windTurbinesTable)
       .values(
