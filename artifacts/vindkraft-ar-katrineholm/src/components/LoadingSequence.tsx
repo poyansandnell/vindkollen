@@ -6,13 +6,23 @@ interface LoadingSequenceProps {
 
 // Varje steg visas i ~1 sekund (sista steget, "0 sekunder", visas något
 // kortare eftersom det bara är en avslutande bekräftelse innan AR-vyn tar
-// över) — totalt ca 5 sekunder, enligt kravet "räkna ner från 5 till 0".
+// över) — totalt ca 6 sekunder. Kompass-steget (4 sekunder kvar) visas
+// något längre (1800ms) än övriga steg, så att användaren hinner läsa och
+// faktiskt utföra åtta-rörelsen innan nästa steg tar över — kompassens
+// råvärde kalibreras av telefonens OS, inte av appen, och kan annars driva
+// iväg (systematiskt fel, inte bara brus) oavsett hur mycket mjukning
+// `useDeviceOrientation.ts` gör i efterhand.
 // `checkedUpTo` anger hur många punkter i checklistan (se `CHECKLIST_ITEMS`
 // nedan) som ska vara avbockade MEDAN detta steg visas, dvs. resultatet av
 // föregående steg.
 const STAGES = [
   { secondsLeft: 5, message: "📍 Hämtar din GPS-position…", checkedUpTo: 0, durationMs: 1000 },
-  { secondsLeft: 4, message: "🧭 Kalibrerar kompass och kamerans riktning…", checkedUpTo: 1, durationMs: 1000 },
+  {
+    secondsLeft: 4,
+    message: "🧭 Kalibrera kompassen — rör telefonen i en åtta-rörelse några gånger",
+    checkedUpTo: 1,
+    durationMs: 1800,
+  },
   {
     secondsLeft: 3,
     message: "🌍 Placerar ut 29 vindkraftverk på sina verkliga koordinater…",
