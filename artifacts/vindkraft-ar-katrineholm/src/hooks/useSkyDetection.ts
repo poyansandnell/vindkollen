@@ -70,8 +70,17 @@ export interface SkyDetectionState {
   method: "loading" | "ml" | "disabled";
 }
 
-export const GRID_COLS = 12;
-export const GRID_ROWS = 8;
+// Rutnätsupplösning: höjdupplösningen (rader) är nu betydligt högre än
+// bredden eftersom kameraströmmen är porträttorienterad (mycket högre än
+// bred), och den vertikala gränsen mellan "himmel" och "skymt av träd" är
+// exakt vad som avgör om den övre delen av ett verk (ovanför trädtopparna)
+// klassas rätt. Med bara 8 rader (ursprungsvärdet) täckte varje rad ~12.5%
+// av bildhöjden — ofta MER än ett helt verks skärmhöjd på 500-800 m
+// avstånd, så hela verket (både den del som stack upp ovanför träden och
+// den skymda basen) hamnade i samma cell och fick samma (delvis skymd)
+// färgton, även på den del som faktiskt var fri mot himlen.
+export const GRID_COLS = 16;
+export const GRID_ROWS = 20;
 // 8x8 pixlar per cell (inte 3x3) — ger textur-signalen (`stdDev`) faktiskt
 // något att mäta. Med bara 3x3 källpixlar nedskalas nästan all textur bort
 // redan innan klassificeringen, vilket gjorde att en jämnt målad, ljus

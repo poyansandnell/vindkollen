@@ -235,7 +235,7 @@ export function PlacementMap({ turbines, onMove, outsideBoundaryIds }: Placement
         })}
       </svg>
 
-      <div className="absolute inset-0">
+      <div className="pointer-events-none absolute inset-0">
         {HOUSEHOLD_CLUSTERS.map((h) => {
           const p = project(h.lat, h.lon);
           return (
