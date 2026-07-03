@@ -84,17 +84,44 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wind.playing, geo.lat, geo.lon]);
 
-  const handleStart = useCallback(async () => {
+  const handleStart = useCallback(() => {
     setStarting(true);
     // Ljud på som standard: startas direkt från samma knapptryckning (giltigt
     // användargest för iOS Safaris ljuduppspelningsregler), innan ev. await
     // nedan, så AudioContext skapas/låses upp synkront i gestens "kontext".
     void wind.toggle();
+
+    // VIKTIGT: GPS- och kamerabehörighet måste begäras SYNKRONT i samma
+    // knapptryckning som utlöser dem — precis som ljudet ovan. iOS Safari
+    // (och flera Android-webbläsare) räknar bara knappklicket som en giltig
+    // "user gesture" en mycket kort stund. Om vi (som tidigare) väntar
+    // (await) på kompassbehörigheten FÖRST, och först därefter — via
+    // setStarted(true) och en efterföljande render/effekt — begär GPS och
+    // kamera, hinner gest-fönstret stängas. Resultatet blir att webbläsaren
+    // tyst nekar GPS/kamera utan att någonsin visa behörighetsdialogen,
+    // vilket var precis vad testaren (Stephane) upplevde. Genom att trigga
+    // alla tre förfrågningar parallellt, direkt här, ligger de alla kvar
+    // inom samma giltiga gest-fönster.
+    navigator.geolocation?.getCurrentPosition(
+      () => {},
+      () => {},
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+    navigator.mediaDevices
+      ?.getUserMedia?.({ video: { facingMode: { ideal: "environment" } }, audio: false })
+      .then((stream) => stream.getTracks().forEach((t) => t.stop()))
+      .catch(() => {});
+
+    const finish = () => {
+      setStarted(true);
+      setStarting(false);
+    };
+
     if (orientation.needsPermission) {
-      await orientation.requestPermission();
+      void orientation.requestPermission().finally(finish);
+    } else {
+      finish();
     }
-    setStarted(true);
-    setStarting(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orientation]);
 

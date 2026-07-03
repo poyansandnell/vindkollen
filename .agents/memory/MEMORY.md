@@ -6,3 +6,4 @@
 - [iOS Safari audio speaker routing](ios-audio-speaker-routing.md) — route Web Audio via MediaStreamAudioDestinationNode + hidden `<audio>` element to force main-speaker (not earpiece) playback.
 - [WebGL canvas photo capture](webgl-canvas-photo-capture.md) — avoid `preserveDrawingBuffer` (risks context loss → black overlay); capture toDataURL synchronously right after render() instead.
 - [In-app browser permission prompts](inapp-browser-permissions.md) — Messenger/Instagram/TikTok webviews often auto-deny camera/GPS without ever prompting; detect UA and tell users to open in Safari/Chrome.
+- [Chained permission requests lose user-gesture](user-gesture-permission-chaining.md) — awaiting one permission prompt before requesting the next silently loses activation, causing later prompts to be denied with no dialog shown.
