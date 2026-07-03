@@ -28,15 +28,24 @@ export interface SkyDetectionState {
    */
   isPointSky: (u: number, v: number) => boolean;
   /**
-   * Vilken metod som just nu producerar himmelsrutnätet — nyttigt för
-   * felsökning/UI, styr aldrig något beteende i sig.
+   * Vilket läge himmel-ocklusionen (`isPointSky`) just nu befinner sig i —
+   * nyttigt för felsökning/UI, styr aldrig något annat beteende i sig.
    * - "loading": ML-segmenteringsmodellen laddas fortfarande i bakgrunden.
-   * - "ml": DeepLabv3/Cityscapes-segmentering används (ockluderar även
-   *   träd/byggnader, inte bara "inomhus").
-   * - "heuristic": enkel ljusstyrka/textur-heuristik används (permanent
-   *   fallback om ML-modellen misslyckades ladda eller var för långsam).
+   *   `isPointSky` returnerar alltid true (ingen ocklusion) tills modellen
+   *   är redo — verken syns precis som innan denna funktion fanns.
+   * - "ml": DeepLabv3/Cityscapes-segmentering körs och styr `isPointSky`
+   *   (ockluderar träd/byggnader/terräng/inomhus, inte bara "inomhus").
+   * - "disabled": modellen misslyckades ladda, eller visade sig vara för
+   *   långsam på enheten — permanent fallback för resten av sessionen.
+   *   `isPointSky` returnerar alltid true (ingen ocklusion), dvs. exakt
+   *   samma beteende som innan denna funktion fanns.
+   *
+   * OBS: `outdoorConfidence`/`indoors` (ljuddämpning + "Gå utomhus") är en
+   * separat, redan tidigare befintlig funktion och drivs alltid av den
+   * enkla heuristiken oavsett `method` — den påverkas inte av om
+   * ML-segmenteringen lyckas eller inte.
    */
-  method: "loading" | "ml" | "heuristic";
+  method: "loading" | "ml" | "disabled";
 }
 
 const GRID_COLS = 12;
@@ -73,9 +82,12 @@ const ML_MAX_SLOW_SAMPLES = 3;
  * - Antingen låg mättnad (vit/grå — mulen himmel) eller tydligt blåaktig
  *   (klarblå himmel).
  *
- * Detta är den enkla, alltid tillgängliga fallback-metoden — se modulens
+ * Denna heuristik driver ENDAST `outdoorConfidence`/`indoors` (den redan
+ * sedan tidigare befintliga ljuddämpningen/"Gå utomhus"-signalen) — den
+ * används inte längre för att ockludera vindkraftverk visuellt. Se modulens
  * jsdoc-kommentar och `method` i `SkyDetectionState` för hur den samspelar
- * med den tyngre ML-baserade segmenteringen i `skySegmentation.ts`.
+ * med den tyngre ML-baserade segmenteringen i `skySegmentation.ts`, som är
+ * den enda källan till visuell ocklusion (`isPointSky`).
  */
 function classifyCell(pixels: Uint8ClampedArray, col: number, row: number): boolean {
   let sumR = 0;
@@ -121,25 +133,29 @@ function classifyCell(pixels: Uint8ClampedArray, col: number, row: number): bool
  * himmel kontra ockluderat av något annat (träd, byggnader, terräng, väggar/
  * tak inomhus), samt en samlad "inomhus"-bedömning för hela bilden.
  *
- * Två metoder samverkar:
- * 1. En tyngre, mer tillförlitlig ML-baserad semantisk segmentering
- *    (DeepLabv3/Cityscapes via `skySegmentation.ts`) som körs i bakgrunden så
- *    fort den hunnit laddas, och som explicit klassificerar "sky" skilt från
- *    t.ex. "vegetation"/"building" — den ockluderar alltså riktiga träd och
- *    byggnader, inte bara "inomhus".
- * 2. En enkel, alltid omedelbart tillgänglig ljusstyrka/textur-heuristik
- *    (`classifyCell`) som täcker upp innan ML-modellen laddats klart, och
- *    som blir permanent fallback för resten av sessionen om modellen
- *    misslyckas ladda eller visar sig vara för långsam för realtidsbruk på
- *    enheten (se `ML_SLOW_MS`/`ML_MAX_SLOW_SAMPLES`).
+ * Två separata mekanismer, med olika ansvar:
+ * 1. **Visuell ocklusion** (`isPointSky`/`method`): styrs uteslutande av en
+ *    ML-baserad semantisk segmentering (DeepLabv3/Cityscapes via
+ *    `skySegmentation.ts`) som laddas lat i bakgrunden och explicit
+ *    klassificerar "sky" skilt från t.ex. "vegetation"/"building" — den
+ *    ockluderar alltså riktiga träd och byggnader, inte bara "inomhus".
+ *    Tills modellen är klar, eller om den permanent stängs av (misslyckad
+ *    laddning, eller för långsam — se `ML_SLOW_MS`/`ML_MAX_SLOW_SAMPLES`),
+ *    ändras aldrig ocklusionsrutnätet: verken förblir alltid synliga, precis
+ *    som innan denna funktion fanns. Detta ÄR fallback-kravet — det finns
+ *    ingen sekundär, mindre tillförlitlig ocklusionsheuristik som tar över.
+ * 2. **Ljuddämpning/"Gå utomhus"** (`outdoorConfidence`/`indoors`): en redan
+ *    sedan tidigare befintlig, alltid omedelbart tillgänglig ljusstyrka/
+ *    textur-heuristik (`classifyCell`) som körs kontinuerligt oavsett
+ *    ML-status — helt oberoende av (1) och opåverkad av om
+ *    segmenteringsmodellen lyckas ladda eller inte.
  *
- * VIKTIGT — även ML-vägen är en heuristik i produktsyfte, inte en perfekt
- * djupsensor: gränser vid tunna detaljer (kvistar, ledningar) blir inte
- * pixelexakta, och ett mycket ovanligt scenario kan fortfarande
- * felklassificeras. Kombinerat med utjämning (EMA) och hysteres blir det
- * ändå en användbar, live-uppdaterad signal för att dölja vindkraftverk som
- * annars skulle synas "spöka" genom väggar/tak/träd/byggnader, och för att
- * dämpa ljudet/dBA-uppskattningen inomhus.
+ * VIKTIGT — ML-segmenteringen är en heuristik i produktsyfte, inte en
+ * perfekt djupsensor: gränser vid tunna detaljer (kvistar, ledningar) blir
+ * inte pixelexakta, och ett mycket ovanligt scenario kan fortfarande
+ * felklassificeras. Kombinerat med hysteres/EMA på ljudsidan blir det ändå
+ * en användbar, live-uppdaterad signal för att dölja vindkraftverk som
+ * annars skulle synas "spöka" genom väggar/tak/träd/byggnader.
  */
 export function useSkyDetection(
   videoRef: React.RefObject<HTMLVideoElement | null>,
@@ -148,10 +164,15 @@ export function useSkyDetection(
   const [outdoorConfidence, setOutdoorConfidence] = useState(1);
   const [indoors, setIndoors] = useState(false);
   const [ready, setReady] = useState(false);
-  const [method, setMethod] = useState<"loading" | "ml" | "heuristic">("loading");
+  const [method, setMethod] = useState<"loading" | "ml" | "disabled">("loading");
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mlCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Ocklusionsrutnätet (`isPointSky`) — börjar och stannar "allt är himmel"
+  // (ingen ocklusion) tills ML-segmenteringen faktiskt är igång och
+  // levererar ett riktigt rutnät. Detta ÄR fallback-beteendet: om ML aldrig
+  // laddas eller stängs av permanent, förblir detta rutnät oförändrat och
+  // verken syns alltid, precis som innan denna funktion fanns.
   const gridRef = useRef<boolean[]>(new Array(GRID_COLS * GRID_ROWS).fill(true));
   const confidenceRef = useRef(1);
   const indoorsRef = useRef(false);
@@ -209,7 +230,11 @@ export function useSkyDetection(
         mlStateRef.current = "disabled";
       });
 
-    function applySkyRatio(skyRatio: number, usedMethod: "ml" | "heuristic") {
+    // Driver ENDAST `outdoorConfidence`/`indoors` (ljuddämpning + "Gå
+    // utomhus" — redan befintlig funktion sedan tidigare). Körs alltid,
+    // oavsett ML-status, så detta beteende aldrig påverkas av om
+    // segmenteringsmodellen lyckas ladda eller inte.
+    function applyConfidence(skyRatio: number) {
       const target = Math.min(skyRatio / CONFIDENCE_SKY_RATIO_SCALE, 1);
       confidenceRef.current += EMA_ALPHA * (target - confidenceRef.current);
       const nextConfidence = confidenceRef.current;
@@ -224,10 +249,9 @@ export function useSkyDetection(
       setOutdoorConfidence(nextConfidence);
       if (nowIndoors !== wasIndoors) setIndoors(nowIndoors);
       setReady(true);
-      setMethod((prev) => (prev === usedMethod ? prev : usedMethod));
     }
 
-    function sampleHeuristic(video: HTMLVideoElement) {
+    function sampleHeuristicConfidence(video: HTMLVideoElement) {
       ctx!.drawImage(video, 0, 0, CANVAS_W, CANVAS_H);
       let pixels: Uint8ClampedArray;
       try {
@@ -237,18 +261,21 @@ export function useSkyDetection(
       }
 
       let skyCount = 0;
-      const grid = gridRef.current;
       for (let row = 0; row < GRID_ROWS; row++) {
         for (let col = 0; col < GRID_COLS; col++) {
-          const isSky = classifyCell(pixels, col, row);
-          grid[row * GRID_COLS + col] = isSky;
-          if (isSky) skyCount++;
+          if (classifyCell(pixels, col, row)) skyCount++;
         }
       }
-      applySkyRatio(skyCount / (GRID_COLS * GRID_ROWS), "heuristic");
+      applyConfidence(skyCount / (GRID_COLS * GRID_ROWS));
     }
 
-    async function sampleMl(video: HTMLVideoElement) {
+    // Driver den VISUELLA ocklusionen (`isPointSky`/`gridRef`) — enda
+    // källan till detta är ML-segmenteringen. Om den inte är redo (fortfarande
+    // laddas, eller permanent avstängd efter fel/prestandaproblem) rör vi
+    // aldrig `gridRef`, som då förblir "allt är himmel" (ingen ocklusion) —
+    // det är precis fallback-beteendet uppgiften kräver: verken syns alltid,
+    // exakt som innan denna funktion fanns.
+    async function sampleMlOcclusion(video: HTMLVideoElement) {
       const model = mlModelRef.current;
       if (!model) return;
       if (!mlCanvasRef.current) {
@@ -275,11 +302,16 @@ export function useSkyDetection(
         }
         if (cancelled) return;
         gridRef.current = grid;
-        applySkyRatio(skyRatio, "ml");
+        // ML:s eget himmel-mått är mer träffsäkert än ljusstyrke-heuristiken
+        // (skiljer t.ex. riktig himmel från en ljus vit vägg) — använd det
+        // för ljuddämpningen/"Gå utomhus" också när det finns tillgängligt.
+        applyConfidence(skyRatio);
+        if (!cancelled) setMethod("ml");
       } catch {
         // En enskild bildruta misslyckades (t.ex. WebGL-kontext tillfälligt
         // upptagen) — räkna som en "långsam"/misslyckad sampling istället för
-        // att krascha; efter tillräckligt många faller vi tillbaka permanent.
+        // att krascha; efter tillräckligt många faller vi tillbaka permanent
+        // (grid rörs inte här, så ocklusionen förblir oförändrad/av).
         mlSlowCountRef.current += 1;
         if (mlSlowCountRef.current >= ML_MAX_SLOW_SAMPLES) {
           mlStateRef.current = "disabled";
@@ -291,17 +323,19 @@ export function useSkyDetection(
       const video = videoRef.current;
       if (!video || video.readyState < 2 || video.videoWidth === 0) return;
 
+      // Ljud-/"Gå utomhus"-signalen är oberoende av ML-status.
+      sampleHeuristicConfidence(video);
+
       if (mlStateRef.current === "ready" && !mlBusyRef.current) {
         mlBusyRef.current = true;
-        void sampleMl(video).finally(() => {
+        void sampleMlOcclusion(video).finally(() => {
           mlBusyRef.current = false;
         });
-        return;
+      } else if (mlStateRef.current === "disabled") {
+        setMethod("disabled");
       }
-
-      // ML laddas fortfarande, eller är avstängd (misslyckad/långsam) — kör
-      // alltid den snabba heuristiken så att himmelsmasken aldrig saknas.
-      sampleHeuristic(video);
+      // mlStateRef.current === "loading": `method` förblir "loading" och
+      // `gridRef` förblir "allt är himmel" tills modellen är redo.
     }
 
     const interval = window.setInterval(sample, SAMPLE_INTERVAL_MS);
