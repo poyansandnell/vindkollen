@@ -146,7 +146,26 @@ export default function Home() {
     }, 1000);
     return () => window.clearInterval(id);
   }, [started]);
-  const ready = started && geo.lat !== null && geo.lon !== null && orientation.hasFix && camera.stream;
+  const ready =
+    started && geo.lat !== null && geo.lon !== null && orientation.hasFix && orientation.hasSettled && camera.stream;
+
+  // Enkel nedräkning (upp till 5s) som visas medan kompassen "räter in sig"
+  // (`hasFix` men inte `hasSettled` än) — samma princip som en användare
+  // annars skulle behöva vänta manuellt på, men styrd av verklig
+  // sensorstabilitet snarare än en blind timer (se `useDeviceOrientation`s
+  // `hasSettled`-logik för detaljerna).
+  const [compassSettleSeconds, setCompassSettleSeconds] = useState(5);
+  useEffect(() => {
+    if (!orientation.hasFix || orientation.hasSettled) {
+      setCompassSettleSeconds(5);
+      return;
+    }
+    const startedAt = Date.now();
+    const id = window.setInterval(() => {
+      setCompassSettleSeconds(Math.max(0, 5 - Math.floor((Date.now() - startedAt) / 1000)));
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [orientation.hasFix, orientation.hasSettled]);
   const wind = useWindSound();
   // Kamerabaserad himmel/inomhus-heuristik (se `useSkyDetection`s jsdoc för
   // begränsningar) — styr både AR-verkens synlighet (via `isPointSky`,
@@ -549,7 +568,15 @@ export default function Home() {
                 {!camera.stream && "Startar kameran…"}
                 {camera.stream && geo.lat === null && "Hämtar GPS-position…"}
                 {camera.stream && geo.lat !== null && !orientation.hasFix && "Läser av kompass — rör telefonen i en åtta-rörelse."}
+                {camera.stream &&
+                  geo.lat !== null &&
+                  orientation.hasFix &&
+                  !orientation.hasSettled &&
+                  "Kalibrerar kompass — håll telefonen stilla…"}
               </p>
+              {camera.stream && geo.lat !== null && orientation.hasFix && !orientation.hasSettled && (
+                <p className="text-[11px] text-white/40">{compassSettleSeconds > 0 ? `${compassSettleSeconds}s` : "Nästan klart…"}</p>
+              )}
               {camera.stream && geo.lat === null && !geo.error && (
                 <p className="text-[11px] text-white/40">
                   {waitSeconds}s — platsbehörighet:{" "}

@@ -10,6 +10,15 @@ export interface DeviceOrientationApi {
   supported: boolean;
   needsPermission: boolean;
   hasFix: boolean;
+  /**
+   * Sant först en liten stund efter `hasFix` — antingen när girriktningen
+   * varit stabil (se `headingStabilityRef`) en sammanhängande stund, eller
+   * efter en maxväntetid, beroende på vilket som inträffar först. Används
+   * för att inte visa vindkraftverk förrän kompassen hunnit "räta in sig"
+   * efter start, istället för att direkt lita på en enda första avläsning
+   * som (särskilt vid magnetiska störningar inomhus) kan vara kraftigt fel.
+   */
+  hasSettled: boolean;
   error: string | null;
   requestPermission: () => Promise<boolean>;
   calibrateHorizon: () => void;
@@ -29,6 +38,43 @@ export interface DeviceOrientationApi {
 // den utjämnade riktningen — annars "skimrar" objekten även när telefonen
 // ligger helt stilla på ett bord.
 const DEADZONE_DEG = 0.06;
+
+// Adaptiv utjämning av gir (kompassriktning): magnetometerbrus (särskilt
+// inomhus/nära metall) ger ofta enstaka-graders hopp mellan avläsningar
+// ÄVEN när telefonen ligger helt stilla — betydligt mer än den tidigare
+// fasta tidskonstanten (0.15s) kunde dämpa bort, vilket gjorde att
+// vindkraftverken syntes "vandra" trots att telefonen inte rörde sig.
+// Lösningen är en tvåhastighets-/adaptiv utjämning (samma princip som ett
+// "one euro"-filter): en liten skillnad mellan på varandra följande råa
+// avläsningar tolkas som brus och dämpas kraftigt (lång tidskonstant), en
+// stor skillnad tolkas som en avsiktlig vridning och släpps igenom snabbt
+// (kort tidskonstant) så att AR-vyn ändå känns responsiv när man faktiskt
+// vrider på telefonen.
+const HEADING_NOISE_DELTA_DEG = 3;
+const HEADING_TURN_DELTA_DEG = 12;
+const HEADING_STILL_TAU = 0.9;
+const HEADING_TURN_TAU = 0.12;
+// Om en enskild avläsning antyder en orimligt snabb vridning (fler grader/
+// sekund än en människa rimligen kan vrida en telefon) beror det nästan
+// alltid på en tillfällig magnetisk störning/sensorglitch, inte en verklig
+// rörelse — då hoppar vi över just den avläsningen istället för att låta
+// den slå igenom i den utjämnade riktningen.
+const MAX_PLAUSIBLE_TURN_RATE_DEG_PER_SEC = 720;
+// Hur stabil (se `headingStabilityRef`) girriktningen måste vara, och hur
+// länge sammanhängande, innan kompassen anses ha "rätat in sig" (`hasSettled`).
+const SETTLE_STABILITY_THRESHOLD = 0.75;
+const SETTLE_STABLE_DURATION_MS = 1200;
+// Maxväntetid innan vi ändå släpper igenom — annars skulle en telefon i en
+// magnetiskt orolig miljö (t.ex. nära en byggnad med mycket armering)
+// aldrig komma förbi väntningen.
+const SETTLE_MAX_WAIT_MS = 5000;
+
+function circularDiffDeg(a: number, b: number): number {
+  let diff = a - b;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  return diff;
+}
 
 /** Tidsbaserad exponentiell utjämningsfaktor (oberoende av sensorns frekvens). */
 function timeSmoothingFactor(tau: number, dt: number): number {
@@ -76,6 +122,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   const [supported] = useState(() => typeof window !== "undefined" && "DeviceOrientationEvent" in window);
   const [needsPermission, setNeedsPermission] = useState(false);
   const [hasFix, setHasFix] = useState(false);
+  const [hasSettled, setHasSettled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const headingRef = useRef<number | null>(null);
@@ -85,6 +132,9 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   const screenAngleRef = useRef(0);
   const quaternionRef = useRef(new THREE.Quaternion());
   const hasFixRef = useRef(false);
+  const hasFixAtRef = useRef<number | null>(null);
+  const hasSettledRef = useRef(false);
+  const stableSinceRef = useRef<number | null>(null);
   const lastEventTimeRef = useRef<number | null>(null);
   const headingStabilityRef = useRef(1);
   // Litet rullande fönster av senaste |Δgir|/tidssteg-samples (grader/s) —
@@ -147,7 +197,31 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     const dt = lastEventTimeRef.current === null ? 1 / 60 : Math.min((now - lastEventTimeRef.current) / 1000, 0.5);
     lastEventTimeRef.current = now;
 
-    const headingFactor = timeSmoothingFactor(0.15, dt);
+    const prevHeadingRaw = headingRef.current;
+
+    // Hoppa över enstaka avläsningar som antyder en orimligt snabb vridning
+    // (se konstantens kommentar ovan) — dessa är nästan alltid en tillfällig
+    // magnetisk störning/sensorglitch, inte en verklig rörelse.
+    if (prevHeadingRaw !== null && dt > 0) {
+      const rawTurnRate = Math.abs(circularDiffDeg(heading, prevHeadingRaw)) / dt;
+      if (rawTurnRate > MAX_PLAUSIBLE_TURN_RATE_DEG_PER_SEC) return;
+    }
+
+    // Adaptiv tidskonstant för giren: liten skillnad mot föregående råa
+    // avläsning => sannolikt bara magnetometerbrus => dämpa kraftigt (lång
+    // tidskonstant); stor skillnad => sannolikt en avsiktlig vridning =>
+    // släpp igenom snabbt (kort tidskonstant).
+    let headingTau = HEADING_STILL_TAU;
+    if (prevHeadingRaw !== null) {
+      const rawDelta = Math.abs(circularDiffDeg(heading, prevHeadingRaw));
+      const t = Math.min(
+        1,
+        Math.max(0, (rawDelta - HEADING_NOISE_DELTA_DEG) / (HEADING_TURN_DELTA_DEG - HEADING_NOISE_DELTA_DEG)),
+      );
+      headingTau = HEADING_STILL_TAU + (HEADING_TURN_TAU - HEADING_STILL_TAU) * t;
+    }
+
+    const headingFactor = timeSmoothingFactor(headingTau, dt);
     const pitchRollFactor = timeSmoothingFactor(0.35, dt);
 
     const prevHeading = headingRef.current;
@@ -179,7 +253,25 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     setError(null);
     if (!hasFixRef.current) {
       hasFixRef.current = true;
+      hasFixAtRef.current = now;
       setHasFix(true);
+    }
+
+    // Se `hasSettled`-dokumentationen i API-typen ovan: vänta tills giren
+    // varit stabil en sammanhängande stund (eller en maxväntetid passerat)
+    // innan vindkraftverken litar på riktningen och börjar visas.
+    if (!hasSettledRef.current && hasFixRef.current) {
+      if (headingStabilityRef.current >= SETTLE_STABILITY_THRESHOLD) {
+        if (stableSinceRef.current === null) stableSinceRef.current = now;
+      } else {
+        stableSinceRef.current = null;
+      }
+      const stableForMs = stableSinceRef.current !== null ? now - stableSinceRef.current : 0;
+      const sinceFixMs = hasFixAtRef.current !== null ? now - hasFixAtRef.current : 0;
+      if (stableForMs >= SETTLE_STABLE_DURATION_MS || sinceFixMs >= SETTLE_MAX_WAIT_MS) {
+        hasSettledRef.current = true;
+        setHasSettled(true);
+      }
     }
   }, []);
 
@@ -237,6 +329,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     supported,
     needsPermission,
     hasFix,
+    hasSettled,
     error,
     requestPermission,
     calibrateHorizon,
