@@ -7,6 +7,7 @@ import FilterBar, { type FilterState } from "@/components/FilterBar";
 import DetailPanel from "@/components/DetailPanel";
 import BestPlacesView from "@/components/BestPlacesView";
 import SightLinePanel, { type SightSummary } from "@/components/SightLinePanel";
+import InstallPrompt from "@/components/InstallPrompt";
 import { useGeolocation, type GeoPoint } from "@/hooks/useGeolocation";
 import { getMapboxToken } from "@/lib/config";
 import type { MapBounds, MapViewport } from "@/lib/mapProvider/types";
@@ -288,6 +289,8 @@ export default function Home() {
           }}
         />
       )}
+
+      <InstallPrompt />
     </div>
   );
 }
