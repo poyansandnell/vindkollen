@@ -109,7 +109,11 @@ export default function Home() {
   // läget helt manuellt — ingen bakgrundstimer skriver över användarens val.
   const [nightMode, setNightMode] = useState(() => isNightTime());
   const [shadowFlicker, setShadowFlicker] = useState(false);
-  const [showHiddenTurbines, setShowHiddenTurbines] = useState(false);
+  // Default PÅ: verk skymda av t.ex. träd visas som en svag röd, streckad
+  // kontur istället för att vara helt osynliga (se ARScene.tsx). Annars är
+  // det i praktiken omöjligt att hitta ett verk i skogsnära vyer eftersom
+  // ingenting alls syns där det är skymt.
+  const [showHiddenTurbines, setShowHiddenTurbines] = useState(true);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
 

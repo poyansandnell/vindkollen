@@ -179,8 +179,8 @@ export function VisualizationControls({
         </div>
         <p className="-mt-2 mb-4 text-[11px] leading-relaxed text-white/50">
           {showHiddenTurbines
-            ? "Skymda delar av verken visas som en svag, streckad kontur istället för att döljas helt."
-            : "Standardläge: verk döljs helt bakom det som faktiskt skymmer dem (träd, byggnader, väggar)."}
+            ? "Standardläge: skymda delar av verken (t.ex. bakom träd) visas som glesa, röda streck istället för att döljas helt."
+            : "Verk döljs helt bakom det som faktiskt skymmer dem (träd, byggnader, väggar) — kan göra verk nära skog svåra att hitta."}
         </p>
 
         <h2 className="mb-3 text-base font-semibold text-[#FFB347]">Nattläge</h2>

@@ -465,8 +465,13 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
               }
               float visMask = smoothstep(${OCCLUSION_THRESHOLD_LOW.toFixed(2)}, ${OCCLUSION_THRESHOLD_HIGH.toFixed(2)}, occlusion);
               if (uShowHidden > 0.5) {
+                // Skymd del (t.ex. bakom träd): rendera som glesa, röda
+                // streck istället för att döljas helt — annars är verket i
+                // praktiken omöjligt att upptäcka i skogsnära vyer.
                 float dash = mod(gl_FragCoord.x + gl_FragCoord.y, 14.0) < 7.0 ? 1.0 : 0.0;
-                float hiddenAlpha = 0.26 * dash;
+                float hiddenAlpha = 0.32 * dash;
+                vec3 hiddenColor = vec3(0.95, 0.12, 0.1);
+                gl_FragColor.rgb = mix(hiddenColor, gl_FragColor.rgb, visMask);
                 gl_FragColor.a *= mix(hiddenAlpha, 1.0, visMask);
               } else {
                 if (visMask < 0.02) discard;
