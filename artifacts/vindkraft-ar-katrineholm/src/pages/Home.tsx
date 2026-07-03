@@ -7,6 +7,7 @@ import { useWindSound } from "@/hooks/useWindSound";
 import { useSkyDetection } from "@/hooks/useSkyDetection";
 import { useOutdoorConfidenceIndex } from "@/hooks/useOutdoorConfidenceIndex";
 import { useStableGeoPosition } from "@/hooks/useStableGeoPosition";
+import { useSmoothedGeoPosition } from "@/hooks/useSmoothedGeoPosition";
 import { useSmoothedDba } from "@/hooks/useSmoothedDba";
 import { CameraBackground } from "@/components/CameraBackground";
 import { ARScene, type ARSceneHandle } from "@/components/ARScene";
@@ -234,6 +235,14 @@ export default function Home() {
   // dBA-uppskattningen nedan inte omberäknas för varje litet, naturligt
   // GPS-brus medan användaren i praktiken står still.
   const stableGeo = useStableGeoPosition(geo.lat, geo.lon);
+
+  // Utjämnad GPS-position (kontinuerligt EMA-filter, ~1.2s tidskonstant) för
+  // AR-verkens faktiska placering — till skillnad från `stableGeo` ovan
+  // (som fryser positionen i stora 15m-hopp, olämpligt för visuell
+  // placering) svarar den här mjukt på verklig rörelse men filtrerar bort
+  // det meterskaliga GPS-bruset som annars fick verken att "fladdra" i
+  // AR-vyn även när användaren stod still.
+  const smoothedGeo = useSmoothedGeoPosition(geo.lat, geo.lon);
 
   // Avstånd (stabiliserad GPS) till samtliga verk — delas av båda
   // uppskattningarna nedan.
@@ -505,8 +514,8 @@ export default function Home() {
           {ready && (
             <ARScene
               ref={arSceneRef}
-              userLat={geo.lat!}
-              userLon={geo.lon!}
+              userLat={smoothedGeo.lat ?? geo.lat!}
+              userLon={smoothedGeo.lon ?? geo.lon!}
               quaternionRef={orientation.quaternionRef}
               turbines={activeTurbines}
               sunMode={sunMode}
