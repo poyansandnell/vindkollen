@@ -11,3 +11,4 @@
 - [Postgres ORDER BY DESC and NULLs](postgres-order-by-desc-nulls.md) — DESC sorts put NULL first by default, silently burying real values behind null-populated tie rows; use explicit NULLS LAST.
 - [Playwright accessibility snapshot false "[active]"](playwright-active-snapshot-false-positive.md) — a toggle flagged as "not updating" via ARIA `[active]` may just be `:active` mouse-down noise; re-verify with a class-attribute diff before treating as a real bug.
 - [ArcGIS resultOffset pagination duplicates](arcgis-pagination-duplicates.md) — paging without `orderByFields` can return the same feature on two pages; add a stable order field and dedupe by external key before bulk upsert.
+- [vite-plugin-pwa workbox precache limit](vite-pwa-workbox-precache-limit.md) — apps with heavy bundles (mapbox-gl, three.js) exceed the default 2MB precache cap and fail the build; raise `maximumFileSizeToCacheInBytes` proactively.
