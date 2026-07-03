@@ -246,21 +246,20 @@ export function useSkyDetection(
   // produktkravet: hellre dölja verken än att visa dem felaktigt innan
   // appen vet något om vad kameran ser.
   const gridRef = useRef<boolean[]>(new Array(GRID_COLS * GRID_ROWS).fill(false));
-  // Enkel ljusstyrke-/textur-heuristik per rutnätscell (samma `classifyCell`
-  // som driver `outdoorConfidence` nedan, men bevarad per cell istället för
-  // bara aggregerad) — används som fallback-ocklusion när ML-segmenteringen
-  // ännu inte är redo eller permanent avstängd, så att `isPointSky` ALDRIG
-  // bara defaultar till "allt är himmel" i det läget. Mindre exakt än
-  // ML-segmenteringen (kan t.ex. inte skilja en ljus vägg lika säkert från
-  // himmel), men betydligt mer konservativt än ingen ocklusion alls.
-  const heuristicGridRef = useRef<boolean[]>(new Array(GRID_COLS * GRID_ROWS).fill(false));
   // Kontinuerligt (0..1), temporalt EMA-utjämnat ocklusionsrutnät — se
-  // `getOcclusionGrid`s jsdoc. Startar på 0 (allt ockluderat), samma
-  // konservativa default som `gridRef`/`heuristicGridRef` ovan.
+  // `getOcclusionGrid`s jsdoc. Startar på 0 (allt ockluderat); detta är dock
+  // BARA det ML-drivna rutnätet — se `getOcclusionGridRef` för hur fallback
+  // (ML ej redo/avstängd) hanteras separat och ALLTID visar "allt är himmel".
   const occlusionGridRef = useRef<Float32Array>(new Float32Array(GRID_COLS * GRID_ROWS).fill(0));
   // Återanvänd, alltid-noll rutnät att returnera när `indoorsRef.current` är
   // sant — undviker att allokera en ny array varje bildruta.
   const indoorZeroGridRef = useRef<Float32Array>(new Float32Array(GRID_COLS * GRID_ROWS).fill(0));
+  // Återanvänd, alltid-ett ("allt är himmel") rutnät att returnera från
+  // `getOcclusionGrid` när ML-segmenteringen inte är aktiv (fortfarande
+  // laddas, eller permanent avstängd) — detta ÄR fallback-kravet: exakt
+  // samma "verken alltid synliga"-beteende som innan ML-ocklusionen fanns,
+  // ingen sekundär heuristik-baserad ocklusion tar över.
+  const allSkyGridRef = useRef<Float32Array>(new Float32Array(GRID_COLS * GRID_ROWS).fill(1));
   const confidenceRef = useRef(1);
   const indoorsRef = useRef(false);
   // Mirror av `method`-staten i en ref, så att den stabila `isPointSkyRef`-
@@ -290,37 +289,42 @@ export function useSkyDetection(
   const mlTensorGrowthCountRef = useRef(0);
 
   // Stabil funktionsreferens — läser alltid det senaste rutnätet via
-  // `gridRef` (oavsett om det just nu kommer från ML-segmenteringen eller
-  // den enkla heuristiken), men själva funktionsidentiteten ändras aldrig.
-  // Det gör den säker att skicka som prop till ARScene utan att trigga
+  // `gridRef` när ML-segmenteringen är aktiv, annars fallback-kravet
+  // ("allt är himmel", se nedan). Själva funktionsidentiteten ändras aldrig,
+  // vilket gör den säker att skicka som prop till ARScene utan att trigga
   // om-renderingar.
   const isPointSkyRef = useRef((u: number, v: number) => {
     // Global spärr: så fort den alltid-aktiva heuristiken bedömer att
-    // användaren är inomhus döljs samtliga verk, oavsett vad ML- eller
-    // fallback-rutnätet råkar säga om just den här punkten — en enstaka
+    // användaren är inomhus döljs samtliga verk, oavsett vad ML-rutnätet
+    // (eller fallbacken) råkar säga om just den här punkten — en enstaka
     // ljus lampa/fönster i bild ska t.ex. inte räcka för att låta ett verk
     // "spöka" fram inomhus.
     if (indoorsRef.current) return false;
+    // ML-segmenteringen är den ENDA källan till visuell ocklusion. Om den
+    // inte är igång (fortfarande laddas, eller permanent avstängd) är detta
+    // fallback-kravet: verken förblir alltid synliga, exakt som innan denna
+    // funktion fanns — ingen sekundär, mindre tillförlitlig heuristik tar
+    // över och döljer verk på egen hand.
+    if (methodRef.current !== "ml") return true;
     const col = Math.min(GRID_COLS - 1, Math.max(0, Math.floor(u * GRID_COLS)));
     const row = Math.min(GRID_ROWS - 1, Math.max(0, Math.floor(v * GRID_ROWS)));
     const idx = row * GRID_COLS + col;
-    // ML-segmenteringen är den mest träffsäkra källan när den är igång;
-    // annars (fortfarande laddas, eller permanent avstängd) faller vi
-    // tillbaka på den enkla per-cell-heuristiken istället för att anta
-    // "allt är himmel" — se jsdoc-kommentaren ovanför modulen.
-    return methodRef.current === "ml" ? gridRef.current[idx] : heuristicGridRef.current[idx];
+    return gridRef.current[idx];
   });
 
   // Stabil funktionsreferens för det kontinuerliga rutnätet — se
   // `getOcclusionGrid`s jsdoc i `SkyDetectionState`.
   const getOcclusionGridRef = useRef((): Float32Array => {
     if (indoorsRef.current) return indoorZeroGridRef.current;
+    // Samma fallback-krav som `isPointSkyRef` ovan: utan aktiv ML-segmentering
+    // är HELA rutnätet "himmel" (inga verk döljs av den kontinuerliga masken).
+    if (methodRef.current !== "ml") return allSkyGridRef.current;
     return occlusionGridRef.current;
   });
 
   // Uppdaterar `occlusionGridRef` med ett EMA-steg mot ett rått booleskt
-  // rutnät — anropas en gång per sample, från VILKEN KÄLLA som än just då
-  // är aktiv (ML eller den enkla heuristiken), se anropsplatserna nedan.
+  // rutnät — anropas en gång per sample med ML-segmenteringens rutnät (enda
+  // källan till visuell ocklusion, se `sampleMlOcclusion` nedan).
   function smoothOcclusionGrid(rawGrid: boolean[]) {
     const smoothed = occlusionGridRef.current;
     for (let i = 0; i < smoothed.length; i++) {
@@ -335,7 +339,6 @@ export function useSkyDetection(
       indoorsRef.current = false;
       methodRef.current = "loading";
       gridRef.current.fill(false);
-      heuristicGridRef.current.fill(false);
       mlTensorBaselineRef.current = null;
       mlTensorGrowthCountRef.current = 0;
       setOutdoorConfidence(1);
@@ -407,9 +410,7 @@ export function useSkyDetection(
       let lumSum = 0;
       for (let row = 0; row < GRID_ROWS; row++) {
         for (let col = 0; col < GRID_COLS; col++) {
-          const isSky = classifyCell(pixels, col, row);
-          heuristicGridRef.current[row * GRID_COLS + col] = isSky;
-          if (isSky) skyCount++;
+          if (classifyCell(pixels, col, row)) skyCount++;
         }
       }
       for (let i = 0; i < pixels.length; i += 4) {
@@ -417,21 +418,15 @@ export function useSkyDetection(
       }
       if (!cancelled) setAvgLuminance(lumSum / (pixels.length / 4) / 255);
       applyConfidence(skyCount / (GRID_COLS * GRID_ROWS));
-      // Utjämna det kontinuerliga ocklusionsrutnätet från heuristiken bara
-      // när den faktiskt är den aktiva källan — annars skulle den (mindre
-      // exakta) heuristiken hinna dra det utjämnade värdet åt fel håll
-      // mellan varje ML-sample och orsaka en synlig, felaktig "blinkning".
-      if (methodRef.current !== "ml") {
-        smoothOcclusionGrid(heuristicGridRef.current);
-      }
     }
 
     // Driver den VISUELLA ocklusionen (`isPointSky`/`gridRef`) — enda
     // källan till detta är ML-segmenteringen. Om den inte är redo (fortfarande
     // laddas, eller permanent avstängd efter fel/prestandaproblem) rör vi
-    // aldrig `gridRef` — `isPointSkyRef` faller då själv tillbaka på
-    // `heuristicGridRef` istället (se ovan), så verken hålls konservativt
-    // dolda tills ett rutnät faktiskt visat riktig himmel.
+    // aldrig `gridRef` — `isPointSkyRef`/`getOcclusionGrid` faller då själva
+    // tillbaka på "allt är himmel" (se `allSkyGridRef` ovan) istället för
+    // någon sekundär heuristik, så verken förblir alltid synliga precis som
+    // innan ML-ocklusionen fanns.
     async function sampleMlOcclusion(video: HTMLVideoElement) {
       const model = mlModelRef.current;
       if (!model) return;
@@ -541,8 +536,9 @@ export function useSkyDetection(
         setMethod("disabled");
       }
       // mlStateRef.current === "loading": `method`/`methodRef` förblir
-      // "loading" och `isPointSkyRef` använder `heuristicGridRef` tills
-      // modellen är redo (eller stängs av permanent).
+      // "loading" och `isPointSkyRef`/`getOcclusionGrid` använder
+      // fallback-kravet ("allt är himmel") tills modellen är redo (eller
+      // stängs av permanent).
     }
 
     const interval = window.setInterval(sample, SAMPLE_INTERVAL_MS);
