@@ -82,6 +82,25 @@ export default function Home() {
   const statusParam = filters.statuses.length > 0 ? filters.statuses.join(",") : "__none__";
 
   const NATIONWIDE_RADIUS_KM = 1500;
+  // Above this bounding-box span (degrees), we're zoomed out to roughly a
+  // whole-country view. Full project-area polygons for thousands of areas at
+  // that zoom is several MB of JSON and can hang/crash the map on mobile, so
+  // we ask the server to omit polygon geometry ("summary" detail) until the
+  // user zooms in far enough to actually see area outlines.
+  const WIDE_VIEW_SPAN_DEG = 3;
+
+  const isWideView = useMemo(() => {
+    if (focusPoint) {
+      return filters.showBeyondRadius;
+    }
+    if (bounds) {
+      return (
+        bounds.maxLat - bounds.minLat > WIDE_VIEW_SPAN_DEG ||
+        bounds.maxLng - bounds.minLng > WIDE_VIEW_SPAN_DEG
+      );
+    }
+    return false;
+  }, [focusPoint, bounds, filters.showBeyondRadius]);
 
   const queryParams = useMemo(() => {
     if (focusPoint) {
@@ -106,13 +125,18 @@ export default function Home() {
     return undefined;
   }, [focusPoint, bounds, statusParam, filters.radiusKm, filters.showBeyondRadius]);
 
+  const projectAreasQueryParams = useMemo(() => {
+    if (!queryParams) return undefined;
+    return { ...queryParams, detail: isWideView ? ("summary" as const) : ("full" as const) };
+  }, [queryParams, isWideView]);
+
   const turbinesQuery = useListWindTurbines(queryParams, {
     query: { enabled: filters.showTurbines && !!queryParams } as UseQueryOptions<WindTurbine[]>,
   });
   const showAnyAreas = filters.showOnshoreAreas || filters.showOffshoreAreas;
-  const projectAreasQuery = useListWindProjectAreas(queryParams, {
+  const projectAreasQuery = useListWindProjectAreas(projectAreasQueryParams, {
     query: {
-      enabled: showAnyAreas && !!queryParams,
+      enabled: showAnyAreas && !!projectAreasQueryParams,
     } as UseQueryOptions<WindProjectArea[]>,
   });
 

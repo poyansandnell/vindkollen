@@ -81,6 +81,7 @@ router.get("/wind/project-areas", async (req, res) => {
 
   let results = rows.map(({ area, nearestLocalityName }) => ({
     ...area,
+    polygon: query.detail === "summary" ? null : area.polygon,
     nearestLocalityName: nearestLocalityName ?? null,
     distanceKm: hasPoint
       ? distanceKm(query.lat as number, query.lng as number, area.centerLat, area.centerLng)

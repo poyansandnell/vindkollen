@@ -233,6 +233,10 @@ statuses?: string;
  */
 category?: ListWindProjectAreasCategory;
 countryCode?: string;
+/**
+ * "summary" omits the (often large) polygon geometry to keep nationwide/low-zoom responses small; "full" includes it. Defaults to "full".
+ */
+detail?: ListWindProjectAreasDetail;
 };
 
 export type ListWindProjectAreasCategory = typeof ListWindProjectAreasCategory[keyof typeof ListWindProjectAreasCategory];
@@ -241,6 +245,14 @@ export type ListWindProjectAreasCategory = typeof ListWindProjectAreasCategory[k
 export const ListWindProjectAreasCategory = {
   onshore: 'onshore',
   offshore: 'offshore',
+} as const;
+
+export type ListWindProjectAreasDetail = typeof ListWindProjectAreasDetail[keyof typeof ListWindProjectAreasDetail];
+
+
+export const ListWindProjectAreasDetail = {
+  full: 'full',
+  summary: 'summary',
 } as const;
 
 export type GetWindProjectAreaParams = {

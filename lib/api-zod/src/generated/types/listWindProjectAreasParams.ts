@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ListWindProjectAreasCategory } from './listWindProjectAreasCategory';
+import type { ListWindProjectAreasDetail } from './listWindProjectAreasDetail';
 
 export type ListWindProjectAreasParams = {
 lat?: number;
@@ -24,4 +25,8 @@ statuses?: string;
  */
 category?: ListWindProjectAreasCategory;
 countryCode?: string;
+/**
+ * "summary" omits the (often large) polygon geometry to keep nationwide/low-zoom responses small; "full" includes it. Defaults to "full".
+ */
+detail?: ListWindProjectAreasDetail;
 };

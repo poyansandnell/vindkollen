@@ -11,6 +11,7 @@ export * from './getWindTurbineParams';
 export * from './healthStatus';
 export * from './listBestLocalitiesToTestParams';
 export * from './listWindProjectAreasCategory';
+export * from './listWindProjectAreasDetail';
 export * from './listWindProjectAreasParams';
 export * from './listWindTurbinesParams';
 export * from './locality';

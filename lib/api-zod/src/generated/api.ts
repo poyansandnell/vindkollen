@@ -23,6 +23,7 @@ export const HealthCheckResponse = zod.object({
  */
 export const listWindProjectAreasQueryRadiusKmDefault = 60;
 export const listWindProjectAreasQueryCountryCodeDefault = `SE`;
+export const listWindProjectAreasQueryDetailDefault = `full`;
 
 export const ListWindProjectAreasQueryParams = zod.object({
   "lat": zod.coerce.number().optional(),
@@ -34,7 +35,8 @@ export const ListWindProjectAreasQueryParams = zod.object({
   "maxLng": zod.coerce.number().optional(),
   "statuses": zod.coerce.string().optional().describe('Comma-separated list of statuses to include'),
   "category": zod.enum(['onshore', 'offshore']).optional().describe('Filter by onshore or offshore'),
-  "countryCode": zod.coerce.string().default(listWindProjectAreasQueryCountryCodeDefault)
+  "countryCode": zod.coerce.string().default(listWindProjectAreasQueryCountryCodeDefault),
+  "detail": zod.enum(['full', 'summary']).default(listWindProjectAreasQueryDetailDefault).describe('\"summary\" omits the (often large) polygon geometry to keep nationwide\/low-zoom responses small; \"full\" includes it. Defaults to \"full\".')
 })
 
 export const ListWindProjectAreasResponseItem = zod.object({

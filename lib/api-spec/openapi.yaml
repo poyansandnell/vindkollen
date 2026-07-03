@@ -65,6 +65,12 @@ paths:
         - name: countryCode
           in: query
           schema: { type: string, default: SE }
+        - name: detail
+          in: query
+          description: >-
+            "summary" omits the (often large) polygon geometry to keep nationwide/low-zoom
+            responses small; "full" includes it. Defaults to "full".
+          schema: { type: string, enum: [full, summary], default: full }
       responses:
         "200":
           description: List of wind project areas
