@@ -8,10 +8,7 @@
   "include": ["src"],
   "references": [
     {
-      "path": "../lib/db"
-    },
-    {
-      "path": "../lib/geo"
+      "path": "../lib/wind-sync"
     }
   ]
 }

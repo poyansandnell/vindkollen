@@ -9,6 +9,7 @@ import {
   countriesTable,
 } from "@workspace/db";
 import { distanceKm, boundingBoxForRadius } from "@workspace/geo";
+import { getWindSyncSchedulerState } from "../lib/windSyncScheduler";
 import {
   ListWindProjectAreasQueryParams,
   ListWindProjectAreasResponse,
@@ -382,6 +383,8 @@ router.get("/wind/sync-status", async (req, res) => {
     .orderBy(desc(windProjectAreasTable.updatedAt))
     .limit(1);
 
+  const schedulerState = getWindSyncSchedulerState();
+
   res.json(
     GetWindSyncStatusResponse.parse({
       countryCode: country?.code ?? countryCode,
@@ -389,6 +392,16 @@ router.get("/wind/sync-status", async (req, res) => {
       turbineCount,
       localityCount,
       lastSyncedAt: latestArea?.lastUpdated ?? null,
+      scheduler: {
+        enabled: schedulerState.enabled,
+        intervalHours: schedulerState.intervalHours,
+        isRunning: schedulerState.isRunning,
+        lastRunStartedAt: schedulerState.lastRunStartedAt,
+        lastRunFinishedAt: schedulerState.lastRunFinishedAt,
+        lastRunStatus: schedulerState.lastRunStatus,
+        lastRunError: schedulerState.lastRunError,
+        nextRunAt: schedulerState.nextRunAt,
+      },
     }),
   );
 });

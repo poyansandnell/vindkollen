@@ -23,4 +23,6 @@ export * from './windProjectArea';
 export * from './windProjectAreaCategory';
 export * from './windProjectAreaPolygon';
 export * from './windSyncStatus';
+export * from './windSyncStatusScheduler';
+export * from './windSyncStatusSchedulerLastRunStatus';
 export * from './windTurbine';

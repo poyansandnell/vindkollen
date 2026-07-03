@@ -371,7 +371,17 @@ export const GetWindSyncStatusResponse = zod.object({
   "projectAreaCount": zod.number(),
   "turbineCount": zod.number(),
   "localityCount": zod.number(),
-  "lastSyncedAt": zod.coerce.date().nullish()
+  "lastSyncedAt": zod.coerce.date().nullish(),
+  "scheduler": zod.object({
+  "enabled": zod.boolean(),
+  "intervalHours": zod.number(),
+  "isRunning": zod.boolean(),
+  "lastRunStartedAt": zod.coerce.date().nullish(),
+  "lastRunFinishedAt": zod.coerce.date().nullish(),
+  "lastRunStatus": zod.union([zod.literal('ok'),zod.literal('error'),zod.literal(null)]).nullish(),
+  "lastRunError": zod.string().nullish(),
+  "nextRunAt": zod.coerce.date().nullish()
+}).optional().describe('Status of the in-process automatic re-sync scheduler.')
 })
 
 

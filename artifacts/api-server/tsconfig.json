@@ -17,6 +17,9 @@
     },
     {
       "path": "../../lib/geo"
+    },
+    {
+      "path": "../../lib/wind-sync"
     }
   ]
 }

@@ -408,4 +408,17 @@ components:
         turbineCount: { type: integer }
         localityCount: { type: integer }
         lastSyncedAt: { type: ["string", "null"], format: date-time }
+        scheduler:
+          type: object
+          description: Status of the in-process automatic re-sync scheduler.
+          required: [enabled, intervalHours, isRunning]
+          properties:
+            enabled: { type: boolean }
+            intervalHours: { type: number }
+            isRunning: { type: boolean }
+            lastRunStartedAt: { type: ["string", "null"], format: date-time }
+            lastRunFinishedAt: { type: ["string", "null"], format: date-time }
+            lastRunStatus: { type: ["string", "null"], enum: [ok, error, null] }
+            lastRunError: { type: ["string", "null"] }
+            nextRunAt: { type: ["string", "null"], format: date-time }
 

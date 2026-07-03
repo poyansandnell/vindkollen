@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { WindSyncStatusScheduler } from './windSyncStatusScheduler';
 
 export interface WindSyncStatus {
   countryCode: string;
@@ -13,4 +14,6 @@ export interface WindSyncStatus {
   localityCount: number;
   /** @nullable */
   lastSyncedAt?: Date | null;
+  /** Status of the in-process automatic re-sync scheduler. */
+  scheduler?: WindSyncStatusScheduler;
 }

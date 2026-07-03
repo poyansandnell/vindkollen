@@ -175,6 +175,36 @@ export interface PublicConfig {
   mapboxToken: string | null;
 }
 
+/**
+ * @nullable
+ */
+export type WindSyncStatusSchedulerLastRunStatus = typeof WindSyncStatusSchedulerLastRunStatus[keyof typeof WindSyncStatusSchedulerLastRunStatus] | null;
+
+
+export const WindSyncStatusSchedulerLastRunStatus = {
+  ok: 'ok',
+  error: 'error',
+} as const;
+
+/**
+ * Status of the in-process automatic re-sync scheduler.
+ */
+export type WindSyncStatusScheduler = {
+  enabled: boolean;
+  intervalHours: number;
+  isRunning: boolean;
+  /** @nullable */
+  lastRunStartedAt?: string | null;
+  /** @nullable */
+  lastRunFinishedAt?: string | null;
+  /** @nullable */
+  lastRunStatus?: WindSyncStatusSchedulerLastRunStatus;
+  /** @nullable */
+  lastRunError?: string | null;
+  /** @nullable */
+  nextRunAt?: string | null;
+};
+
 export interface WindSyncStatus {
   countryCode: string;
   projectAreaCount: number;
@@ -182,6 +212,8 @@ export interface WindSyncStatus {
   localityCount: number;
   /** @nullable */
   lastSyncedAt?: string | null;
+  /** Status of the in-process automatic re-sync scheduler. */
+  scheduler?: WindSyncStatusScheduler;
 }
 
 export type ListWindProjectAreasParams = {

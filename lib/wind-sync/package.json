@@ -1,0 +1,19 @@
+{
+  "name": "@workspace/wind-sync",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@workspace/db": "workspace:*",
+    "@workspace/geo": "workspace:*",
+    "adm-zip": "^0.5.18",
+    "drizzle-orm": "catalog:"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/node": "catalog:"
+  }
+}
