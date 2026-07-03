@@ -14,6 +14,7 @@ import { ARScene, type ARSceneHandle } from "@/components/ARScene";
 import { MapView } from "@/components/MapView";
 import { PetitionModal } from "@/components/PetitionModal";
 import { PermissionGate } from "@/components/PermissionGate";
+import { LoadingSequence } from "@/components/LoadingSequence";
 import { InfoPanel } from "@/components/InfoPanel";
 import { VisualizationControls } from "@/components/VisualizationControls";
 import { SoundLevelPanel, SoundLevelBadge } from "@/components/SoundLevelPanel";
@@ -88,6 +89,13 @@ export default function Home() {
 
   const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
+  // Visar en 5-sekunders nedräkning med statusmeddelanden/checklista direkt
+  // efter "Starta visualisering" — en produktkrävd, alltid likadan
+  // laddningssekvens. Körs parallellt med (inte i väntan på) den riktiga
+  // GPS/kompass/kamera-behörighetsflödet nedan; om det äkta `ready`-läget
+  // inte hunnit bli klart när sekvensen tar slut visas det befintliga
+  // väntar-overlayet (se `!ready`-blocket längre ner) precis som innan.
+  const [showLoadingSequence, setShowLoadingSequence] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [showPetition, setShowPetition] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -375,6 +383,7 @@ export default function Home() {
 
   const handleStart = useCallback(() => {
     setStarting(true);
+    setShowLoadingSequence(true);
     // Ljud på som standard: startas direkt från samma knapptryckning (giltigt
     // användargest för iOS Safaris ljuduppspelningsregler), innan ev. await
     // nedan, så AudioContext skapas/låses upp synkront i gestens "kontext".
@@ -528,6 +537,8 @@ export default function Home() {
 
       {started && (
         <>
+          {showLoadingSequence && <LoadingSequence onComplete={() => setShowLoadingSequence(false)} />}
+
           <CameraBackground stream={camera.stream} videoRef={videoElRef} />
 
           {ready && (
