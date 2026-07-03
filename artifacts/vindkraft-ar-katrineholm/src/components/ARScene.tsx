@@ -6,6 +6,7 @@ import { swerefToWgs84 } from "@/lib/sweref";
 import { getCurrentSunPosition } from "@/lib/sunPosition";
 import { getBladeRpm, getBladeStartAngleRad, getBlinkOffsetMs, getBlinkPeriodMs, BLINK_ON_MS } from "@/lib/turbineAnimation";
 import { shadowFlickerActive, type SunMode, type VisibilityLevel } from "@/lib/visualizationTypes";
+import { GRID_COLS, GRID_ROWS } from "@/hooks/useSkyDetection";
 
 interface ARSceneProps {
   userLat: number;
@@ -25,6 +26,24 @@ interface ARSceneProps {
    */
   isPointSky?: (u: number, v: number) => boolean;
   /**
+   * Returnerar HELA det kontinuerliga (0..1 per cell, temporalt utjämnat)
+   * ocklusionsrutnätet — se `useSkyDetection`s `getOcclusionGrid`-jsdoc.
+   * Driver den PER-PIXEL-baserade ocklusionsshadern på själva
+   * turbinkroppen (torn/navcell/blad), så bara den faktiskt skymda delen
+   * av ett verk döljs, istället för att hela verket tonas bort baserat på
+   * en enda ankarpunkt (vilket `isPointSky` fortfarande gör, och
+   * fortsätter användas för etiketter/ljus/glöd/skugga — se `animate`).
+   * Om utelämnad antas allt vara himmel. Måste vara en stabil
+   * funktionsreferens (anropas i renderloopen).
+   */
+  getOcclusionGrid?: () => Float32Array;
+  /**
+   * "Visa dolda verk"-läge: skymda fragment av turbinkroppen visas som en
+   * svag (~25% opacitet), streckad kontur istället för att döljas helt.
+   * Default av (realistisk ocklusion, verk döljs helt där de är skymda).
+   */
+  showHiddenTurbines?: boolean;
+  /**
    * Global styrka (0..1) från "Outdoor Confidence Index"-tröskelvärdet
    * (`useOutdoorConfidenceIndex` i Home.tsx) — appliceras ovanpå per-punkts
    * himmelsmasken (`isPointSky`) som ytterligare en försiktighetsspärr:
@@ -36,6 +55,13 @@ interface ARSceneProps {
 }
 
 const DEFAULT_IS_POINT_SKY = () => true;
+const DEFAULT_OCCLUSION_GRID = new Float32Array(GRID_COLS * GRID_ROWS).fill(1);
+const DEFAULT_GET_OCCLUSION_GRID = () => DEFAULT_OCCLUSION_GRID;
+// Mjuk tröskel (smoothstep) runt "hälften ockluderad" istället för en hård
+// avgränsning — ger en mild, naturlig kant mellan synlig/dold del av ett
+// verk snarare än ett tydligt hack mitt i tornet/rotorn.
+const OCCLUSION_THRESHOLD_LOW = 0.35;
+const OCCLUSION_THRESHOLD_HIGH = 0.55;
 
 export interface ARSceneHandle {
   /**
@@ -253,6 +279,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     nightMode,
     shadowFlicker,
     isPointSky,
+    getOcclusionGrid,
+    showHiddenTurbines,
     globalVisibilityFactor,
   },
   forwardedRef,
@@ -275,9 +303,13 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     visibility,
     nightMode,
     shadowFlicker,
+    showHiddenTurbines: showHiddenTurbines ?? false,
     globalVisibilityFactor: globalVisibilityFactor ?? 1,
   });
-  const skyRef = useRef({ isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY });
+  const skyRef = useRef({
+    isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
+    getOcclusionGrid: getOcclusionGrid ?? DEFAULT_GET_OCCLUSION_GRID,
+  });
   // Väntande Fotomontage-förfrågan — löses in synkront direkt efter nästa
   // renderade bildruta i animationsloopen (se `animate`), istället för att
   // sätta `preserveDrawingBuffer: true` på renderaren. Att läsa canvasen i
@@ -295,9 +327,13 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     visibility,
     nightMode,
     shadowFlicker,
+    showHiddenTurbines: showHiddenTurbines ?? false,
     globalVisibilityFactor: globalVisibilityFactor ?? 1,
   };
-  skyRef.current = { isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY };
+  skyRef.current = {
+    isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
+    getOcclusionGrid: getOcclusionGrid ?? DEFAULT_GET_OCCLUSION_GRID,
+  };
 
   useImperativeHandle(forwardedRef, () => ({
     capturePhoto: () =>
@@ -381,9 +417,72 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     shadowGeo.translate(0.5, 0, 0);
     shadowGeo.rotateX(-Math.PI / 2);
 
+    // Delad textur som varje bildruta fylls med det senaste utjämnade
+    // ocklusionsrutnätet (`getOcclusionGrid()`), och som alla turbinkroppars
+    // material samplar per-fragment (se `attachOcclusionShader` nedan) för
+    // att bara dölja/tona den faktiskt skymda delen av ett verk, inte hela
+    // objektet. RGBA/Uint8 stöds överallt (till skillnad från t.ex.
+    // enkanalsformat som kräver WebGL2), vi använder bara r-kanalen.
+    const occlusionData = new Uint8Array(GRID_COLS * GRID_ROWS * 4).fill(255);
+    const occlusionTexture = new THREE.DataTexture(occlusionData, GRID_COLS, GRID_ROWS, THREE.RGBAFormat, THREE.UnsignedByteType);
+    occlusionTexture.flipY = false;
+    occlusionTexture.minFilter = THREE.LinearFilter;
+    occlusionTexture.magFilter = THREE.LinearFilter;
+    occlusionTexture.wrapS = THREE.ClampToEdgeWrapping;
+    occlusionTexture.wrapT = THREE.ClampToEdgeWrapping;
+    occlusionTexture.needsUpdate = true;
+
+    // Kompilerade shader-referenser (fylls i via `onBeforeCompile` nedan) så
+    // `animate()` kan uppdatera `uShowHidden` varje bildruta utan att behöva
+    // återkompilera materialen.
+    const occlusionShaders: THREE.WebGLProgramParametersWithUniforms[] = [];
+
+    function attachOcclusionShader(material: THREE.MeshStandardMaterial) {
+      material.transparent = true;
+      material.onBeforeCompile = (shader) => {
+        shader.uniforms.uOcclusionMap = { value: occlusionTexture };
+        shader.uniforms.uShowHidden = { value: modeRef.current.showHiddenTurbines ? 1 : 0 };
+        shader.vertexShader = shader.vertexShader
+          .replace("#include <common>", "#include <common>\nvarying vec4 vOcclusionClipPos;")
+          .replace("#include <project_vertex>", "#include <project_vertex>\nvOcclusionClipPos = gl_Position;");
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            "#include <common>",
+            `#include <common>
+            varying vec4 vOcclusionClipPos;
+            uniform sampler2D uOcclusionMap;
+            uniform float uShowHidden;`,
+          )
+          .replace(
+            "#include <dithering_fragment>",
+            `
+            {
+              vec2 occlusionUv = (vOcclusionClipPos.xy / vOcclusionClipPos.w) * 0.5 + 0.5;
+              occlusionUv.y = 1.0 - occlusionUv.y;
+              float occlusion = 1.0;
+              if (occlusionUv.x >= 0.0 && occlusionUv.x <= 1.0 && occlusionUv.y >= 0.0 && occlusionUv.y <= 1.0) {
+                occlusion = texture2D(uOcclusionMap, occlusionUv).r;
+              }
+              float visMask = smoothstep(${OCCLUSION_THRESHOLD_LOW.toFixed(2)}, ${OCCLUSION_THRESHOLD_HIGH.toFixed(2)}, occlusion);
+              if (uShowHidden > 0.5) {
+                float dash = mod(gl_FragCoord.x + gl_FragCoord.y, 14.0) < 7.0 ? 1.0 : 0.0;
+                float hiddenAlpha = 0.26 * dash;
+                gl_FragColor.a *= mix(hiddenAlpha, 1.0, visMask);
+              } else {
+                if (visMask < 0.02) discard;
+                gl_FragColor.a *= visMask;
+              }
+            }
+            #include <dithering_fragment>`,
+          );
+        occlusionShaders.push(shader);
+      };
+    }
+
     const objects: TurbineObject[] = turbines.map((turbine) => {
       const { lat, lon } = swerefToWgs84(turbine.easting, turbine.northing);
       const { group, bladesGroup, materials } = buildTurbineMesh(turbine);
+      for (const mat of materials) attachOcclusionShader(mat);
       scene.add(group);
       const label = createCanvasLabel();
       label.sprite.scale.set(34, 8.5, 1);
@@ -536,22 +635,27 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     }
 
     /**
-     * Skriver de faktiska material-opaciteterna utifrån `obj.baseOpacity`
-     * (avstånd/siktläge) multiplicerat med `obj.skyFactor` (himmelsmasken).
+     * Skriver de faktiska material-opaciteterna. Turbinkroppens material
+     * (torn/navcell/blad) styrs numera BARA av `obj.baseOpacity` (avstånd/
+     * siktläge) × `globalVisibilityFactor` (Outdoor Confidence Index) — den
+     * faktiska himmels-/ocklusionsmaskeringen sker per-pixel i shadern som
+     * `attachOcclusionShader` injicerar, så bara den skymda delen av ett
+     * verk döljs istället för hela objektet. Etiketter/ljus/glöd (små,
+     * punktformade element som inte kan maskeras meningsfullt per pixel)
+     * fortsätter använda den enkla ankarpunktsbaserade `obj.skyFactor`.
      * Körs dels när basopaciteten ändras (`applyVisibility`), dels varje
      * bildruta i renderloopen när himmelsmasken uppdateras.
      */
     function applyFinalOpacities(obj: TurbineObject) {
       // `globalVisibilityFactor` (Outdoor Confidence Index-tröskeln) verkar
-      // som en global gate ovanpå per-punkts himmelsmasken — 0 döljer alla
-      // verk helt oavsett vad `skyFactor` säger, ~0.6 tonar ned dem för
-      // "cautious"-läget.
+      // som en global gate — 0 döljer alla verk helt oavsett ocklusion,
+      // ~0.6 tonar ned dem för "cautious"-läget.
       const globalFactor = modeRef.current.globalVisibilityFactor;
       const skyFactor = obj.skyFactor * globalFactor;
-      const opacity = obj.baseOpacity * skyFactor;
+      const bodyOpacity = obj.baseOpacity * globalFactor;
       for (const mat of obj.materials) {
-        mat.transparent = opacity < 1;
-        mat.opacity = opacity;
+        mat.transparent = true;
+        mat.opacity = bodyOpacity;
       }
       (obj.label.sprite.material as THREE.SpriteMaterial).opacity = skyFactor;
       (obj.distanceLabel.sprite.material as THREE.SpriteMaterial).opacity = skyFactor;
@@ -683,6 +787,25 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       const flickerActive = shadowFlickerActive(curShadowFlicker, curMode);
       const currentIsPointSky = skyRef.current.isPointSky;
       const skyLerpRate = Math.min(dt * 4, 1);
+      // Fyll den delade ocklusionstexturen med det senaste (temporalt
+      // utjämnade) rutnätet, och synka "Visa dolda verk"-uniformen till
+      // varje kompilerad turbin-shader. Görs en gång per bildruta (inte per
+      // objekt) eftersom texturen och läget är globalt delade.
+      const occlusionGrid = skyRef.current.getOcclusionGrid();
+      for (let i = 0; i < occlusionGrid.length; i++) {
+        const v = Math.max(0, Math.min(1, occlusionGrid[i])) * 255;
+        const o = i * 4;
+        occlusionData[o] = v;
+        occlusionData[o + 1] = v;
+        occlusionData[o + 2] = v;
+        occlusionData[o + 3] = 255;
+      }
+      occlusionTexture.needsUpdate = true;
+      const showHiddenValue = modeRef.current.showHiddenTurbines ? 1 : 0;
+      for (const shader of occlusionShaders) {
+        shader.uniforms.uShowHidden.value = showHiddenValue;
+      }
+
       for (const obj of state.objects) {
         obj.bladesGroup.rotation.z += obj.bladeRadPerSec * dt;
 
@@ -753,6 +876,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       shadowTexture.dispose();
       sunTexture.dispose();
       sunGlowTexture.dispose();
+      occlusionTexture.dispose();
       shadowGeo.dispose();
       sunSpriteMat.dispose();
       sunGlowMat.dispose();

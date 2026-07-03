@@ -55,7 +55,7 @@ export function NoiseImpactPanel({
       className={`pointer-events-auto w-full rounded-2xl border ${colors.border} ${colors.bg} p-3.5 text-white shadow-xl backdrop-blur-sm`}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold tracking-wide text-[#FFB347]">🌬️ Infraljud-/bullermonitor</p>
+        <p className="text-xs font-semibold tracking-wide text-[#FFB347]">🌬️ Infraljud</p>
         <button
           onClick={onClose}
           aria-label="Dölj infraljudsmonitor"

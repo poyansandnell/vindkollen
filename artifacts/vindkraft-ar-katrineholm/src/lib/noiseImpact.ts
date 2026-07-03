@@ -3,13 +3,22 @@
 // officiell bullerutredning — se `NOISE_IMPACT_DISCLAIMER` för den exakta
 // text som alltid visas tillsammans med statusen.
 //
+// VIKTIGT: denna indikator visar ALDRIG ett exakt dBA-tal i UI:t — bara
+// nivån (🟢Låg/🟡Måttlig/🔴Hög) + kvalitativa skäl. Den interna `estimate.
+// totalDba` används fortfarande för att GRADERA nivån (se `dbaScore` nedan),
+// men får inte läcka ut som en siffra i `reasons` eller någon annanstans —
+// se `SoundLevelPanel`/`NoiseImpactMonitor` för den separata "Ljudnivå"-
+// sektionen som faktiskt visar dBA.
+//
 // Indikatorn väger samman fem signaler till en poäng 0..100:
-// 1. Beräknad ljudnivå (dBA) från `estimateSoundLevel` — dominerande faktor.
+// 1. Beräknad ljudnivå (dBA, internt) från `estimateSoundLevel` — dominerande
+//    faktor, men uttrycks utåt bara via avstånd till närmaste verk.
 // 2. Antal vindkraftverk som bidrar märkbart (fler källor = mer påverkan).
-// 3. Vindriktning, OM tillgänglig — medvind (vinden blåser i användarens
-//    riktning från verken) ökar upplevd påverkan; annars neutral.
+// 3. Vindriktning OCH vindhastighet, OM tillgängliga — medvind (vinden
+//    blåser i användarens riktning från verken) ökar upplevd påverkan,
+//    skalat efter hur hårt det blåser; annars neutral/oskalad.
 // 4. Exponeringstid — hur länge användaren har stått kvar på platsen.
-import { normalizeAngle } from "./geo";
+import { formatDistance, normalizeAngle } from "./geo";
 import type { SoundLevelEstimate } from "./soundLevel";
 
 export type NoiseImpactLevel = "low" | "moderate" | "high";
@@ -20,6 +29,8 @@ export interface NoiseImpactInput {
   bearingToNearestDeg: number | null;
   /** Vindriktning (grader, 0-360) vinden blåser FRÅN (meteorologisk konvention), eller null om okänd. */
   windFromDeg: number | null;
+  /** Vindhastighet (m/s), eller null om okänd — skalar medvindseffekten. */
+  windSpeedMs: number | null;
   /** Hur länge (sekunder) användaren sammanhängande har befunnit sig i AR-vyn på denna plats. */
   exposureSeconds: number;
 }
@@ -30,7 +41,7 @@ export interface NoiseImpactResult {
   score: number;
   /** Är vinden bedömd som medvind (bär ljud från verken mot användaren)? Null = okänt (ingen vinddata). */
   downwind: boolean | null;
-  /** Läsbara, redan formulerade delförklaringar (svenska) att lista i panelen. */
+  /** Läsbara, redan formulerade delförklaringar (svenska) att lista i panelen — innehåller aldrig ett dBA-tal. */
   reasons: string[];
 }
 
@@ -41,6 +52,9 @@ const COUNT_WEIGHT = 15;
 const COUNT_SCALE = 10;
 const DOWNWIND_BONUS = 15;
 const DOWNWIND_ANGLE_TOLERANCE_DEG = 45;
+// Vid denna vindhastighet (m/s) eller mer räknas medvindsbonusen fullt ut;
+// under det skalas den ner linjärt (svag bris bär knappt ljud alls).
+const DOWNWIND_FULL_SPEED_MS = 8;
 const EXPOSURE_WEIGHT = 15;
 const EXPOSURE_FULL_MINUTES = 30;
 
@@ -63,7 +77,7 @@ function isDownwind(bearingToTurbineDeg: number, windFromDeg: number): boolean {
 }
 
 export function estimateNoiseImpact(input: NoiseImpactInput): NoiseImpactResult {
-  const { estimate, bearingToNearestDeg, windFromDeg, exposureSeconds } = input;
+  const { estimate, bearingToNearestDeg, windFromDeg, windSpeedMs, exposureSeconds } = input;
   const reasons: string[] = [];
 
   if (!Number.isFinite(estimate.totalDba)) {
@@ -71,8 +85,13 @@ export function estimateNoiseImpact(input: NoiseImpactInput): NoiseImpactResult 
     return { level: "low", score: 0, downwind: null, reasons };
   }
 
+  // OBS: `estimate.totalDba` används bara internt för att gradera nivån —
+  // den siffran visas aldrig i infraljud-panelens texter. Skälet nedan
+  // uttrycks istället kvalitativt via avstånd till närmaste verk.
   const dbaScore = clamp01((estimate.totalDba - DBA_SCORE_MIN) / (DBA_SCORE_MAX - DBA_SCORE_MIN)) * DBA_WEIGHT;
-  reasons.push(`Beräknad ljudnivå: ${estimate.totalDba.toFixed(1)} dBA.`);
+  if (estimate.nearestDistanceM !== null) {
+    reasons.push(`Avstånd till närmaste vindkraftverk: ${formatDistance(estimate.nearestDistanceM)}.`);
+  }
 
   const countScore = clamp01(estimate.contributingCount / COUNT_SCALE) * COUNT_WEIGHT;
   reasons.push(
@@ -85,12 +104,17 @@ export function estimateNoiseImpact(input: NoiseImpactInput): NoiseImpactResult 
   let windScore = 0;
   if (windFromDeg !== null && bearingToNearestDeg !== null) {
     downwind = isDownwind(bearingToNearestDeg, windFromDeg);
-    windScore = downwind ? DOWNWIND_BONUS : 0;
-    reasons.push(
-      downwind
-        ? "Medvind: vinden för ljudet från vindkraftverken mot dig, vilket kan öka den upplevda nivån."
-        : "Vindriktningen bär för närvarande inte ljudet direkt mot dig.",
-    );
+    const speedFactor = windSpeedMs !== null ? clamp01(windSpeedMs / DOWNWIND_FULL_SPEED_MS) : 1;
+    windScore = downwind ? DOWNWIND_BONUS * speedFactor : 0;
+    if (downwind) {
+      reasons.push(
+        windSpeedMs !== null
+          ? `Medvind (${windSpeedMs.toFixed(0)} m/s): vinden för ljudet från vindkraftverken mot dig, vilket kan öka den upplevda nivån.`
+          : "Medvind: vinden för ljudet från vindkraftverken mot dig, vilket kan öka den upplevda nivån.",
+      );
+    } else {
+      reasons.push("Vindriktningen bär för närvarande inte ljudet direkt mot dig.");
+    }
   } else {
     reasons.push("Vindriktning saknas — påverkas inte av denna faktor just nu.");
   }
@@ -127,7 +151,7 @@ export const NOISE_IMPACT_LEVEL_COLORS: Record<
 
 /**
  * Exakt disclaimer-text enligt produktspecifikationen (uppdaterad efter
- * användartester) — får INTE omformuleras eller parafraseras.
+ * senaste feedbackrundan) — får INTE omformuleras eller parafraseras.
  */
 export const NOISE_IMPACT_DISCLAIMER =
-  "Detta är en uppskattad indikator, inte en medicinsk mätning. Långvarig exponering för lågfrekvent ljud kan hos vissa personer upplevas som störande och bidra till trötthet, huvudvärk eller sömnproblem.";
+  "Detta är en uppskattad indikator baserad på projektets data och användarens position. Den är inte en faktisk mätning av infraljud.";

@@ -54,7 +54,7 @@ export function SoundLevelPanel({
       className={`pointer-events-auto w-full rounded-2xl border ${colors.border} ${colors.bg} p-3.5 text-white shadow-xl backdrop-blur-sm`}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold tracking-wide text-[#FFB347]">🔊 Beräknad ljudnivå</p>
+        <p className="text-xs font-semibold tracking-wide text-[#FFB347]">🔊 Ljudnivå</p>
         <button
           onClick={onClose}
           aria-label="Dölj ljudnivåpanel"
@@ -97,6 +97,9 @@ export function SoundLevelPanel({
                   🏠 Inomhus · ljudet dämpas i den här uppskattningen
                 </p>
               )}
+              <p className="mt-1.5 text-[11px] text-white/70">
+                Vindljudets volym följer denna nivå automatiskt — dämpas/höjs i takt med siffran ovan.
+              </p>
               <p className="mt-2 text-[10px] leading-relaxed text-white/45">{SOUND_LEVEL_DISCLAIMER}</p>
             </>
           )}

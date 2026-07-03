@@ -28,6 +28,18 @@ export interface SkyDetectionState {
    */
   isPointSky: (u: number, v: number) => boolean;
   /**
+   * Stabil funktionsreferens som returnerar HELA ocklusionsrutnätet (inte
+   * bara en enskild punkt) som ett kontinuerligt (0..1 per cell,
+   * temporalt EMA-utjämnat mellan varje sample för att undvika flimmer),
+   * radvis (row-major, `GRID_COLS` x `GRID_ROWS`) `Float32Array`.
+   * Används av `ARScene` för att bygga en `THREE.DataTexture` som
+   * ockluderar vindkraftverk PER PIXEL/FRAGMENT (bara den täckta delen av
+   * ett verk döljs) istället för hela verket via en enda ankarpunkt.
+   * 1 = himmel (synligt), 0 = ockluderat (träd/byggnad/vägg/inomhus).
+   * Funktionsidentiteten ändras aldrig — säker att läsa varje bildruta.
+   */
+  getOcclusionGrid: () => Float32Array;
+  /**
    * Rå (lätt utjämnad) andel av bildrutan som just nu klassas som himmel
    * (0..1) — samma underliggande signal som `outdoorConfidence` bygger på,
    * men utan EMA-fördröjningen, så konsumenter som behöver ett direkt
@@ -64,8 +76,17 @@ export interface SkyDetectionState {
   method: "loading" | "ml" | "disabled";
 }
 
-const GRID_COLS = 12;
-const GRID_ROWS = 8;
+export const GRID_COLS = 12;
+export const GRID_ROWS = 8;
+// EMA-utjämningsfaktor för det kontinuerliga ocklusionsrutnätet
+// (`occlusionGridRef`, se `getOcclusionGrid`) — lägre värde än det befintliga
+// `EMA_ALPHA` för `outdoorConfidence`, eftersom detta rutnät driver en visuell
+// per-pixel-mask (shader) snarare än en enda sammanfattande siffra: för snabb
+// utjämning skulle fortfarande hinna flimra vid gränsen mellan himmel/inte-
+// himmel när ett verk rör sig i bild, medan för långsam gör ocklusionen
+// märkbart "trög" efter en snabb kamerarörelse. ~3 samples (≈1s) för att nå
+// halva vägen till ett nytt värde är en rimlig avvägning.
+const OCCLUSION_GRID_EMA_ALPHA = 0.3;
 // 8x8 pixlar per cell (inte 3x3) — ger textur-signalen (`stdDev`) faktiskt
 // något att mäta. Med bara 3x3 källpixlar nedskalas nästan all textur bort
 // redan innan klassificeringen, vilket gjorde att en jämnt målad, ljus
@@ -228,6 +249,13 @@ export function useSkyDetection(
   // ML-segmenteringen (kan t.ex. inte skilja en ljus vägg lika säkert från
   // himmel), men betydligt mer konservativt än ingen ocklusion alls.
   const heuristicGridRef = useRef<boolean[]>(new Array(GRID_COLS * GRID_ROWS).fill(false));
+  // Kontinuerligt (0..1), temporalt EMA-utjämnat ocklusionsrutnät — se
+  // `getOcclusionGrid`s jsdoc. Startar på 0 (allt ockluderat), samma
+  // konservativa default som `gridRef`/`heuristicGridRef` ovan.
+  const occlusionGridRef = useRef<Float32Array>(new Float32Array(GRID_COLS * GRID_ROWS).fill(0));
+  // Återanvänd, alltid-noll rutnät att returnera när `indoorsRef.current` är
+  // sant — undviker att allokera en ny array varje bildruta.
+  const indoorZeroGridRef = useRef<Float32Array>(new Float32Array(GRID_COLS * GRID_ROWS).fill(0));
   const confidenceRef = useRef(1);
   const indoorsRef = useRef(false);
   // Mirror av `method`-staten i en ref, så att den stabila `isPointSkyRef`-
@@ -277,6 +305,24 @@ export function useSkyDetection(
     // "allt är himmel" — se jsdoc-kommentaren ovanför modulen.
     return methodRef.current === "ml" ? gridRef.current[idx] : heuristicGridRef.current[idx];
   });
+
+  // Stabil funktionsreferens för det kontinuerliga rutnätet — se
+  // `getOcclusionGrid`s jsdoc i `SkyDetectionState`.
+  const getOcclusionGridRef = useRef((): Float32Array => {
+    if (indoorsRef.current) return indoorZeroGridRef.current;
+    return occlusionGridRef.current;
+  });
+
+  // Uppdaterar `occlusionGridRef` med ett EMA-steg mot ett rått booleskt
+  // rutnät — anropas en gång per sample, från VILKEN KÄLLA som än just då
+  // är aktiv (ML eller den enkla heuristiken), se anropsplatserna nedan.
+  function smoothOcclusionGrid(rawGrid: boolean[]) {
+    const smoothed = occlusionGridRef.current;
+    for (let i = 0; i < smoothed.length; i++) {
+      const target = rawGrid[i] ? 1 : 0;
+      smoothed[i] += OCCLUSION_GRID_EMA_ALPHA * (target - smoothed[i]);
+    }
+  }
 
   useEffect(() => {
     if (!enabled) {
@@ -366,6 +412,13 @@ export function useSkyDetection(
       }
       if (!cancelled) setAvgLuminance(lumSum / (pixels.length / 4) / 255);
       applyConfidence(skyCount / (GRID_COLS * GRID_ROWS));
+      // Utjämna det kontinuerliga ocklusionsrutnätet från heuristiken bara
+      // när den faktiskt är den aktiva källan — annars skulle den (mindre
+      // exakta) heuristiken hinna dra det utjämnade värdet åt fel håll
+      // mellan varje ML-sample och orsaka en synlig, felaktig "blinkning".
+      if (methodRef.current !== "ml") {
+        smoothOcclusionGrid(heuristicGridRef.current);
+      }
     }
 
     // Driver den VISUELLA ocklusionen (`isPointSky`/`gridRef`) — enda
@@ -423,6 +476,7 @@ export function useSkyDetection(
         }
         if (cancelled) return;
         gridRef.current = grid;
+        smoothOcclusionGrid(grid);
         // ML:s eget himmel-mått är mer träffsäkert än ljusstyrke-heuristiken
         // (skiljer t.ex. riktig himmel från en ljus vit vägg) — använd det
         // för ljuddämpningen/"Gå utomhus" också när det finns tillgängligt.
@@ -496,6 +550,7 @@ export function useSkyDetection(
     indoors,
     ready,
     isPointSky: isPointSkyRef.current,
+    getOcclusionGrid: getOcclusionGridRef.current,
     method,
     skyRatio,
     avgLuminance,

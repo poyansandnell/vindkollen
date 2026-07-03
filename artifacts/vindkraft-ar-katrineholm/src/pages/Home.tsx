@@ -23,7 +23,7 @@ import { TURBINES } from "@/lib/turbines";
 import { distanceMeters, bearingDegrees, isNightTime } from "@/lib/geo";
 import { swerefToWgs84 } from "@/lib/sweref";
 import { getBladeRpm } from "@/lib/turbineAnimation";
-import { estimateSoundLevel, dbaToGain } from "@/lib/soundLevel";
+import { estimateSoundLevel, dbaToGain, applyIndoorAttenuation } from "@/lib/soundLevel";
 import { estimateNoiseImpact } from "@/lib/noiseImpact";
 import { useWindDirection } from "@/hooks/useWindDirection";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
@@ -58,6 +58,7 @@ export default function Home() {
   // läget helt manuellt — ingen bakgrundstimer skriver över användarens val.
   const [nightMode, setNightMode] = useState(() => isNightTime());
   const [shadowFlicker, setShadowFlicker] = useState(false);
+  const [showHiddenTurbines, setShowHiddenTurbines] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
@@ -119,33 +120,48 @@ export default function Home() {
   // GPS-brus medan användaren i praktiken står still.
   const stableGeo = useStableGeoPosition(geo.lat, geo.lon);
 
-  // Beräknar dBA-uppskattningen baserat på (den stabiliserade) GPS-avstånd
-  // till samtliga verk. Dämpningen styrs numera av den explicita "Ljud
-  // ute/inne"-väljaren (`soundEnvironment`) i stället för kameraheuristiken
-  // — användaren ska kunna lita på och kontrollera detta läge själv. Samma
-  // tal (efter ytterligare utjämning, se `smoothedTotalDba` nedan) används
-  // både för visningen (SoundLevelPanel/NoiseImpactMonitor) OCH för att
-  // driva wind.updateProximitys volym, så allt hänger konsekvent ihop.
-  const rawSoundLevelEstimate = useMemo(() => {
-    if (stableGeo.lat === null || stableGeo.lon === null) {
-      return { totalDba: -Infinity, nearestDistanceM: null, contributingCount: 0 };
-    }
-    const distances = TURBINES.map((t) => {
+  // Avstånd (stabiliserad GPS) till samtliga verk — delas av båda
+  // uppskattningarna nedan.
+  const turbineDistancesM = useMemo(() => {
+    if (stableGeo.lat === null || stableGeo.lon === null) return null;
+    return TURBINES.map((t) => {
       const { lat, lon } = swerefToWgs84(t.easting, t.northing);
       return distanceMeters(stableGeo.lat as number, stableGeo.lon as number, lat, lon);
     });
-    return estimateSoundLevel(distances, soundEnvironment === "ute" ? 1 : 0);
-  }, [stableGeo.lat, stableGeo.lon, soundEnvironment]);
+  }, [stableGeo.lat, stableGeo.lon]);
 
-  // Glidande medelvärde (5-10s) av den råa totalnivån ovan, uppdaterat högst
-  // en gång per sekund — se `useSmoothedDba`s jsdoc. Alla konsumenter
-  // (panelerna nedan OCH vindljudets volym) använder detta utjämnade tal,
-  // inte `rawSoundLevelEstimate.totalDba` direkt, så ingen av dem kan
-  // "hoppa" ryckigt oberoende av den andra.
-  const smoothedTotalDba = useSmoothedDba(rawSoundLevelEstimate.totalDba);
+  // Alltid beräknad med full "ute"-nivå (confidence=1) — den manuella
+  // ute/inne-dämpningen appliceras separat, EFTER GPS-jitterutjämningen
+  // nedan (`applyIndoorAttenuation`), istället för att vara en del av det
+  // som utjämnas. Annars dröjde det upp till hela utjämningsfönstret
+  // (flera sekunder) innan en växling av "Ljud ute"/"Ljud inne" faktiskt
+  // hördes i det spelade vindljudet — bara panelens text uppdaterades
+  // direkt. Se `applyIndoorAttenuation`s jsdoc.
+  const rawOutdoorEstimate = useMemo(() => {
+    if (!turbineDistancesM) return { totalDba: -Infinity, nearestDistanceM: null, contributingCount: 0 };
+    return estimateSoundLevel(turbineDistancesM, 1);
+  }, [turbineDistancesM]);
+
+  // Glidande medelvärde (5-10s) av den råa UTOMHUS-nivån ovan, uppdaterat
+  // högst en gång per sekund — filtrerar bara GPS-brus, inte den manuella
+  // väljaren (se ovan).
+  const smoothedOutdoorDba = useSmoothedDba(rawOutdoorEstimate.totalDba);
+
+  // Antal bidragande verk räknas om direkt (icke-utjämnat) från den
+  // manuella väljaren, så badgen/panelen och den faktiska ljudvolymen
+  // alltid reagerar lika omedelbart på en växling.
+  const indoorAdjustedEstimate = useMemo(() => {
+    if (!turbineDistancesM) return { totalDba: -Infinity, nearestDistanceM: null, contributingCount: 0 };
+    return estimateSoundLevel(turbineDistancesM, soundEnvironment === "ute" ? 1 : 0);
+  }, [turbineDistancesM, soundEnvironment]);
+
   const soundLevelEstimate = useMemo(
-    () => ({ ...rawSoundLevelEstimate, totalDba: smoothedTotalDba }),
-    [rawSoundLevelEstimate, smoothedTotalDba],
+    () => ({
+      totalDba: applyIndoorAttenuation(smoothedOutdoorDba, soundEnvironment === "inne"),
+      nearestDistanceM: rawOutdoorEstimate.nearestDistanceM,
+      contributingCount: indoorAdjustedEstimate.contributingCount,
+    }),
+    [smoothedOutdoorDba, soundEnvironment, rawOutdoorEstimate.nearestDistanceM, indoorAdjustedEstimate.contributingCount],
   );
 
   // Vindriktning (informativ, om tillgänglig) för infraljud-/bullermonitorn
@@ -188,9 +204,10 @@ export default function Home() {
       estimate: soundLevelEstimate,
       bearingToNearestDeg: nearest?.bearing ?? null,
       windFromDeg: windDirection.windFromDeg,
+      windSpeedMs: windDirection.windSpeedMs,
       exposureSeconds,
     });
-  }, [soundLevelEstimate, geo.lat, geo.lon, windDirection.windFromDeg, exposureNowTick]);
+  }, [soundLevelEstimate, geo.lat, geo.lon, windDirection.windFromDeg, windDirection.windSpeedMs, exposureNowTick]);
 
   // Uppdatera vindljudets volym/svischtakt när GPS-position eller den
   // beräknade ljudnivån ändras. Volymen följer nu KONTINUERLIGT den redan
@@ -364,6 +381,8 @@ export default function Home() {
               nightMode={nightMode}
               shadowFlicker={shadowFlicker}
               isPointSky={sky.isPointSky}
+              getOcclusionGrid={sky.getOcclusionGrid}
+              showHiddenTurbines={showHiddenTurbines}
               globalVisibilityFactor={globalVisibilityFactor}
             />
           )}
@@ -612,6 +631,8 @@ export default function Home() {
           onToggleNightMode={() => setNightMode((v) => !v)}
           shadowFlicker={shadowFlicker}
           onToggleShadowFlicker={() => setShadowFlicker((v) => !v)}
+          showHiddenTurbines={showHiddenTurbines}
+          onToggleShowHiddenTurbines={() => setShowHiddenTurbines((v) => !v)}
           onClose={() => setShowControls(false)}
         />
       )}

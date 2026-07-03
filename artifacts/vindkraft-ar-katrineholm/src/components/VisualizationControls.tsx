@@ -19,6 +19,8 @@ interface VisualizationControlsProps {
   onToggleNightMode: () => void;
   shadowFlicker: boolean;
   onToggleShadowFlicker: () => void;
+  showHiddenTurbines: boolean;
+  onToggleShowHiddenTurbines: () => void;
   onClose: () => void;
 }
 
@@ -74,6 +76,8 @@ export function VisualizationControls({
   onToggleNightMode,
   shadowFlicker,
   onToggleShadowFlicker,
+  showHiddenTurbines,
+  onToggleShowHiddenTurbines,
   onClose,
 }: VisualizationControlsProps) {
   const [shadowFlickerInfoOpen, setShadowFlickerInfoOpen] = useState(false);
@@ -163,6 +167,21 @@ export function VisualizationControls({
             ))}
           </div>
         )}
+
+        <h2 className="mb-3 text-base font-semibold text-[#FFB347]">👻 Visa dolda verk</h2>
+        <div className="mb-1 grid grid-cols-2 gap-2">
+          <SegButton active={showHiddenTurbines} onClick={() => !showHiddenTurbines && onToggleShowHiddenTurbines()}>
+            👻 Visa dolda PÅ
+          </SegButton>
+          <SegButton active={!showHiddenTurbines} onClick={() => showHiddenTurbines && onToggleShowHiddenTurbines()}>
+            🎯 Realistisk vy
+          </SegButton>
+        </div>
+        <p className="-mt-2 mb-4 text-[11px] leading-relaxed text-white/50">
+          {showHiddenTurbines
+            ? "Skymda delar av verken visas som en svag, streckad kontur istället för att döljas helt."
+            : "Standardläge: verk döljs helt bakom det som faktiskt skymmer dem (träd, byggnader, väggar)."}
+        </p>
 
         <h2 className="mb-3 text-base font-semibold text-[#FFB347]">Nattläge</h2>
         <div className="mb-1 grid grid-cols-2 gap-2">

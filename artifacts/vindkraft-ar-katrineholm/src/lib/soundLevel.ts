@@ -45,7 +45,7 @@ export interface SoundLevelEstimate {
 // byggnader/fönster (Sverige, äldre villa ~25–35 dB). Skalas linjärt med
 // `1 - outdoorConfidence`, så panelen tonar mjukt mellan lägena istället för
 // att hoppa abrupt när dörren/gränsvärdet passeras.
-const MAX_INDOOR_ATTENUATION_DBA = 35;
+export const MAX_INDOOR_ATTENUATION_DBA = 35;
 // Absolut hörbarhetsgolv (dBA) — ett verk räknas bara som "bidragande" om
 // dess enskilda, dämpade nivå faktiskt ligger över denna gräns. Behövs
 // eftersom en enhetlig dB-dämpning av samtliga verk INTE ändrar deras
@@ -127,4 +127,17 @@ export function dbaToGain(totalDba: number): number {
   if (!Number.isFinite(totalDba)) return 0;
   const t = (totalDba - AUDIBILITY_FLOOR_DBA) / (REFERENCE_MAX_DBA - AUDIBILITY_FLOOR_DBA);
   return Math.min(Math.max(t, 0), 1);
+}
+
+/**
+ * Applicerar den manuella "Ljud ute"/"Ljud inne"-dämpningen som ett
+ * OMEDELBART, icke-utjämnat sista steg ovanpå en (ev. GPS-jitter-utjämnad)
+ * dBA-nivå. Måste INTE gå via `useSmoothedDba` — annars dröjer det upp till
+ * hela utjämningsfönstret (flera sekunder) innan en växling av väljaren
+ * faktiskt hörs i det spelade ljudet, vilket var den rapporterade buggen
+ * ("Ljud inne" uppdaterade bara texten/panelen, inte ljudmotorn).
+ */
+export function applyIndoorAttenuation(totalDba: number, indoor: boolean): number {
+  if (!Number.isFinite(totalDba)) return totalDba;
+  return indoor ? totalDba - MAX_INDOOR_ATTENUATION_DBA : totalDba;
 }
