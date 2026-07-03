@@ -43,8 +43,20 @@ export function useSmoothedDba(rawTotalDba: number): number {
     samplesRef.current = samplesRef.current.filter((s) => now - s.time <= WINDOW_MS);
   }, [rawTotalDba]);
 
+  // VIKTIGT: intervallet startas ALLTID vid mount, oavsett om det just då
+  // finns några samples eller ej. Tidigare fanns ett "optimerings"-villkor
+  // här (`if (!Number.isFinite(...) && samples.length === 0) return;`) som
+  // skulle hoppa över att starta intervallet om det inte fanns någon data
+  // ÄN — men eftersom denna effekt bara körs EN gång (tom dependency-array)
+  // och GPS-fixet nästan alltid saknas vid själva mount-ögonblicket, var
+  // villkoret i praktiken NÄSTAN ALLTID sant vid första körningen. Det
+  // gjorde att intervallet aldrig startade — inte ens efter att GPS-fixet
+  // senare kom in och riktiga samples började samlas i `samplesRef` via
+  // effekten ovan. Resultatet: `smoothed` fastnade permanent på sitt
+  // initiala värde (-Infinity), och "🔊 Ljudnivå"-panelen visade "Väntar på
+  // GPS-position…" för alltid — även när GPS/kamera/kompass i övrigt
+  // fungerade helt korrekt (skiljer sig alltså från själva GPS-hämtningen).
   useEffect(() => {
-    if (!Number.isFinite(latestRawRef.current) && samplesRef.current.length === 0) return;
     const interval = window.setInterval(() => {
       const now = Date.now();
       if (now - lastUpdateRef.current < UPDATE_INTERVAL_MS) return;

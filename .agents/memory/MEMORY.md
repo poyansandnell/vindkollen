@@ -25,3 +25,4 @@
 - [ML inference fallback reliability](ml-inference-fallback-reliability.md) — bound warm-up exemptions by attempt count not success; a `Promise.race` timeout doesn't cancel the underlying work, so stale results can stack up.
 - [Full-screen overlay masks loading state](full-screen-overlay-masks-loading-state.md) — an env-quality overlay independent of the primary `ready` flag can cover a working feature's loading/error UI, causing misreported bugs.
 - [Duplicate geolocation request contention](duplicate-geolocation-request-contention.md) — a gesture-preserving throwaway `getCurrentPosition()` must use low accuracy or it competes with the real `watchPosition()` for the GPS chip and can stall it.
+- [Mount-time-gated interval never (re)starts](mount-time-gated-interval-never-starts.md) — an effect with `[]` deps that early-returns based on data available only at mount time permanently disables itself if that data isn't ready yet (e.g. before an async GPS fix arrives).
