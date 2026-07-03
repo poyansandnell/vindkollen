@@ -288,20 +288,17 @@ export default function Home() {
                   Kalibrera horisont
                 </button>
               )}
-              {!showSoundLevel && (
+              {ready && (
                 <button
-                  onClick={() => setShowSoundLevel(true)}
-                  className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+                  onClick={() => setShowSoundLevel((v) => !v)}
+                  aria-pressed={showSoundLevel}
+                  className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
                 >
-                  🔊 Visa ljudnivå
+                  🔊 Ljudnivå
                 </button>
               )}
             </div>
           </div>
-
-          {ready && showSoundLevel && (
-            <SoundLevelPanel estimate={soundLevelEstimate} onClose={() => setShowSoundLevel(false)} />
-          )}
 
           {ready && photoError && (
             <div className="pointer-events-none absolute inset-x-0 top-[7.5rem] z-30 flex justify-center px-4">
@@ -311,6 +308,9 @@ export default function Home() {
 
           {/* Bottom controls */}
           <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-10">
+            {ready && showSoundLevel && (
+              <SoundLevelPanel estimate={soundLevelEstimate} onClose={() => setShowSoundLevel(false)} />
+            )}
             <button
               onClick={() => setShowPetition(true)}
               className="w-full rounded-full bg-[#FF8B01] py-3.5 text-sm font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/30 hover:bg-[#FFB347]"
