@@ -41,9 +41,11 @@ export interface SkyDetectionState {
    *   samma beteende som innan denna funktion fanns.
    *
    * OBS: `outdoorConfidence`/`indoors` (ljuddämpning + "Gå utomhus") är en
-   * separat, redan tidigare befintlig funktion och drivs alltid av den
-   * enkla heuristiken oavsett `method` — den påverkas inte av om
-   * ML-segmenteringen lyckas eller inte.
+   * separat, redan tidigare befintlig funktion som ALLTID uppdateras av den
+   * enkla heuristiken varje bildruta (oavsett `method`), men förfinas med
+   * ML-segmenteringens (mer träffsäkra) himmelsandel också när den är
+   * tillgänglig. Denna signal fortsätter alltså fungera identiskt oavsett
+   * om ML lyckas ladda — den kan bara bli MER exakt, aldrig sluta fungera.
    */
   method: "loading" | "ml" | "disabled";
 }
@@ -147,8 +149,10 @@ function classifyCell(pixels: Uint8ClampedArray, col: number, row: number): bool
  * 2. **Ljuddämpning/"Gå utomhus"** (`outdoorConfidence`/`indoors`): en redan
  *    sedan tidigare befintlig, alltid omedelbart tillgänglig ljusstyrka/
  *    textur-heuristik (`classifyCell`) som körs kontinuerligt oavsett
- *    ML-status — helt oberoende av (1) och opåverkad av om
- *    segmenteringsmodellen lyckas ladda eller inte.
+ *    ML-status, så signalen aldrig försvinner. När ML-segmenteringen är
+ *    igång förfinas samma signal med dess (mer träffsäkra) himmelsandel —
+ *    men fungerar identiskt, oberoende av (1), om ML aldrig blir
+ *    tillgänglig.
  *
  * VIKTIGT — ML-segmenteringen är en heuristik i produktsyfte, inte en
  * perfekt djupsensor: gränser vid tunna detaljer (kvistar, ledningar) blir
@@ -306,16 +310,26 @@ export function useSkyDetection(
         // (skiljer t.ex. riktig himmel från en ljus vit vägg) — använd det
         // för ljuddämpningen/"Gå utomhus" också när det finns tillgängligt.
         applyConfidence(skyRatio);
-        if (!cancelled) setMethod("ml");
       } catch {
         // En enskild bildruta misslyckades (t.ex. WebGL-kontext tillfälligt
         // upptagen) — räkna som en "långsam"/misslyckad sampling istället för
-        // att krascha; efter tillräckligt många faller vi tillbaka permanent
-        // (grid rörs inte här, så ocklusionen förblir oförändrad/av).
+        // att krascha; efter tillräckligt många faller vi tillbaka permanent.
         mlSlowCountRef.current += 1;
         if (mlSlowCountRef.current >= ML_MAX_SLOW_SAMPLES) {
           mlStateRef.current = "disabled";
         }
+      }
+      // Om DENNA sampling (lyckad eller ej) var den som korsade
+      // slow/error-tröskeln och stängde av ML permanent, nollställ
+      // ocklusionen till "allt är himmel" omedelbart — annars skulle en nu
+      // inaktuell mask (t.ex. från strax innan enheten blev för långsam)
+      // kunna bli kvar permanent istället för att falla tillbaka korrekt.
+      if (cancelled) return;
+      if (mlStateRef.current === "disabled") {
+        gridRef.current.fill(true);
+        setMethod("disabled");
+      } else {
+        setMethod("ml");
       }
     }
 
