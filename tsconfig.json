@@ -7,6 +7,9 @@
       "path": "./lib/db"
     },
     {
+      "path": "./lib/geo"
+    },
+    {
       "path": "./lib/api-client-react"
     },
     {

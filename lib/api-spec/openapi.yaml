@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: wind
+    description: Wind power project, turbine and locality operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,228 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /wind/project-areas:
+    get:
+      operationId: listWindProjectAreas
+      tags: [wind]
+      summary: List wind project areas near a point
+      description: Returns onshore and offshore wind project area polygons within a radius of a point, or within a bounding box.
+      parameters:
+        - name: lat
+          in: query
+          schema: { type: number }
+        - name: lng
+          in: query
+          schema: { type: number }
+        - name: radiusKm
+          in: query
+          schema: { type: number, default: 60 }
+        - name: minLat
+          in: query
+          schema: { type: number }
+        - name: minLng
+          in: query
+          schema: { type: number }
+        - name: maxLat
+          in: query
+          schema: { type: number }
+        - name: maxLng
+          in: query
+          schema: { type: number }
+        - name: statuses
+          in: query
+          description: Comma-separated list of statuses to include
+          schema: { type: string }
+        - name: category
+          in: query
+          description: Filter by onshore or offshore
+          schema: { type: string, enum: [onshore, offshore] }
+        - name: countryCode
+          in: query
+          schema: { type: string, default: SE }
+      responses:
+        "200":
+          description: List of wind project areas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WindProjectArea"
+  /wind/project-areas/{id}:
+    get:
+      operationId: getWindProjectArea
+      tags: [wind]
+      summary: Get a single wind project area
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Wind project area
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WindProjectArea"
+        "404":
+          description: Not found
+  /wind/turbines:
+    get:
+      operationId: listWindTurbines
+      tags: [wind]
+      summary: List individual wind turbines near a point or bounding box
+      parameters:
+        - name: lat
+          in: query
+          schema: { type: number }
+        - name: lng
+          in: query
+          schema: { type: number }
+        - name: radiusKm
+          in: query
+          schema: { type: number, default: 60 }
+        - name: minLat
+          in: query
+          schema: { type: number }
+        - name: minLng
+          in: query
+          schema: { type: number }
+        - name: maxLat
+          in: query
+          schema: { type: number }
+        - name: maxLng
+          in: query
+          schema: { type: number }
+        - name: statuses
+          in: query
+          description: Comma-separated list of statuses to include
+          schema: { type: string }
+        - name: countryCode
+          in: query
+          schema: { type: string, default: SE }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 5000 }
+      responses:
+        "200":
+          description: List of wind turbines
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WindTurbine"
+  /wind/turbines/{id}:
+    get:
+      operationId: getWindTurbine
+      tags: [wind]
+      summary: Get a single wind turbine
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Wind turbine
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WindTurbine"
+        "404":
+          description: Not found
+  /wind/localities/search:
+    get:
+      operationId: searchLocalities
+      tags: [wind]
+      summary: Search Swedish localities by name, kommun or postcode
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: countryCode
+          in: query
+          schema: { type: string, default: SE }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Matching localities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Locality"
+  /wind/localities/{id}:
+    get:
+      operationId: getLocality
+      tags: [wind]
+      summary: Get a locality and its impact detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Locality impact detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalityImpactDetail"
+        "404":
+          description: Not found
+  /wind/localities/best-to-test:
+    get:
+      operationId: listBestLocalitiesToTest
+      tags: [wind]
+      summary: Ranked list of localities most relevant for a local campaign
+      parameters:
+        - name: countryCode
+          in: query
+          schema: { type: string, default: SE }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        "200":
+          description: Ranked localities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocalityRanking"
+  /config:
+    get:
+      operationId: getPublicConfig
+      tags: [health]
+      summary: Public frontend configuration
+      description: Returns public configuration values needed by frontend clients (e.g. Mapbox token).
+      responses:
+        "200":
+          description: Public config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicConfig"
+  /wind/sync-status:
+    get:
+      operationId: getWindSyncStatus
+      tags: [wind]
+      summary: Latest data sync status and row counts
+      responses:
+        "200":
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WindSyncStatus"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +257,136 @@ components:
           type: string
       required:
         - status
+    WindProjectArea:
+      type: object
+      required: [id, countryCode, category, name, status, sourceLayer]
+      properties:
+        id: { type: integer }
+        countryCode: { type: string }
+        externalId: { type: ["string", "null"] }
+        category: { type: string, enum: [onshore, offshore] }
+        name: { type: string }
+        status: { type: string }
+        kommun: { type: ["string", "null"] }
+        region: { type: ["string", "null"] }
+        turbineCountPlannedMin: { type: ["integer", "null"] }
+        turbineCountPlannedMax: { type: ["integer", "null"] }
+        heightMaxM: { type: ["number", "null"] }
+        installedEffectMw: { type: ["number", "null"] }
+        annualProductionGwh: { type: ["number", "null"] }
+        plannedConstructionStart: { type: ["string", "null"] }
+        plannedOperationDate: { type: ["string", "null"] }
+        organisationName: { type: ["string", "null"] }
+        centerLat: { type: "number" }
+        centerLng: { type: "number" }
+        polygon:
+          description: GeoJSON Polygon/MultiPolygon geometry, or null if unavailable
+          type: ["object", "null"]
+        nearestLocalityId: { type: ["integer", "null"] }
+        nearestLocalityName: { type: ["string", "null"] }
+        nearestLocalityDistanceKm: { type: ["number", "null"] }
+        source: { type: string }
+        sourceLayer: { type: string }
+        lastUpdated: { type: ["string", "null"], format: date-time }
+        distanceKm:
+          description: Distance in km from the query point, only present when lat/lng was supplied
+          type: ["number", "null"]
+    WindTurbine:
+      type: object
+      required: [id, countryCode, name, status]
+      properties:
+        id: { type: integer }
+        countryCode: { type: string }
+        externalId: { type: ["string", "null"] }
+        projectAreaId: { type: ["integer", "null"] }
+        name: { type: string }
+        status: { type: string }
+        kommun: { type: ["string", "null"] }
+        region: { type: ["string", "null"] }
+        totalHeightM: { type: ["number", "null"] }
+        hubHeightM: { type: ["number", "null"] }
+        rotorDiameterM: { type: ["number", "null"] }
+        maxEffectMw: { type: ["number", "null"] }
+        manufacturer: { type: ["string", "null"] }
+        model: { type: ["string", "null"] }
+        organisationName: { type: ["string", "null"] }
+        lat: { type: "number" }
+        lng: { type: "number" }
+        nearestLocalityId: { type: ["integer", "null"] }
+        nearestLocalityName: { type: ["string", "null"] }
+        nearestLocalityDistanceKm: { type: ["number", "null"] }
+        source: { type: string }
+        lastUpdated: { type: ["string", "null"], format: date-time }
+        distanceKm:
+          description: Distance in km from the query point, only present when lat/lng was supplied
+          type: ["number", "null"]
+    Locality:
+      type: object
+      required: [id, countryCode, name, lat, lng]
+      properties:
+        id: { type: integer }
+        countryCode: { type: string }
+        name: { type: string }
+        kommun: { type: ["string", "null"] }
+        region: { type: ["string", "null"] }
+        population: { type: ["integer", "null"] }
+        lat: { type: number }
+        lng: { type: number }
+        distanceKm:
+          type: ["number", "null"]
+    LocalityImpactDetail:
+      type: object
+      required: [locality, impactScore, nearbyProjectAreas, nearbyTurbines]
+      properties:
+        locality:
+          $ref: "#/components/schemas/Locality"
+        impactScore: { type: number }
+        scoreBreakdown:
+          type: object
+          properties:
+            distanceScore: { type: number }
+            plannedTurbinesScore: { type: number }
+            existingTurbinesScore: { type: number }
+            statusScore: { type: number }
+            populationScore: { type: number }
+            visibilityScore: { type: number }
+        turbineCountWithin25Km: { type: integer }
+        turbineCountWithin60Km: { type: integer }
+        projectAreaCountWithin25Km: { type: integer }
+        projectAreaCountWithin60Km: { type: integer }
+        nearbyProjectAreas:
+          type: array
+          items:
+            $ref: "#/components/schemas/WindProjectArea"
+        nearbyTurbines:
+          type: array
+          items:
+            $ref: "#/components/schemas/WindTurbine"
+    LocalityRanking:
+      type: object
+      required: [locality, impactScore, rank]
+      properties:
+        rank: { type: integer }
+        locality:
+          $ref: "#/components/schemas/Locality"
+        impactScore: { type: number }
+        turbineCountWithin25Km: { type: integer }
+        turbineCountWithin60Km: { type: integer }
+        projectAreaCountWithin25Km: { type: integer }
+        projectAreaCountWithin60Km: { type: integer }
+        dominantStatus: { type: ["string", "null"] }
+    PublicConfig:
+      type: object
+      required: [mapboxToken]
+      properties:
+        mapboxToken: { type: ["string", "null"] }
+    WindSyncStatus:
+      type: object
+      required: [countryCode, projectAreaCount, turbineCount, localityCount]
+      properties:
+        countryCode: { type: string }
+        projectAreaCount: { type: integer }
+        turbineCount: { type: integer }
+        localityCount: { type: integer }
+        lastSyncedAt: { type: ["string", "null"], format: date-time }
 

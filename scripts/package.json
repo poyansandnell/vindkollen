@@ -5,10 +5,18 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "sync:wind": "tsx ./src/wind-sync/run.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "catalog:",
     "tsx": "catalog:"
+  },
+  "dependencies": {
+    "@workspace/db": "workspace:*",
+    "@workspace/geo": "workspace:*",
+    "adm-zip": "^0.5.18",
+    "drizzle-orm": "catalog:"
   }
 }

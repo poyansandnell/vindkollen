@@ -1,0 +1,155 @@
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Loader2, X } from "lucide-react";
+import {
+  useGetWindTurbine,
+  useGetWindProjectArea,
+  type WindTurbine,
+  type WindProjectArea,
+} from "@workspace/api-client-react";
+import { statusColor, statusLabel } from "@/lib/statusMeta";
+import type { MapSelection } from "@/components/MapCanvas";
+import type { UseQueryOptions } from "@tanstack/react-query";
+
+interface DetailPanelProps {
+  selection: MapSelection;
+  onClose: () => void;
+}
+
+function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
+  if (value === null || value === undefined || value === "") return null;
+  return (
+    <div className="flex justify-between text-sm py-1 border-b border-border/60 last:border-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-right">{value}</span>
+    </div>
+  );
+}
+
+export default function DetailPanel({ selection, onClose }: DetailPanelProps) {
+  const turbineQuery = useGetWindTurbine(selection.id, {
+    query: { enabled: selection.kind === "turbine" } as UseQueryOptions<WindTurbine>,
+  });
+  const projectAreaQuery = useGetWindProjectArea(selection.id, {
+    query: { enabled: selection.kind === "projectArea" } as UseQueryOptions<WindProjectArea>,
+  });
+
+  const isLoading =
+    selection.kind === "turbine" ? turbineQuery.isLoading : projectAreaQuery.isLoading;
+
+  return (
+    <div
+      className="absolute top-0 right-0 h-full w-full sm:w-96 bg-background border-l shadow-lg z-20 flex flex-col"
+      data-testid="panel-detail"
+    >
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <h2 className="font-semibold text-base">
+          {selection.kind === "turbine" ? "Vindkraftverk" : "Projekteringsområde"}
+        </h2>
+        <Button variant="ghost" size="icon" onClick={onClose} data-testid="button-close-detail">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      <ScrollArea className="flex-1">
+        <div className="p-4">
+          {isLoading && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {selection.kind === "turbine" && turbineQuery.data && (
+            <div>
+              <h3 className="text-lg font-semibold mb-1">{turbineQuery.data.name}</h3>
+              <Badge
+                style={{ backgroundColor: statusColor(turbineQuery.data.status), color: "white" }}
+                className="mb-4"
+              >
+                {statusLabel(turbineQuery.data.status)}
+              </Badge>
+              <div className="space-y-0.5">
+                <Field label="Kommun" value={turbineQuery.data.kommun} />
+                <Field label="Län" value={turbineQuery.data.region} />
+                <Field label="Total höjd" value={turbineQuery.data.totalHeightM ? `${turbineQuery.data.totalHeightM} m` : null} />
+                <Field label="Navhöjd" value={turbineQuery.data.hubHeightM ? `${turbineQuery.data.hubHeightM} m` : null} />
+                <Field label="Rotordiameter" value={turbineQuery.data.rotorDiameterM ? `${turbineQuery.data.rotorDiameterM} m` : null} />
+                <Field label="Maxeffekt" value={turbineQuery.data.maxEffectMw ? `${turbineQuery.data.maxEffectMw} MW` : null} />
+                <Field label="Tillverkare" value={turbineQuery.data.manufacturer} />
+                <Field label="Modell" value={turbineQuery.data.model} />
+                <Field label="Verksamhetsutövare" value={turbineQuery.data.organisationName} />
+                <Field
+                  label="Närmaste ort"
+                  value={
+                    turbineQuery.data.nearestLocalityName
+                      ? `${turbineQuery.data.nearestLocalityName} (${turbineQuery.data.nearestLocalityDistanceKm?.toFixed(1)} km)`
+                      : null
+                  }
+                />
+                <Field
+                  label="Avstånd från din plats"
+                  value={
+                    turbineQuery.data.distanceKm != null
+                      ? `${turbineQuery.data.distanceKm.toFixed(1)} km`
+                      : null
+                  }
+                />
+              </div>
+            </div>
+          )}
+
+          {selection.kind === "projectArea" && projectAreaQuery.data && (
+            <div>
+              <h3 className="text-lg font-semibold mb-1">{projectAreaQuery.data.name}</h3>
+              <div className="flex gap-2 mb-4">
+                <Badge
+                  style={{ backgroundColor: statusColor(projectAreaQuery.data.status), color: "white" }}
+                >
+                  {statusLabel(projectAreaQuery.data.status)}
+                </Badge>
+                <Badge variant="outline">
+                  {projectAreaQuery.data.category === "offshore" ? "Havsbaserat" : "Landbaserat"}
+                </Badge>
+              </div>
+              <div className="space-y-0.5">
+                <Field label="Kommun" value={projectAreaQuery.data.kommun} />
+                <Field label="Län" value={projectAreaQuery.data.region} />
+                <Field
+                  label="Antal planerade verk"
+                  value={
+                    projectAreaQuery.data.turbineCountPlannedMin ||
+                    projectAreaQuery.data.turbineCountPlannedMax
+                      ? `${projectAreaQuery.data.turbineCountPlannedMin ?? "?"}–${projectAreaQuery.data.turbineCountPlannedMax ?? "?"}`
+                      : null
+                  }
+                />
+                <Field label="Maxhöjd" value={projectAreaQuery.data.heightMaxM ? `${projectAreaQuery.data.heightMaxM} m` : null} />
+                <Field label="Installerad effekt" value={projectAreaQuery.data.installedEffectMw ? `${projectAreaQuery.data.installedEffectMw} MW` : null} />
+                <Field label="Årsproduktion" value={projectAreaQuery.data.annualProductionGwh ? `${projectAreaQuery.data.annualProductionGwh} GWh` : null} />
+                <Field label="Planerad byggstart" value={projectAreaQuery.data.plannedConstructionStart} />
+                <Field label="Planerat drifttagande" value={projectAreaQuery.data.plannedOperationDate} />
+                <Field label="Verksamhetsutövare" value={projectAreaQuery.data.organisationName} />
+                <Field
+                  label="Närmaste ort"
+                  value={
+                    projectAreaQuery.data.nearestLocalityName
+                      ? `${projectAreaQuery.data.nearestLocalityName} (${projectAreaQuery.data.nearestLocalityDistanceKm?.toFixed(1)} km)`
+                      : null
+                  }
+                />
+                <Field
+                  label="Avstånd från din plats"
+                  value={
+                    projectAreaQuery.data.distanceKm != null
+                      ? `${projectAreaQuery.data.distanceKm.toFixed(1)} km`
+                      : null
+                  }
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@workspace/geo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "proj4": "^2.20.9"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/proj4": "^2.19.0"
+  }
+}
