@@ -33,7 +33,7 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
 
         <h1 className="mt-6 text-3xl font-bold leading-tight text-white">Vindkraft AR</h1>
         <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#FF8B01]/15 px-3 py-1 text-xs font-medium text-[#FFB347]">
-          📱 Kräver mobiltelefon — fungerar inte på dator
+          📱 Kräver mobiltelefon — rikta mobilkameran runt dig
         </p>
 
         <p className="mt-4 text-sm leading-relaxed text-white/70">
