@@ -242,7 +242,7 @@ export default function Home() {
   // placering) svarar den här mjukt på verklig rörelse men filtrerar bort
   // det meterskaliga GPS-bruset som annars fick verken att "fladdra" i
   // AR-vyn även när användaren stod still.
-  const smoothedGeo = useSmoothedGeoPosition(geo.lat, geo.lon);
+  const smoothedGeo = useSmoothedGeoPosition(geo.lat, geo.lon, geo.accuracy);
 
   // Avstånd (stabiliserad GPS) till samtliga verk — delas av båda
   // uppskattningarna nedan.

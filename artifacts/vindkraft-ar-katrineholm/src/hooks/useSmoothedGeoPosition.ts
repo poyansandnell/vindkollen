@@ -1,14 +1,34 @@
 import { useRef } from "react";
+import { distanceMeters } from "@/lib/geo";
 
 /**
- * Tidskonstant (sekunder) för den exponentiella utjämningen av lat/lon.
+ * Bas-tidskonstant (sekunder) för den exponentiella utjämningen av lat/lon.
  * Samma mönster som `useDeviceOrientation.ts`s gir-utjämning (0.15s), men
- * längre eftersom rått GPS-brus normalt är mycket grövre (flera meter) än
- * kompassbrus (bråkdelar av en grad) — en för kort tidskonstant skulle
- * fortfarande släppa igenom synligt "fladder" i verkens skärmposition.
- * Kort nog för att fortfarande kännas responsiv när man faktiskt går.
+ * betydligt längre eftersom rått GPS-brus normalt är mycket grövre (flera
+ * meter, ibland tiotals meter) än kompassbrus (bråkdelar av en grad).
+ * Den faktiska, effektiva tidskonstanten skalas upp ytterligare när
+ * GPS-precisionen (`accuracy`) är dålig — se `effectiveTau`.
  */
-const POSITION_TAU_SEC = 1.2;
+const BASE_TAU_SEC = 2.5;
+
+/**
+ * Om GPS-precisionen är sämre än det här (meter) körs utjämningen med en
+ * proportionellt längre tidskonstant — en dålig fix (typiskt vid
+ * flervägsreflektioner nära byggnader) ska inte få lov att svänga
+ * verkens position lika snabbt som en bra fix.
+ */
+const REFERENCE_ACCURACY_M = 8;
+const MAX_TAU_MULTIPLIER = 5;
+
+/**
+ * En enskild råavläsning som avviker mer än så här många meter från den
+ * senast utjämnade positionen, och som skulle motsvara en orimlig hastighet
+ * (se `MAX_PLAUSIBLE_SPEED_MPS`), klassas som en GPS-"spik"
+ * (flervägsreflektion/hopp) och ignoreras helt istället för att smygas in
+ * via EMA-filtret — annars skulle en enda kraftig spik fortfarande synas
+ * som ett tydligt hack i verkens position innan filtret hinner dämpa den.
+ */
+const MAX_PLAUSIBLE_SPEED_MPS = 4; // ~14 km/h, generöst för gång/lätt jogg
 
 /** Tidsbaserad exponentiell utjämningsfaktor (oberoende av GPS-avläsningsfrekvens). */
 function timeSmoothingFactor(tau: number, dt: number): number {
@@ -16,24 +36,35 @@ function timeSmoothingFactor(tau: number, dt: number): number {
   return 1 - Math.exp(-dt / tau);
 }
 
+function effectiveTau(accuracy: number | null): number {
+  if (accuracy === null || accuracy <= REFERENCE_ACCURACY_M) return BASE_TAU_SEC;
+  const multiplier = Math.min(accuracy / REFERENCE_ACCURACY_M, MAX_TAU_MULTIPLIER);
+  return BASE_TAU_SEC * multiplier;
+}
+
 /**
  * Låg-passfiltrerar rå `lat`/`lon` från `useGeolocation` med ett tidsbaserat
  * exponentiellt glidande medelvärde (EMA), på samma sätt som
- * `useDeviceOrientation.ts` utjämnar gir/pitch/roll.
+ * `useDeviceOrientation.ts` utjämnar gir/pitch/roll — men med tre extra lager
+ * anpassade för GPS specifikt:
  *
- * Till skillnad från `useStableGeoPosition` (som helt fryser positionen tills
- * användaren flyttat sig >15m — bra för att undvika onödig omräkning av
- * dBA-uppskattningen, men skulle göra AR-verkens placering hackig/"teleporterande"
- * i stora hopp) ger den här hooken en *kontinuerlig* men utjämnad position:
- * den svarar mjukt och successivt på verklig rörelse (går i ~1-2 sekunder),
- * men dämpar bort det höga, meterskaliga GPS-bruset i vanliga
- * konsument-GPS-avläsningar som annars fick verken att "fladdra"/hoppa i
- * AR-vyn även när användaren stod still.
+ * 1. Tidskonstanten skalas upp när `accuracy` är dålig (se `effectiveTau`),
+ *    så en osäker fix inte får svänga positionen lika snabbt som en bra.
+ * 2. Enstaka orimliga "spik"-avläsningar (skulle motsvara en omöjlig
+ *    hastighet, se `MAX_PLAUSIBLE_SPEED_MPS`) ignoreras helt istället för
+ *    att smygas in via filtret.
+ * 3. Är kontinuerlig (till skillnad från `useStableGeoPosition`s hela
+ *    15m-hoppsfrysning) — svarar mjukt och successivt på verklig rörelse
+ *    men dämpar bort det meterskaliga GPS-bruset som annars fick verken att
+ *    "fladdra"/hoppa i AR-vyn.
  *
- * Ren ref-baserad state (ingen egen re-render) — konsumenter läser samma
- * `{ lat, lon }`-par varje render tills nästa `useGeolocation`-uppdatering.
+ * Ren ref-baserad state (ingen egen re-render).
  */
-export function useSmoothedGeoPosition(lat: number | null, lon: number | null): { lat: number | null; lon: number | null } {
+export function useSmoothedGeoPosition(
+  lat: number | null,
+  lon: number | null,
+  accuracy: number | null = null,
+): { lat: number | null; lon: number | null } {
   const smoothedRef = useRef<{ lat: number | null; lon: number | null }>({ lat: null, lon: null });
   const lastTimeRef = useRef<number | null>(null);
 
@@ -53,7 +84,17 @@ export function useSmoothedGeoPosition(lat: number | null, lon: number | null): 
   const dt = lastTimeRef.current === null ? 1 : Math.min((now - lastTimeRef.current) / 1000, 5);
   lastTimeRef.current = now;
 
-  const factor = timeSmoothingFactor(POSITION_TAU_SEC, dt);
+  const jumpM = distanceMeters(smoothedRef.current.lat, smoothedRef.current.lon, lat, lon);
+  const maxPlausibleM = MAX_PLAUSIBLE_SPEED_MPS * dt + (accuracy ?? REFERENCE_ACCURACY_M);
+  if (jumpM > maxPlausibleM) {
+    // Orimligt hopp för den förflutna tiden — troligen en GPS-spik
+    // (flervägsreflektion). Ignorera avläsningen helt denna gång; om det
+    // faktiskt var en riktig förflyttning fångas den upp av nästa
+    // avläsning(ar) istället.
+    return smoothedRef.current;
+  }
+
+  const factor = timeSmoothingFactor(effectiveTau(accuracy), dt);
   smoothedRef.current = {
     lat: smoothedRef.current.lat + (lat - smoothedRef.current.lat) * factor,
     lon: smoothedRef.current.lon + (lon - smoothedRef.current.lon) * factor,

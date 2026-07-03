@@ -1,0 +1,10 @@
+---
+name: Duplicate device-orientation event sources causing AR jitter
+description: Listening to both deviceorientationabsolute and deviceorientation without dedup can feed two conflicting heading readings into the same smoothing filter.
+---
+
+Registering handlers for both `deviceorientationabsolute` and plain `deviceorientation` "for compatibility" can backfire: on many Android browsers both fire for the same physical sensor sample, but plain `deviceorientation`'s `alpha` is not always north-referenced (it can drift from an arbitrary start orientation on some browsers/devices), while `deviceorientationabsolute` (or `event.absolute === true`) is compass-locked. Feeding both into one EMA/low-pass filter makes the filter chase two different "truths" every frame, which looks like heavy, continuous jitter/swinging of anything rendered relative to that heading (e.g. AR overlays) — far more visually significant than sensor noise on either source alone, since heading error maps directly to on-screen angle regardless of object distance (unlike GPS position error, which is angularly attenuated by distance to the object).
+
+**Why:** iOS Safari never fires `deviceorientationabsolute` at all (it exposes `webkitCompassHeading` on plain `deviceorientation` instead), so a naive "prefer whichever event exists" approach still needs both listeners registered — the bug is processing *both* once you already have a trustworthy absolute source, not registering both listeners.
+
+**How to apply:** Latch a flag the first time an absolute/compass-referenced reading arrives (`event.type === "deviceorientationabsolute"`, `event.absolute === true`, or a platform-specific absolute field like `webkitCompassHeading`). Once latched, ignore further non-absolute `deviceorientation` events entirely so only one heading source ever feeds the smoothing filter. Before concluding GPS/position noise is the cause of AR jitter, sanity-check the angular magnitude: bearing error from GPS noise is `atan(noise_m / distance_m)`, which is often under 1° for anything more than a few hundred meters away — heading/compass noise is usually the dominant, undamped contributor instead.

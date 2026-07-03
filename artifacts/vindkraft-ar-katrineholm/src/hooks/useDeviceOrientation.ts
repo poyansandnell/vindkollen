@@ -90,6 +90,20 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   // Litet rullande fönster av senaste |Δgir|/tidssteg-samples (grader/s) —
   // används bara för att räkna fram `headingStabilityRef`, ingen render.
   const headingDeltaSamplesRef = useRef<number[]>([]);
+  // Sant så fort ett riktigt `deviceorientationabsolute`-event tagits emot.
+  // Många Android-webbläsare skickar BÅDE `deviceorientationabsolute` OCH
+  // vanliga `deviceorientation`-event för samma sensoravläsning — men den
+  // senares `alpha` är inte alltid kompass-/norr-refererad (kan drifta från
+  // en godtycklig startriktning på vissa webbläsare/enheter). Att mata båda
+  // källorna genom samma utjämningsfilter ger två konkurrerande
+  // "sanningar" om riktningen, vilket upplevs som att AR-objekten svänger/
+  // hoppar kraftigt. Så fort en absolut avläsning finns litar vi bara på
+  // den (eller andra event som själva flaggar `absolute: true`) och
+  // ignorerar icke-absoluta `deviceorientation`-event helt. iOS Safari
+  // saknar `deviceorientationabsolute` helt, så där förblir flaggan false
+  // och vanliga `deviceorientation`-event (med `webkitCompassHeading`)
+  // fortsätter fungera precis som förut.
+  const hasAbsoluteFixRef = useRef(false);
 
   const updateScreenAngle = useCallback(() => {
     const orientationApi = (screen as unknown as { orientation?: { angle: number } }).orientation;
@@ -99,6 +113,19 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
 
   const handleOrientation = useCallback((event: DeviceOrientationEvent) => {
     const webkitCompassHeading = (event as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
+    const eventType = (event as unknown as { type?: string }).type;
+    const isAbsoluteEvent = eventType === "deviceorientationabsolute" || event.absolute === true;
+
+    if (isAbsoluteEvent) {
+      hasAbsoluteFixRef.current = true;
+    } else if (hasAbsoluteFixRef.current && typeof webkitCompassHeading !== "number") {
+      // Vi har redan en pålitlig absolut/kompass-källa (Android
+      // `deviceorientationabsolute`, eller iOS `webkitCompassHeading` som
+      // alltid är absolut) — ignorera det här icke-absoluta
+      // `deviceorientation`-eventet helt så det inte konkurrerar med och
+      // förvränger den utjämnade riktningen.
+      return;
+    }
 
     let heading: number | null = null;
     if (typeof webkitCompassHeading === "number") {
