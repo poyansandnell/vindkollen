@@ -79,8 +79,34 @@ export function useGeolocation(enabled: boolean): GeoState {
 
     setState((s) => ({ ...s, loading: true }));
 
+    // Egen "vakthund"-timer utöver `timeout`-optionen nedan. `timeout` i
+    // watchPosition-anropet är kända för att INTE vara pålitligt över alla
+    // plattformar — framför allt i iOS Safari/hemskärms-PWA (standalone-
+    // läge) har det förekommit att varken success- eller error-callbacken
+    // någonsin anropas om den allra första positioneringen misslyckas
+    // internt, vilket lämnar appen i en evig "Hämtar GPS-position…"-snurra
+    // utan felmeddelande eller möjlighet att försöka igen. Denna timer
+    // garanterar att användaren alltid får ett fel + en "Försök igen"-knapp
+    // efter som mest 20 sekunder, oavsett om webbläsarens egna callbacks
+    // någonsin triggas.
+    let gotFix = false;
+    const watchdogId = window.setTimeout(() => {
+      if (gotFix) return;
+      setState((s) => {
+        if (s.lat !== null) return s;
+        return {
+          ...s,
+          loading: false,
+          error:
+            "Det tog för lång tid att hämta din position. Kontrollera att Plats/GPS är påslaget för webbläsaren och försök igen.",
+        };
+      });
+    }, 20000);
+
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
+        gotFix = true;
+        window.clearTimeout(watchdogId);
         setState((s) => ({
           ...s,
           lat: pos.coords.latitude,
@@ -112,6 +138,7 @@ export function useGeolocation(enabled: boolean): GeoState {
     );
 
     return () => {
+      window.clearTimeout(watchdogId);
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
