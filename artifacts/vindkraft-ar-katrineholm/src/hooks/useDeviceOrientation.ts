@@ -32,6 +32,18 @@ export interface DeviceOrientationApi {
    * rörs runt snarare än hålls stadigt riktad mot himlen).
    */
   headingStabilityRef: React.MutableRefObject<number>;
+  /**
+   * 0..1 mått på hur stor del av kompassens riktningsomfång (uppdelat i
+   * `CALIBRATION_TOTAL_SECTORS` sektorer) användaren faktiskt svept
+   * telefonen genom sedan `startCalibrationTracking()` senast anropades.
+   * Används av `LoadingSequence.tsx` för att visa ett levande
+   * kalibreringsförlopp under åtta-rörelsen, istället för en blind timer.
+   */
+  calibrationProgress: number;
+  /** Sant när tillräckligt många sektorer (se ovan) har svepts. */
+  calibrationComplete: boolean;
+  /** Börjar (om)räkna vilka riktningssektorer telefonen sveps genom. */
+  startCalibrationTracking: () => void;
 }
 
 // Dödzon: sensorbrus på bråkdelar av en grad ska inte alls påverka
@@ -68,6 +80,16 @@ const SETTLE_STABLE_DURATION_MS = 1200;
 // magnetiskt orolig miljö (t.ex. nära en byggnad med mycket armering)
 // aldrig komma förbi väntningen.
 const SETTLE_MAX_WAIT_MS = 5000;
+
+// Åtta-rörelsens kalibrering: girriktningens 360° delas i sektorer, och
+// användaren måste faktiskt svepa telefonen genom en majoritet av dem
+// (inte bara skaka den lite fram och tillbaka) innan kalibreringen räknas
+// som klar. 8 av 12 sektorer (240°) kräver en genuin, nästan hel varvning
+// — mer robust mot att bara vagga telefonen en aning i en riktning, vilket
+// annars skulle räknas som "klart" utan att faktiskt ha korsat telefonens
+// magnetometer genom tillräckligt olika riktningar.
+const CALIBRATION_TOTAL_SECTORS = 12;
+const CALIBRATION_REQUIRED_SECTORS = 8;
 
 function circularDiffDeg(a: number, b: number): number {
   let diff = a - b;
@@ -155,6 +177,24 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   // fortsätter fungera precis som förut.
   const hasAbsoluteFixRef = useRef(false);
 
+  // Åtta-rörelsens kalibrering (se konstanterna ovan): vilka sektorer som
+  // svepts sedan `startCalibrationTracking()` senast anropades, samt om
+  // tillräckligt många redan svepts (så vi inte skickar onödiga state-
+  // uppdateringar efter att målet redan uppnåtts).
+  const calibrationActiveRef = useRef(false);
+  const calibrationSectorsRef = useRef<Set<number>>(new Set());
+  const calibrationCompleteRef = useRef(false);
+  const [calibrationProgress, setCalibrationProgress] = useState(0);
+  const [calibrationComplete, setCalibrationComplete] = useState(false);
+
+  const startCalibrationTracking = useCallback(() => {
+    calibrationSectorsRef.current = new Set();
+    calibrationCompleteRef.current = false;
+    calibrationActiveRef.current = true;
+    setCalibrationProgress(0);
+    setCalibrationComplete(false);
+  }, []);
+
   const updateScreenAngle = useCallback(() => {
     const orientationApi = (screen as unknown as { orientation?: { angle: number } }).orientation;
     const legacyOrientation = (window as unknown as { orientation?: number }).orientation;
@@ -187,6 +227,27 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     }
 
     if (heading === null || event.beta === null || event.gamma === null || Number.isNaN(heading)) return;
+
+    // Åtta-rörelsens kalibrering: markera vilken sektor den RÅA (ej
+    // utjämnade) girriktningen ligger i just nu. Vi använder rådata här
+    // (inte den nedan utjämnade `smoothedHeading`) eftersom utjämningen med
+    // avsikt dämpar snabba rörelser kraftigt — exakt det en riktig
+    // åtta-rörelse producerar — vilket annars skulle göra kalibreringen
+    // konstgjort långsam.
+    if (calibrationActiveRef.current && !calibrationCompleteRef.current) {
+      const sector = Math.floor((heading / 360) * CALIBRATION_TOTAL_SECTORS) % CALIBRATION_TOTAL_SECTORS;
+      const sectors = calibrationSectorsRef.current;
+      if (!sectors.has(sector)) {
+        sectors.add(sector);
+        const progress = Math.min(1, sectors.size / CALIBRATION_REQUIRED_SECTORS);
+        setCalibrationProgress(progress);
+        if (sectors.size >= CALIBRATION_REQUIRED_SECTORS) {
+          calibrationCompleteRef.current = true;
+          calibrationActiveRef.current = false;
+          setCalibrationComplete(true);
+        }
+      }
+    }
 
     // Tidsbaserad låg-passfiltrering: räknar om utjämningsfaktorn utifrån
     // faktisk tid sedan förra avläsningen, så resultatet blir stabilt även
@@ -335,5 +396,8 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     calibrateHorizon,
     quaternionRef,
     headingStabilityRef,
+    calibrationProgress,
+    calibrationComplete,
+    startCalibrationTracking,
   };
 }

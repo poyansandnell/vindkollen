@@ -423,6 +423,10 @@ export default function Home() {
       .catch(() => {});
 
     const finish = () => {
+      // Nollställ/starta åtta-rörelsens sektorspårning precis när AR-flödet
+      // startar, så att `LoadingSequence`s kompass-steg (se nedan) kan visa
+      // ett levande kalibreringsförlopp istället för en blind timer.
+      orientation.startCalibrationTracking();
       setStarted(true);
       setStarting(false);
     };
@@ -537,7 +541,13 @@ export default function Home() {
 
       {started && (
         <>
-          {showLoadingSequence && <LoadingSequence onComplete={() => setShowLoadingSequence(false)} />}
+          {showLoadingSequence && (
+            <LoadingSequence
+              onComplete={() => setShowLoadingSequence(false)}
+              calibrationProgress={orientation.calibrationProgress}
+              calibrationComplete={orientation.calibrationComplete}
+            />
+          )}
 
           <CameraBackground stream={camera.stream} videoRef={videoElRef} />
 
