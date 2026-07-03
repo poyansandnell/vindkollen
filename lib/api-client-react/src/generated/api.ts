@@ -16,6 +16,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  GetWindProjectAreaParams,
+  GetWindTurbineParams,
   HealthStatus,
   ListBestLocalitiesToTestParams,
   ListWindProjectAreasParams,
@@ -220,20 +222,29 @@ export function useListWindProjectAreas<TData = Awaited<ReturnType<typeof listWi
 
 
 
-export const getGetWindProjectAreaUrl = (id: number,) => {
+export const getGetWindProjectAreaUrl = (id: number,
+    params?: GetWindProjectAreaParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/wind/project-areas/${id}`
+  return stringifiedParams.length > 0 ? `/api/wind/project-areas/${id}?${stringifiedParams}` : `/api/wind/project-areas/${id}`
 }
 
 /**
  * @summary Get a single wind project area
  */
-export const getWindProjectArea = async (id: number, options?: RequestInit): Promise<WindProjectArea> => {
+export const getWindProjectArea = async (id: number,
+    params?: GetWindProjectAreaParams, options?: RequestInit): Promise<WindProjectArea> => {
 
-  return customFetch<WindProjectArea>(getGetWindProjectAreaUrl(id),
+  return customFetch<WindProjectArea>(getGetWindProjectAreaUrl(id,params),
   {
     ...options,
     method: 'GET'
@@ -246,23 +257,25 @@ export const getWindProjectArea = async (id: number, options?: RequestInit): Pro
 
 
 
-export const getGetWindProjectAreaQueryKey = (id: number,) => {
+export const getGetWindProjectAreaQueryKey = (id: number,
+    params?: GetWindProjectAreaParams,) => {
     return [
-    `/api/wind/project-areas/${id}`
+    `/api/wind/project-areas/${id}`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetWindProjectAreaQueryOptions = <TData = Awaited<ReturnType<typeof getWindProjectArea>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWindProjectArea>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetWindProjectAreaQueryOptions = <TData = Awaited<ReturnType<typeof getWindProjectArea>>, TError = ErrorType<void>>(id: number,
+    params?: GetWindProjectAreaParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWindProjectArea>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetWindProjectAreaQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getGetWindProjectAreaQueryKey(id,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWindProjectArea>>> = ({ signal }) => getWindProjectArea(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWindProjectArea>>> = ({ signal }) => getWindProjectArea(id,params, { signal, ...requestOptions });
 
 
 
@@ -280,11 +293,12 @@ export type GetWindProjectAreaQueryError = ErrorType<void>
  */
 
 export function useGetWindProjectArea<TData = Awaited<ReturnType<typeof getWindProjectArea>>, TError = ErrorType<void>>(
- id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWindProjectArea>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ id: number,
+    params?: GetWindProjectAreaParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWindProjectArea>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetWindProjectAreaQueryOptions(id,options)
+  const queryOptions = getGetWindProjectAreaQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -381,20 +395,29 @@ export function useListWindTurbines<TData = Awaited<ReturnType<typeof listWindTu
 
 
 
-export const getGetWindTurbineUrl = (id: number,) => {
+export const getGetWindTurbineUrl = (id: number,
+    params?: GetWindTurbineParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/wind/turbines/${id}`
+  return stringifiedParams.length > 0 ? `/api/wind/turbines/${id}?${stringifiedParams}` : `/api/wind/turbines/${id}`
 }
 
 /**
  * @summary Get a single wind turbine
  */
-export const getWindTurbine = async (id: number, options?: RequestInit): Promise<WindTurbine> => {
+export const getWindTurbine = async (id: number,
+    params?: GetWindTurbineParams, options?: RequestInit): Promise<WindTurbine> => {
 
-  return customFetch<WindTurbine>(getGetWindTurbineUrl(id),
+  return customFetch<WindTurbine>(getGetWindTurbineUrl(id,params),
   {
     ...options,
     method: 'GET'
@@ -407,23 +430,25 @@ export const getWindTurbine = async (id: number, options?: RequestInit): Promise
 
 
 
-export const getGetWindTurbineQueryKey = (id: number,) => {
+export const getGetWindTurbineQueryKey = (id: number,
+    params?: GetWindTurbineParams,) => {
     return [
-    `/api/wind/turbines/${id}`
+    `/api/wind/turbines/${id}`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetWindTurbineQueryOptions = <TData = Awaited<ReturnType<typeof getWindTurbine>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWindTurbine>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetWindTurbineQueryOptions = <TData = Awaited<ReturnType<typeof getWindTurbine>>, TError = ErrorType<void>>(id: number,
+    params?: GetWindTurbineParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWindTurbine>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetWindTurbineQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getGetWindTurbineQueryKey(id,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWindTurbine>>> = ({ signal }) => getWindTurbine(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWindTurbine>>> = ({ signal }) => getWindTurbine(id,params, { signal, ...requestOptions });
 
 
 
@@ -441,11 +466,12 @@ export type GetWindTurbineQueryError = ErrorType<void>
  */
 
 export function useGetWindTurbine<TData = Awaited<ReturnType<typeof getWindTurbine>>, TError = ErrorType<void>>(
- id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWindTurbine>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ id: number,
+    params?: GetWindTurbineParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWindTurbine>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetWindTurbineQueryOptions(id,options)
+  const queryOptions = getGetWindTurbineQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

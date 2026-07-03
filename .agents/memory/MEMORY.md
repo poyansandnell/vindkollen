@@ -9,3 +9,4 @@
 - [Chained permission requests lose user-gesture](user-gesture-permission-chaining.md) — awaiting one permission prompt before requesting the next silently loses activation, causing later prompts to be denied with no dialog shown.
 - [Sandboxed test browsers lack WebGL/GPU](sandbox-webgl-unavailable.md) — screenshot tool and Playwright test browser both fail "Failed to initialize WebGL"; add a mapboxgl.supported() fallback and verify non-map flows via Playwright instead.
 - [Postgres ORDER BY DESC and NULLs](postgres-order-by-desc-nulls.md) — DESC sorts put NULL first by default, silently burying real values behind null-populated tie rows; use explicit NULLS LAST.
+- [Playwright accessibility snapshot false "[active]"](playwright-active-snapshot-false-positive.md) — a toggle flagged as "not updating" via ARIA `[active]` may just be `:active` mouse-down noise; re-verify with a class-attribute diff before treating as a real bug.

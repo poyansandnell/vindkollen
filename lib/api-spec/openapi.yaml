@@ -84,6 +84,14 @@ paths:
           in: path
           required: true
           schema: { type: integer }
+        - name: lat
+          in: query
+          description: Optional reference point latitude to compute distanceKm from
+          schema: { type: number }
+        - name: lng
+          in: query
+          description: Optional reference point longitude to compute distanceKm from
+          schema: { type: number }
       responses:
         "200":
           description: Wind project area
@@ -149,6 +157,14 @@ paths:
           in: path
           required: true
           schema: { type: integer }
+        - name: lat
+          in: query
+          description: Optional reference point latitude to compute distanceKm from
+          schema: { type: number }
+        - name: lng
+          in: query
+          description: Optional reference point longitude to compute distanceKm from
+          schema: { type: number }
       responses:
         "200":
           description: Wind turbine

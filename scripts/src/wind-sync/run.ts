@@ -112,12 +112,37 @@ async function syncCountry(adapter: CountryWindDataAdapter): Promise<void> {
           };
         }),
       )
-      .onConflictDoNothing()
+      .onConflictDoUpdate({
+        target: [windProjectAreasTable.countryCode, windProjectAreasTable.externalId],
+        set: {
+          category: sql`excluded.category`,
+          name: sql`excluded.name`,
+          status: sql`excluded.status`,
+          kommun: sql`excluded.kommun`,
+          region: sql`excluded.region`,
+          turbineCountPlannedMin: sql`excluded.turbine_count_planned_min`,
+          turbineCountPlannedMax: sql`excluded.turbine_count_planned_max`,
+          heightMaxM: sql`excluded.height_max_m`,
+          installedEffectMw: sql`excluded.installed_effect_mw`,
+          annualProductionGwh: sql`excluded.annual_production_gwh`,
+          plannedConstructionStart: sql`excluded.planned_construction_start`,
+          plannedOperationDate: sql`excluded.planned_operation_date`,
+          organisationName: sql`excluded.organisation_name`,
+          centerLat: sql`excluded.center_lat`,
+          centerLng: sql`excluded.center_lng`,
+          polygon: sql`excluded.polygon`,
+          nearestLocalityId: sql`excluded.nearest_locality_id`,
+          nearestLocalityDistanceKm: sql`excluded.nearest_locality_distance_km`,
+          sourceLayer: sql`excluded.source_layer`,
+          lastUpdated: sql`excluded.last_updated`,
+          updatedAt: new Date(),
+        },
+      })
       .returning();
     projectAreas.push(...inserted);
     log(`  project areas ${Math.min(i + BATCH, normalizedAreas.length)}/${normalizedAreas.length}`);
   }
-  // Re-read all project areas (onConflictDoNothing skips returning existing rows on reruns).
+  // Re-read all project areas (batched inserts above don't return a single combined array).
   const allProjectAreas = await db
     .select()
     .from(windProjectAreasTable)
@@ -167,12 +192,34 @@ async function syncCountry(adapter: CountryWindDataAdapter): Promise<void> {
           };
         }),
       )
-      .onConflictDoNothing()
+      .onConflictDoUpdate({
+        target: [windTurbinesTable.countryCode, windTurbinesTable.externalId],
+        set: {
+          projectAreaId: sql`excluded.project_area_id`,
+          name: sql`excluded.name`,
+          status: sql`excluded.status`,
+          kommun: sql`excluded.kommun`,
+          region: sql`excluded.region`,
+          totalHeightM: sql`excluded.total_height_m`,
+          hubHeightM: sql`excluded.hub_height_m`,
+          rotorDiameterM: sql`excluded.rotor_diameter_m`,
+          maxEffectMw: sql`excluded.max_effect_mw`,
+          manufacturer: sql`excluded.manufacturer`,
+          model: sql`excluded.model`,
+          organisationName: sql`excluded.organisation_name`,
+          lat: sql`excluded.lat`,
+          lng: sql`excluded.lng`,
+          nearestLocalityId: sql`excluded.nearest_locality_id`,
+          nearestLocalityDistanceKm: sql`excluded.nearest_locality_distance_km`,
+          lastUpdated: sql`excluded.last_updated`,
+          updatedAt: new Date(),
+        },
+      })
       .returning();
     turbines.push(...inserted);
     log(`  turbines ${Math.min(i + BATCH, normalizedTurbines.length)}/${normalizedTurbines.length}`);
   }
-  // Re-read all turbines (onConflictDoNothing skips returning existing rows on reruns).
+  // Re-read all turbines (batched inserts above don't return a single combined array).
   const allTurbines = await db
     .select()
     .from(windTurbinesTable)

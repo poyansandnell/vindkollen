@@ -11,10 +11,12 @@ import {
 import { statusColor, statusLabel } from "@/lib/statusMeta";
 import type { MapSelection } from "@/components/MapCanvas";
 import type { UseQueryOptions } from "@tanstack/react-query";
+import { sourceLabel, sourceUrl } from "@/lib/sourceMeta";
 
 interface DetailPanelProps {
   selection: MapSelection;
   onClose: () => void;
+  focusPoint?: { lat: number; lng: number } | null;
 }
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -27,11 +29,12 @@ function Field({ label, value }: { label: string; value: string | number | null 
   );
 }
 
-export default function DetailPanel({ selection, onClose }: DetailPanelProps) {
-  const turbineQuery = useGetWindTurbine(selection.id, {
+export default function DetailPanel({ selection, onClose, focusPoint }: DetailPanelProps) {
+  const pointParams = focusPoint ? { lat: focusPoint.lat, lng: focusPoint.lng } : undefined;
+  const turbineQuery = useGetWindTurbine(selection.id, pointParams, {
     query: { enabled: selection.kind === "turbine" } as UseQueryOptions<WindTurbine>,
   });
-  const projectAreaQuery = useGetWindProjectArea(selection.id, {
+  const projectAreaQuery = useGetWindProjectArea(selection.id, pointParams, {
     query: { enabled: selection.kind === "projectArea" } as UseQueryOptions<WindProjectArea>,
   });
 
@@ -94,7 +97,26 @@ export default function DetailPanel({ selection, onClose }: DetailPanelProps) {
                       : null
                   }
                 />
+                <Field label="Senast uppdaterad" value={turbineQuery.data.lastUpdated ? String(turbineQuery.data.lastUpdated).slice(0, 10) : null} />
               </div>
+              {sourceLabel(turbineQuery.data.source) && (
+                <div className="text-xs text-muted-foreground mt-3 pt-3 border-t">
+                  Källa:{" "}
+                  {sourceUrl(turbineQuery.data.source) ? (
+                    <a
+                      href={sourceUrl(turbineQuery.data.source) as string}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                      data-testid="link-source-turbine"
+                    >
+                      {sourceLabel(turbineQuery.data.source)}
+                    </a>
+                  ) : (
+                    sourceLabel(turbineQuery.data.source)
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -145,7 +167,26 @@ export default function DetailPanel({ selection, onClose }: DetailPanelProps) {
                       : null
                   }
                 />
+                <Field label="Senast uppdaterad" value={projectAreaQuery.data.lastUpdated ? String(projectAreaQuery.data.lastUpdated).slice(0, 10) : null} />
               </div>
+              {sourceLabel(projectAreaQuery.data.source) && (
+                <div className="text-xs text-muted-foreground mt-3 pt-3 border-t">
+                  Källa:{" "}
+                  {sourceUrl(projectAreaQuery.data.source) ? (
+                    <a
+                      href={sourceUrl(projectAreaQuery.data.source) as string}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                      data-testid="link-source-project-area"
+                    >
+                      {sourceLabel(projectAreaQuery.data.source)}
+                    </a>
+                  ) : (
+                    sourceLabel(projectAreaQuery.data.source)
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

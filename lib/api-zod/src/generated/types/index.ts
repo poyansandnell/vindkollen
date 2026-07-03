@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './getWindProjectAreaParams';
+export * from './getWindTurbineParams';
 export * from './healthStatus';
 export * from './listBestLocalitiesToTestParams';
 export * from './listWindProjectAreasCategory';

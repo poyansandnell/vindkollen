@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Source, Layer, Popup, type MapRef } from "react-map-gl/mapbox";
-import type { MapLayerMouseEvent, GeoJSONSource } from "mapbox-gl";
+import type { MapLayerMouseEvent, GeoJSONSource, Expression } from "mapbox-gl";
 import MapboxMapView from "@/lib/mapProvider/MapboxMapView";
 import type { MapBounds, MapViewport } from "@/lib/mapProvider/types";
 import type { WindTurbine, WindProjectArea } from "@workspace/api-client-react";
@@ -33,6 +33,53 @@ const UNCLUSTERED_LAYER = "turbine-unclustered";
 const PROJECT_FILL_LAYER = "project-area-fill";
 const PROJECT_LINE_LAYER = "project-area-line";
 const PROJECT_POINT_LAYER = "project-area-point";
+
+// Distance-tier visibility: 0-20 km prominent, 20-35 km toned down, 35-60+ km muted/regional.
+// distanceKm is only present in feature properties when a focus point is set; falls back to
+// full prominence (null case) when browsing without a focus point.
+const DISTANCE_TIER_OPACITY: Expression = [
+  "case",
+  ["==", ["get", "distanceKm"], null],
+  1,
+  ["<", ["get", "distanceKm"], 20],
+  1,
+  ["<", ["get", "distanceKm"], 35],
+  0.6,
+  0.32,
+];
+
+const DISTANCE_TIER_LINE_OPACITY: Expression = [
+  "case",
+  ["==", ["get", "distanceKm"], null],
+  1,
+  ["<", ["get", "distanceKm"], 20],
+  1,
+  ["<", ["get", "distanceKm"], 35],
+  0.7,
+  0.4,
+];
+
+const DISTANCE_TIER_POINT_RADIUS: Expression = [
+  "case",
+  ["==", ["get", "distanceKm"], null],
+  8,
+  ["<", ["get", "distanceKm"], 20],
+  8,
+  ["<", ["get", "distanceKm"], 35],
+  6.5,
+  5,
+];
+
+const DISTANCE_TIER_TURBINE_RADIUS: Expression = [
+  "case",
+  ["==", ["get", "distanceKm"], null],
+  6,
+  ["<", ["get", "distanceKm"], 20],
+  6,
+  ["<", ["get", "distanceKm"], 35],
+  5,
+  4,
+];
 
 export default function MapCanvas({
   mapboxToken,
@@ -163,9 +210,11 @@ export default function MapCanvas({
           filter={["!", ["has", "point_count"]]}
           paint={{
             "circle-color": ["get", "color"],
-            "circle-radius": 6,
+            "circle-radius": DISTANCE_TIER_TURBINE_RADIUS,
+            "circle-opacity": DISTANCE_TIER_OPACITY,
             "circle-stroke-width": 1.5,
             "circle-stroke-color": "#ffffff",
+            "circle-stroke-opacity": DISTANCE_TIER_OPACITY,
           }}
         />
       </Source>
@@ -174,12 +223,28 @@ export default function MapCanvas({
         <Layer
           id={PROJECT_FILL_LAYER}
           type="fill"
-          paint={{ "fill-color": ["get", "color"], "fill-opacity": 0.25 }}
+          paint={{
+            "fill-color": ["get", "color"],
+            "fill-opacity": [
+              "case",
+              ["==", ["get", "distanceKm"], null],
+              0.25,
+              ["<", ["get", "distanceKm"], 20],
+              0.25,
+              ["<", ["get", "distanceKm"], 35],
+              0.16,
+              0.08,
+            ],
+          }}
         />
         <Layer
           id={PROJECT_LINE_LAYER}
           type="line"
-          paint={{ "line-color": ["get", "color"], "line-width": 2 }}
+          paint={{
+            "line-color": ["get", "color"],
+            "line-width": 2,
+            "line-opacity": DISTANCE_TIER_LINE_OPACITY,
+          }}
         />
       </Source>
 
@@ -189,10 +254,19 @@ export default function MapCanvas({
           type="circle"
           paint={{
             "circle-color": ["get", "color"],
-            "circle-radius": 8,
+            "circle-radius": DISTANCE_TIER_POINT_RADIUS,
             "circle-stroke-width": 2,
             "circle-stroke-color": "#ffffff",
-            "circle-opacity": 0.85,
+            "circle-opacity": [
+              "case",
+              ["==", ["get", "distanceKm"], null],
+              0.85,
+              ["<", ["get", "distanceKm"], 20],
+              0.85,
+              ["<", ["get", "distanceKm"], 35],
+              0.55,
+              0.3,
+            ],
           }}
         />
       </Source>

@@ -210,6 +210,17 @@ export const ListWindProjectAreasCategory = {
   offshore: 'offshore',
 } as const;
 
+export type GetWindProjectAreaParams = {
+/**
+ * Optional reference point latitude to compute distanceKm from
+ */
+lat?: number;
+/**
+ * Optional reference point longitude to compute distanceKm from
+ */
+lng?: number;
+};
+
 export type ListWindTurbinesParams = {
 lat?: number;
 lng?: number;
@@ -224,6 +235,17 @@ maxLng?: number;
 statuses?: string;
 countryCode?: string;
 limit?: number;
+};
+
+export type GetWindTurbineParams = {
+/**
+ * Optional reference point latitude to compute distanceKm from
+ */
+lat?: number;
+/**
+ * Optional reference point longitude to compute distanceKm from
+ */
+lng?: number;
 };
 
 export type SearchLocalitiesParams = {

@@ -8,8 +8,10 @@ import { ALL_STATUSES, statusLabel } from "@/lib/statusMeta";
 export interface FilterState {
   statuses: string[];
   showTurbines: boolean;
-  showProjectAreas: boolean;
+  showOnshoreAreas: boolean;
+  showOffshoreAreas: boolean;
   radiusKm: number;
+  showBeyondRadius: boolean;
 }
 
 interface FilterBarProps {
@@ -17,6 +19,8 @@ interface FilterBarProps {
   onChange: (filters: FilterState) => void;
   hasFocusPoint: boolean;
 }
+
+const QUICK_RADII = [25, 60];
 
 export default function FilterBar({ filters, onChange, hasFocusPoint }: FilterBarProps) {
   const toggleStatus = (status: string) => {
@@ -26,8 +30,11 @@ export default function FilterBar({ filters, onChange, hasFocusPoint }: FilterBa
     onChange({ ...filters, statuses: next });
   };
 
+  const activeAreaToggles =
+    (filters.showOnshoreAreas ? 1 : 0) + (filters.showOffshoreAreas ? 1 : 0);
+
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
       <Button
         variant={filters.showTurbines ? "default" : "outline"}
         size="sm"
@@ -37,12 +44,20 @@ export default function FilterBar({ filters, onChange, hasFocusPoint }: FilterBa
         Vindkraftverk
       </Button>
       <Button
-        variant={filters.showProjectAreas ? "default" : "outline"}
+        variant={filters.showOnshoreAreas ? "default" : "outline"}
         size="sm"
-        onClick={() => onChange({ ...filters, showProjectAreas: !filters.showProjectAreas })}
-        data-testid="button-toggle-project-areas"
+        onClick={() => onChange({ ...filters, showOnshoreAreas: !filters.showOnshoreAreas })}
+        data-testid="button-toggle-onshore-areas"
       >
-        Projekteringsområden
+        Landbaserade områden
+      </Button>
+      <Button
+        variant={filters.showOffshoreAreas ? "default" : "outline"}
+        size="sm"
+        onClick={() => onChange({ ...filters, showOffshoreAreas: !filters.showOffshoreAreas })}
+        data-testid="button-toggle-offshore-areas"
+      >
+        Havsbaserade områden
       </Button>
 
       <Popover>
@@ -73,6 +88,32 @@ export default function FilterBar({ filters, onChange, hasFocusPoint }: FilterBa
                   onValueChange={([value]) => onChange({ ...filters, radiusKm: value })}
                   data-testid="slider-radius"
                 />
+                <div className="flex gap-2 mt-2">
+                  {QUICK_RADII.map((km) => (
+                    <button
+                      key={km}
+                      className={`text-xs rounded px-2 py-1 border ${
+                        filters.radiusKm === km
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border text-muted-foreground"
+                      }`}
+                      onClick={() => onChange({ ...filters, radiusKm: km })}
+                      data-testid={`button-quick-radius-${km}`}
+                    >
+                      Endast inom {km} km
+                    </button>
+                  ))}
+                </div>
+                <label className="flex items-center gap-2 text-sm cursor-pointer mt-3">
+                  <Checkbox
+                    checked={filters.showBeyondRadius}
+                    onCheckedChange={(checked) =>
+                      onChange({ ...filters, showBeyondRadius: checked === true })
+                    }
+                    data-testid="checkbox-show-beyond-radius"
+                  />
+                  Visa även avlägsna projekt (&gt; {filters.radiusKm} km)
+                </label>
               </div>
             )}
             <div>
@@ -110,6 +151,9 @@ export default function FilterBar({ filters, onChange, hasFocusPoint }: FilterBa
           </div>
         </PopoverContent>
       </Popover>
+      {activeAreaToggles === 0 && (
+        <span className="text-xs text-muted-foreground">Inga projekteringsområden visas</span>
+      )}
     </div>
   );
 }

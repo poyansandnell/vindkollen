@@ -32,8 +32,10 @@ export default function Home() {
   const [filters, setFilters] = useState<FilterState>({
     statuses: ACTIVE_STATUSES,
     showTurbines: true,
-    showProjectAreas: true,
+    showOnshoreAreas: true,
+    showOffshoreAreas: true,
     radiusKm: 60,
+    showBeyondRadius: false,
   });
 
   useEffect(() => {
@@ -51,12 +53,14 @@ export default function Home() {
 
   const statusParam = filters.statuses.length > 0 ? filters.statuses.join(",") : "__none__";
 
+  const NATIONWIDE_RADIUS_KM = 1500;
+
   const queryParams = useMemo(() => {
     if (focusPoint) {
       return {
         lat: focusPoint.lat,
         lng: focusPoint.lng,
-        radiusKm: filters.radiusKm,
+        radiusKm: filters.showBeyondRadius ? NATIONWIDE_RADIUS_KM : filters.radiusKm,
         statuses: statusParam,
         limit: 5000,
       };
@@ -72,19 +76,24 @@ export default function Home() {
       };
     }
     return undefined;
-  }, [focusPoint, bounds, statusParam, filters.radiusKm]);
+  }, [focusPoint, bounds, statusParam, filters.radiusKm, filters.showBeyondRadius]);
 
   const turbinesQuery = useListWindTurbines(queryParams, {
     query: { enabled: filters.showTurbines && !!queryParams } as UseQueryOptions<WindTurbine[]>,
   });
+  const showAnyAreas = filters.showOnshoreAreas || filters.showOffshoreAreas;
   const projectAreasQuery = useListWindProjectAreas(queryParams, {
     query: {
-      enabled: filters.showProjectAreas && !!queryParams,
+      enabled: showAnyAreas && !!queryParams,
     } as UseQueryOptions<WindProjectArea[]>,
   });
 
   const turbines = filters.showTurbines ? (turbinesQuery.data ?? []) : [];
-  const projectAreas = filters.showProjectAreas ? (projectAreasQuery.data ?? []) : [];
+  const projectAreas = showAnyAreas
+    ? (projectAreasQuery.data ?? []).filter((a) =>
+        a.category === "offshore" ? filters.showOffshoreAreas : filters.showOnshoreAreas,
+      )
+    : [];
   const isFetching = turbinesQuery.isFetching || projectAreasQuery.isFetching;
 
   if (mapboxToken === undefined) {
@@ -170,7 +179,9 @@ export default function Home() {
         </div>
       )}
 
-      {selection && <DetailPanel selection={selection} onClose={() => setSelection(null)} />}
+      {selection && (
+        <DetailPanel selection={selection} onClose={() => setSelection(null)} focusPoint={focusPoint} />
+      )}
 
       {showBestPlaces && (
         <BestPlacesView

@@ -77,6 +77,11 @@ export const GetWindProjectAreaParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const GetWindProjectAreaQueryParams = zod.object({
+  "lat": zod.coerce.number().optional().describe('Optional reference point latitude to compute distanceKm from'),
+  "lng": zod.coerce.number().optional().describe('Optional reference point longitude to compute distanceKm from')
+})
+
 export const GetWindProjectAreaResponse = zod.object({
   "id": zod.number(),
   "countryCode": zod.string(),
@@ -162,6 +167,11 @@ export const ListWindTurbinesResponse = zod.array(ListWindTurbinesResponseItem)
  */
 export const GetWindTurbineParams = zod.object({
   "id": zod.coerce.number()
+})
+
+export const GetWindTurbineQueryParams = zod.object({
+  "lat": zod.coerce.number().optional().describe('Optional reference point latitude to compute distanceKm from'),
+  "lng": zod.coerce.number().optional().describe('Optional reference point longitude to compute distanceKm from')
 })
 
 export const GetWindTurbineResponse = zod.object({

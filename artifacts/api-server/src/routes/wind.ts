@@ -13,10 +13,12 @@ import {
   ListWindProjectAreasQueryParams,
   ListWindProjectAreasResponse,
   GetWindProjectAreaParams,
+  GetWindProjectAreaQueryParams,
   GetWindProjectAreaResponse,
   ListWindTurbinesQueryParams,
   ListWindTurbinesResponse,
   GetWindTurbineParams,
+  GetWindTurbineQueryParams,
   GetWindTurbineResponse,
   SearchLocalitiesQueryParams,
   SearchLocalitiesResponse,
@@ -94,6 +96,7 @@ router.get("/wind/project-areas", async (req, res) => {
 
 router.get("/wind/project-areas/:id", async (req, res) => {
   const params = GetWindProjectAreaParams.parse(req.params);
+  const query = GetWindProjectAreaQueryParams.parse(req.query);
   const [row] = await db
     .select({ area: windProjectAreasTable, nearestLocalityName: localitiesTable.name })
     .from(windProjectAreasTable)
@@ -106,10 +109,15 @@ router.get("/wind/project-areas/:id", async (req, res) => {
     return;
   }
 
+  const hasPoint = query.lat !== undefined && query.lng !== undefined;
+
   res.json(
     GetWindProjectAreaResponse.parse({
       ...row.area,
       nearestLocalityName: row.nearestLocalityName ?? null,
+      distanceKm: hasPoint
+        ? distanceKm(query.lat as number, query.lng as number, row.area.centerLat, row.area.centerLng)
+        : null,
     }),
   );
 });
@@ -166,6 +174,7 @@ router.get("/wind/turbines", async (req, res) => {
 
 router.get("/wind/turbines/:id", async (req, res) => {
   const params = GetWindTurbineParams.parse(req.params);
+  const query = GetWindTurbineQueryParams.parse(req.query);
   const [row] = await db
     .select({ turbine: windTurbinesTable, nearestLocalityName: localitiesTable.name })
     .from(windTurbinesTable)
@@ -178,10 +187,15 @@ router.get("/wind/turbines/:id", async (req, res) => {
     return;
   }
 
+  const hasPoint = query.lat !== undefined && query.lng !== undefined;
+
   res.json(
     GetWindTurbineResponse.parse({
       ...row.turbine,
       nearestLocalityName: row.nearestLocalityName ?? null,
+      distanceKm: hasPoint
+        ? distanceKm(query.lat as number, query.lng as number, row.turbine.lat, row.turbine.lng)
+        : null,
     }),
   );
 });
