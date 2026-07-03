@@ -294,18 +294,19 @@ export function useSkyDetection(
   // vilket gör den säker att skicka som prop till ARScene utan att trigga
   // om-renderingar.
   const isPointSkyRef = useRef((u: number, v: number) => {
-    // Global spärr: så fort den alltid-aktiva heuristiken bedömer att
-    // användaren är inomhus döljs samtliga verk, oavsett vad ML-rutnätet
-    // (eller fallbacken) råkar säga om just den här punkten — en enstaka
-    // ljus lampa/fönster i bild ska t.ex. inte räcka för att låta ett verk
-    // "spöka" fram inomhus.
-    if (indoorsRef.current) return false;
-    // ML-segmenteringen är den ENDA källan till visuell ocklusion. Om den
-    // inte är igång (fortfarande laddas, eller permanent avstängd) är detta
-    // fallback-kravet: verken förblir alltid synliga, exakt som innan denna
-    // funktion fanns — ingen sekundär, mindre tillförlitlig heuristik tar
-    // över och döljer verk på egen hand.
+    // ML-segmenteringen är den ENDA källan till visuell ocklusion (inkl.
+    // "inomhus"-spärren nedan). Om den inte är igång (fortfarande laddas,
+    // eller permanent avstängd) gäller fallback-kravet ovillkorligt: verken
+    // förblir alltid synliga, exakt som innan denna funktion fanns — varken
+    // den kamerabaserade inomhus-heuristiken eller någon sekundär, mindre
+    // tillförlitlig heuristik får döljä verk på egen hand i det läget.
     if (methodRef.current !== "ml") return true;
+    // Global spärr (endast när ML faktiskt är aktiv): så fort den
+    // alltid-aktiva heuristiken bedömer att användaren är inomhus döljs
+    // samtliga verk, oavsett vad ML-rutnätet råkar säga om just den här
+    // punkten — en enstaka ljus lampa/fönster i bild ska t.ex. inte räcka
+    // för att låta ett verk "spöka" fram inomhus.
+    if (indoorsRef.current) return false;
     const col = Math.min(GRID_COLS - 1, Math.max(0, Math.floor(u * GRID_COLS)));
     const row = Math.min(GRID_ROWS - 1, Math.max(0, Math.floor(v * GRID_ROWS)));
     const idx = row * GRID_COLS + col;
@@ -315,10 +316,11 @@ export function useSkyDetection(
   // Stabil funktionsreferens för det kontinuerliga rutnätet — se
   // `getOcclusionGrid`s jsdoc i `SkyDetectionState`.
   const getOcclusionGridRef = useRef((): Float32Array => {
-    if (indoorsRef.current) return indoorZeroGridRef.current;
-    // Samma fallback-krav som `isPointSkyRef` ovan: utan aktiv ML-segmentering
-    // är HELA rutnätet "himmel" (inga verk döljs av den kontinuerliga masken).
+    // Samma fallback-krav som `isPointSkyRef` ovan, kontrollerat FÖRST och
+    // ovillkorligt: utan aktiv ML-segmentering är HELA rutnätet "himmel"
+    // (inga verk döljs av den kontinuerliga masken), oavsett inomhus-status.
     if (methodRef.current !== "ml") return allSkyGridRef.current;
+    if (indoorsRef.current) return indoorZeroGridRef.current;
     return occlusionGridRef.current;
   });
 

@@ -147,19 +147,36 @@ export default function Home() {
   const MIN_SKY_RATIO = 0.15;
   const hasEnoughSky = sky.skyRatio >= MIN_SKY_RATIO;
 
+  // Hela detta index (och "Gå utomhus"/"aim"-bannern nedan) förutsätter att
+  // ML-segmenteringen faktiskt är igång och därmed levererar en tillförlitlig
+  // himmelsandel. Om den fortfarande laddas eller är permanent avstängd
+  // gäller samma fallback-krav som för den per-punkts ocklusionen i
+  // `useSkyDetection`: verken förblir alltid fullt synliga och ingen
+  // "Gå utomhus"/aim-overlay visas — vi låter aldrig ett index som bygger på
+  // en inaktiv signal dölja verk.
+  const mlActive = sky.method === "ml";
+
   // Global synlighetsstyrka som skickas till ARScene: 1 = visa normalt,
   // 0.6 = "cautious"-tonat, 0 = dölj helt ("aim"/"hide", eller otillräcklig
   // himmelsandel). `sky.ready` väntar in det allra första samplet så verken
   // inte blixtrar till fullt synliga under den första bildrutan.
-  const globalVisibilityFactor = !sky.ready || !hasEnoughSky ? 0 : confidence.tier === "show" ? 1 : confidence.tier === "cautious" ? 0.6 : 0;
+  const globalVisibilityFactor = !mlActive
+    ? 1
+    : !sky.ready || !hasEnoughSky
+      ? 0
+      : confidence.tier === "show"
+        ? 1
+        : confidence.tier === "cautious"
+          ? 0.6
+          : 0;
 
   // Dölj verk + visa "Gå utomhus" antingen vid indexets "hide"-nivå (<40%)
   // eller om himmelsandelen i bild är för låg — samma stora, prominenta
   // overlay som tidigare, men nu även styrd av det sammanvägda indexet.
-  const shouldHide = sky.ready && (confidence.tier === "hide" || !hasEnoughSky);
+  const shouldHide = mlActive && sky.ready && (confidence.tier === "hide" || !hasEnoughSky);
   // 40-70%: be användaren rikta kameran mot himlen istället för att bara
   // dölja tyst — en mellanliggande, mindre alarmerande banner.
-  const shouldAskAimAtSky = sky.ready && !shouldHide && confidence.tier === "aim";
+  const shouldAskAimAtSky = mlActive && sky.ready && !shouldHide && confidence.tier === "aim";
 
   const errors = useMemo(
     () => [geo.error, orientation.error, camera.error].filter((e): e is string => Boolean(e)),
