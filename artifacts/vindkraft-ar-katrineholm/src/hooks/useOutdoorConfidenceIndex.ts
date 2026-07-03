@@ -87,7 +87,11 @@ export function useOutdoorConfidenceIndex(params: {
     // används kamerans egen genomsnittsluminans (redan 0..1) som proxy:
     // ljust ute (även mulet) ger typiskt betydligt högre värde än normal
     // inomhusbelysning.
-    const light = ambientLuminance;
+    //
+    // JUSTERING: Om himmelsandelen är tillräckligt hög (camera > 0.8) litar
+    // vi mer på att det faktiskt är ljust ute även om kamerans genomsnittliga
+    // luminans är låg (t.ex. vid mörk förgrund).
+    const light = camera > 0.8 ? Math.max(ambientLuminance, 0.5) : ambientLuminance;
     const compass = headingStabilityRef.current;
     const motion = motionRef.current;
     const connection = connectionRef.current;

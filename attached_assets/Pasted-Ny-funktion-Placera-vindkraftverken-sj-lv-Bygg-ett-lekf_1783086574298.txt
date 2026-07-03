@@ -1,0 +1,107 @@
+Ny funktion: “Placera vindkraftverken själv”
+
+Bygg ett lekfullt men seriöst kartläge där användaren själv kan testa att placera ut 8 vindkraftverk på Ericsbergs marker.
+
+Rubrik:
+“Testa själv: var borde vindkraftverken stå?”
+
+Syfte:
+Visa att frågan inte handlar om att säga nej till vindkraft, utan om att hitta placeringar där påverkan blir minst.
+
+Funktioner:
+
+1. Karta med Ericsbergs markområde
+- Lägg in Ericsbergs marker som markerat område på kartan.
+- Använd de bifogade kartorna som underlag.
+- Om exakt gräns saknas, visa text:
+“Markgränsen är ungefärlig och baserad på tillgängligt kartunderlag.”
+
+2. Placera ut 8 vindkraftverk
+- Användaren ska kunna dra och släppa ut 8 vindkraftverk på kartan.
+- Varje verk ska kunna flyttas fritt inom Ericsbergs marker.
+- Om användaren placerar ett verk utanför området ska det markeras rött och visa:
+“Placera inom Ericsbergs marker.”
+
+3. Direkt bedömning av placeringen
+När användaren placerar verken ska appen räkna ut en enkel lämplighetsbedömning.
+
+Bedöm utifrån:
+- avstånd till bostäder
+- antal berörda hushåll
+- avstånd till tätort/centrum
+- natur- och friluftsvärden
+- kulturmiljö
+- vattenskydd
+- bullerpåverkan
+- visuell påverkan
+- närhet till riksintresse vindkraft
+- om placeringen ligger i område som pekas ut i kommunens planering
+
+Använd gärna data från:
+- Katrineholms kommuns kartlager / Framtidsplan 2050 / Katronkartan
+- Energimyndighetens kartmaterial för riksintresse vindbruk
+- öppna kartdata där det är möjligt
+
+4. Färgskala
+Kartans bedömning ska visas med färger:
+
+Grön = bättre placering
+Gul = tveksam placering
+Orange = problematisk placering
+Röd = olämplig placering
+
+Ju sämre placering, desto mer röd ska kartan bli.
+
+5. Lekfull varning
+Om användaren placerar verken väldigt olämpligt, till exempel nära bostäder eller centrum, ska appen reagera lite lekfullt:
+
+- kartan blinkar svagt rött
+- en varning visas
+- eventuellt ett kort larmljud
+
+Text:
+“Hoppsan! Den här placeringen riskerar att påverka många boende.”
+
+6. Poängsystem
+Lägg till ett resultat:
+“Påverkanspoäng: 78/100”
+
+Där:
+- 0–30 = låg påverkan
+- 31–60 = måttlig påverkan
+- 61–80 = hög påverkan
+- 81–100 = mycket hög påverkan
+
+Visa också:
+- antal uppskattat berörda hushåll
+- kortaste avstånd till bostad
+- kortaste avstånd till tätort
+- bedömd visuell påverkan
+- bedömd bullerpåverkan
+
+7. Jämför placeringar
+Användaren ska kunna klicka:
+“Spara placering”
+och sedan jämföra olika alternativ.
+
+Exempel:
+Alternativ A: 8 verk nära centrum – hög påverkan
+Alternativ B: 8 verk längre bort – lägre påverkan
+
+8. Koppling till AR-läget
+När användaren har placerat verken ska det finnas en knapp:
+“Se denna placering i AR”
+
+Då kan användaren simulera hur just den placeringen skulle se ut från sin position.
+
+9. Tonalitet
+Funktionen ska kännas lekfull men saklig.
+
+Exempeltext:
+“Placera ut åtta vindkraftverk på Ericsbergs marker och se hur påverkan förändras. Målet är att hitta en placering med så låg påverkan som möjligt för boende, natur, kulturmiljö och friluftsliv.”
+
+10. Viktigt
+Detta ska visas som en pedagogisk uppskattning, inte som en juridiskt bindande tillståndsprövning.
+
+Lägg därför in text:
+“Bedömningen är en förenklad uppskattning baserad på tillgängliga kartlager. Den ersätter inte kommunens, länsstyrelsens eller domstolens formella prövning.”

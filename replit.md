@@ -38,7 +38,12 @@ A Swedish-language progressive web app that lets people in Katrineholm point the
 - `src/hooks/useOutdoorConfidenceIndex.ts` — weighted "Outdoor Confidence Index" (0-100%: camera/AI sky-detection 45%, GPS accuracy 20%, ambient light 15%, compass stability 10%, motion/gyro 5%, WiFi/indoor signal 5%) with four tiers (`show` ≥90, `cautious` ≥70, `aim` ≥40, `hide` <40) driving turbine visibility gating in `Home.tsx`/`ARScene.tsx`.
 - `src/hooks/useStableGeoPosition.ts` — freezes the lat/lon fed into the dBA calculation until the user moves ≥15m, so ordinary GPS jitter doesn't recompute sound level.
 - `src/hooks/useSmoothedDba.ts` — 7s rolling average of the raw dBA estimate, throttled to at most one visible update per second; both `SoundLevelPanel`/`NoiseImpactMonitor` display and the wind sound's `dbaToGain` volume consume this same smoothed value so they always agree.
-- `src/pages/Home.tsx` — wires camera + AR + GPS + compass + permission gate + top/bottom UI chrome + dBA panel + noise impact monitor (incl. exposure-duration timer) + Fotomontage capture + Outdoor Confidence Index gating together.
+- `src/pages/Home.tsx` — wires camera + AR + GPS + compass + permission gate + top/bottom UI chrome + dBA panel + noise impact monitor (incl. exposure-duration timer) + Fotomontage capture + Outdoor Confidence Index gating together. Also reads a custom turbine placement (if any) via `AR_HANDOFF_KEY`/`loadCustomPlacement()` and swaps it in for the default 29-turbine set as `activeTurbines`, with a bottom-bar link to `/placera` and a button to clear the custom placement.
+- `src/lib/ericsbergArea.ts` — Ericsberg estate boundary polygon, household clusters, sensitive/positive zones, and the "Placera vindkraftverken själv" disclaimer text.
+- `src/lib/placementScoring.ts` — `scorePlacement()`: weighted 0–100 impact score (distance to households, sensitive-zone proximity, spacing, etc.) plus playful Swedish warnings for the placement game.
+- `src/lib/webMercatorTiles.ts` — shared Web Mercator tile/projection math (Esri World Imagery tiles, `computeTileLayout`, `fitBoundsToAspect`, `makeProjector`); used by both `MapView.tsx` and `PlacementMap.tsx` so the two maps stay visually consistent.
+- `src/components/PlacementMap.tsx` — SVG drag-and-drop map for the 8 user-placeable turbines on Ericsberg's land.
+- `src/pages/PlaceTurbines.tsx` (route `/placera`) — "Placera vindkraftverken själv" game: drag the 8 turbines, live score/warnings panel, save/compare placements (`localStorage` keys `vindkraft-ar-katrineholm:savedPlacements` and `vindkraft-ar-katrineholm:customPlacement`), and a "Se denna placering i AR" handoff back to the main AR view.
 
 ## Architecture decisions
 
@@ -60,6 +65,7 @@ A Swedish-language progressive web app that lets people in Katrineholm point the
 - Map view (SVG-based) showing all turbines and the user's position.
 - "Skriv under för folkomröstning" petition button/modal referencing the real 2022 Katrineholm wind-power referendum.
 - Turbines only render in the AR view when the weighted Outdoor Confidence Index (camera/AI sky detection, GPS accuracy, ambient light, compass stability, motion/gyro, WiFi/indoor signal) is in its "show" or "cautious" tier AND camera-based sky coverage is ≥15% of the frame; the "aim" tier (40-70%) shows a "Rikta kameran mot öppen himmel" banner instead of turbines, and the "hide" tier (<40%) or insufficient sky coverage shows the large, high-z-index "Gå utomhus" (go outside) message that always renders above all UI chrome (top/bottom bars, badges).
+- "🗺️ Placera vindkraftverken själv" (`/placera`): a drag-and-drop game letting the user reposition 8 turbines on Ericsberg's land, with a live 0–100 impact score (distance to households, sensitive zones, spacing), color-coded severity, playful Swedish warnings, save/compare of multiple placements, and a "Se denna placering i AR" button that swaps the AR view's turbine set to the custom placement.
 - Fully Swedish-language UI; installable as a PWA.
 
 ## User preferences

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useCameraStream } from "@/hooks/useCameraStream";
@@ -19,9 +20,9 @@ import { NoiseImpactBadge, NoiseImpactPanel } from "@/components/NoiseImpactMoni
 import { PhotoMontageModal } from "@/components/PhotoMontageModal";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
-import { TURBINES } from "@/lib/turbines";
+import { TURBINES, type TurbineSweref } from "@/lib/turbines";
 import { distanceMeters, bearingDegrees, isNightTime } from "@/lib/geo";
-import { swerefToWgs84 } from "@/lib/sweref";
+import { swerefToWgs84, wgs84ToSweref } from "@/lib/sweref";
 import { getBladeRpm } from "@/lib/turbineAnimation";
 import { estimateSoundLevel, dbaToGain, applyIndoorAttenuation } from "@/lib/soundLevel";
 import { estimateNoiseImpact } from "@/lib/noiseImpact";
@@ -33,7 +34,57 @@ const PHOTO_DISCLAIMER_TEXT = "Fotomontage/visualisering. GPS, kompass, terräng
 
 const AVG_RPM = TURBINES.reduce((sum, t) => sum + getBladeRpm(t.name), 0) / TURBINES.length;
 
+// Nyckeln som "Placera vindkraftverken själv" (`PlaceTurbines.tsx`) skriver
+// till när användaren trycker "Se denna placering i AR" — läses här EN gång
+// vid montering så AR-vyn kan visa användarens egen Ericsberg-placering
+// istället för de 29 planerade Länsterberget-verken. Samma default-mått
+// (grundhöjd/navhöjd/rotordiameter) som de riktiga verken, eftersom
+// placeringsläget bara samlar in lat/lon, inte verkens fysiska mått.
+const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
+
+interface StoredPlacement {
+  turbines: { id: string; lat: number; lon: number }[];
+  savedAt: number;
+}
+
+function loadCustomPlacement(): TurbineSweref[] | null {
+  try {
+    const raw = localStorage.getItem(AR_HANDOFF_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredPlacement;
+    if (!Array.isArray(parsed.turbines) || parsed.turbines.length === 0) return null;
+    return parsed.turbines.map((t, i) => {
+      const { easting, northing } = wgs84ToSweref(t.lat, t.lon);
+      return {
+        id: t.id,
+        name: `Egen V${i + 1}`,
+        easting,
+        northing,
+        heightMeters: 250,
+        groundHeightMeters: 60,
+        hubHeightMeters: 169,
+        rotorDiameterMeters: 162,
+        totalHeightAboveSeaMeters: 310,
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
+  const [, navigate] = useLocation();
+  const [customTurbines, setCustomTurbines] = useState<TurbineSweref[] | null>(null);
+  useEffect(() => {
+    setCustomTurbines(loadCustomPlacement());
+  }, []);
+  const activeTurbines = customTurbines ?? TURBINES;
+  const usingCustomPlacement = customTurbines !== null;
+  const handleClearCustomPlacement = useCallback(() => {
+    localStorage.removeItem(AR_HANDOFF_KEY);
+    setCustomTurbines(null);
+  }, []);
+
   const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -124,11 +175,11 @@ export default function Home() {
   // uppskattningarna nedan.
   const turbineDistancesM = useMemo(() => {
     if (stableGeo.lat === null || stableGeo.lon === null) return null;
-    return TURBINES.map((t) => {
+    return activeTurbines.map((t) => {
       const { lat, lon } = swerefToWgs84(t.easting, t.northing);
       return distanceMeters(stableGeo.lat as number, stableGeo.lon as number, lat, lon);
     });
-  }, [stableGeo.lat, stableGeo.lon]);
+  }, [activeTurbines, stableGeo.lat, stableGeo.lon]);
 
   // Alltid beräknad med full "ute"-nivå (confidence=1) — den manuella
   // ute/inne-dämpningen appliceras separat, EFTER GPS-jitterutjämningen
@@ -187,7 +238,7 @@ export default function Home() {
   }, [geo.lat, geo.lon]);
 
   const noiseImpact = useMemo(() => {
-    const nearest = TURBINES.reduce<{ dist: number; bearing: number } | null>((closest, t) => {
+    const nearest = activeTurbines.reduce<{ dist: number; bearing: number } | null>((closest, t) => {
       if (geo.lat === null || geo.lon === null) return closest;
       const { lat, lon } = swerefToWgs84(t.easting, t.northing);
       const dist = distanceMeters(geo.lat, geo.lon, lat, lon);
@@ -207,7 +258,7 @@ export default function Home() {
       windSpeedMs: windDirection.windSpeedMs,
       exposureSeconds,
     });
-  }, [soundLevelEstimate, geo.lat, geo.lon, windDirection.windFromDeg, windDirection.windSpeedMs, exposureNowTick]);
+  }, [activeTurbines, soundLevelEstimate, geo.lat, geo.lon, windDirection.windFromDeg, windDirection.windSpeedMs, exposureNowTick]);
 
   // Uppdatera vindljudets volym/svischtakt när GPS-position eller den
   // beräknade ljudnivån ändras. Volymen följer nu KONTINUERLIGT den redan
@@ -361,7 +412,7 @@ export default function Home() {
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#090909] text-white">
       {!started && (
-        <PermissionGate onStart={handleStart} starting={starting} errors={errors} turbineCount={TURBINES.length} />
+        <PermissionGate onStart={handleStart} starting={starting} errors={errors} turbineCount={activeTurbines.length} />
       )}
 
       {started && (
@@ -374,7 +425,7 @@ export default function Home() {
               userLat={geo.lat!}
               userLon={geo.lon!}
               quaternionRef={orientation.quaternionRef}
-              turbines={TURBINES}
+              turbines={activeTurbines}
               sunMode={sunMode}
               realScale={realScale}
               visibility={visibility}
@@ -488,7 +539,9 @@ export default function Home() {
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKRAFT AR</p>
-                <p className="text-sm text-white/90">Katrineholm · {TURBINES.length} verk</p>
+                <p className="text-sm text-white/90">
+                  Katrineholm · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
@@ -596,12 +649,26 @@ export default function Home() {
                 Om projektet
               </button>
             </div>
+            <button
+              onClick={() => navigate("/placera")}
+              className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
+            >
+              🗺️ Placera vindkraftverken själv
+            </button>
+            {usingCustomPlacement && (
+              <button
+                onClick={handleClearCustomPlacement}
+                className="w-full rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white/80 hover:bg-white/10"
+              >
+                ↩️ Återgå till planerad placering (29 verk)
+              </button>
+            )}
           </div>
         </>
       )}
 
       {showMap && (
-        <MapView turbines={TURBINES} userLat={geo.lat} userLon={geo.lon} onClose={() => setShowMap(false)} />
+        <MapView turbines={activeTurbines} userLat={geo.lat} userLon={geo.lon} onClose={() => setShowMap(false)} />
       )}
       {showPetition && <PetitionModal onClose={() => setShowPetition(false)} />}
       {showInfo && <InfoPanel onClose={() => setShowInfo(false)} />}

@@ -789,18 +789,24 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       const skyLerpRate = Math.min(dt * 4, 1);
       // Fyll den delade ocklusionstexturen med det senaste (temporalt
       // utjämnade) rutnätet, och synka "Visa dolda verk"-uniformen till
-      // varje kompilerad turbin-shader. Görs en gång per bildruta (inte per
-      // objekt) eftersom texturen och läget är globalt delade.
+      // varje kompilerad turbin-shader. Görs bara om rutnätet faktiskt har
+      // ändrats (eller första gången), för att spara GPU-bussbandbredd.
       const occlusionGrid = skyRef.current.getOcclusionGrid();
+      let changed = false;
       for (let i = 0; i < occlusionGrid.length; i++) {
-        const v = Math.max(0, Math.min(1, occlusionGrid[i])) * 255;
+        const v = Math.round(Math.max(0, Math.min(1, occlusionGrid[i])) * 255);
         const o = i * 4;
-        occlusionData[o] = v;
-        occlusionData[o + 1] = v;
-        occlusionData[o + 2] = v;
-        occlusionData[o + 3] = 255;
+        if (occlusionData[o] !== v) {
+          occlusionData[o] = v;
+          occlusionData[o + 1] = v;
+          occlusionData[o + 2] = v;
+          occlusionData[o + 3] = 255;
+          changed = true;
+        }
       }
-      occlusionTexture.needsUpdate = true;
+      if (changed) {
+        occlusionTexture.needsUpdate = true;
+      }
       const showHiddenValue = modeRef.current.showHiddenTurbines ? 1 : 0;
       for (const shader of occlusionShaders) {
         shader.uniforms.uShowHidden.value = showHiddenValue;

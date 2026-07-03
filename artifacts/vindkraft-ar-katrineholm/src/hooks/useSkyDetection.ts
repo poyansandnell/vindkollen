@@ -86,7 +86,7 @@ export const GRID_ROWS = 8;
 // himmel när ett verk rör sig i bild, medan för långsam gör ocklusionen
 // märkbart "trög" efter en snabb kamerarörelse. ~3 samples (≈1s) för att nå
 // halva vägen till ett nytt värde är en rimlig avvägning.
-const OCCLUSION_GRID_EMA_ALPHA = 0.3;
+const OCCLUSION_GRID_EMA_ALPHA = 0.5;
 // 8x8 pixlar per cell (inte 3x3) — ger textur-signalen (`stdDev`) faktiskt
 // något att mäta. Med bara 3x3 källpixlar nedskalas nästan all textur bort
 // redan innan klassificeringen, vilket gjorde att en jämnt målad, ljus
@@ -94,16 +94,16 @@ const OCCLUSION_GRID_EMA_ALPHA = 0.3;
 const CELL_PX = 8;
 const CANVAS_W = GRID_COLS * CELL_PX;
 const CANVAS_H = GRID_ROWS * CELL_PX;
-const SAMPLE_INTERVAL_MS = 350;
-const EMA_ALPHA = 0.18;
+const SAMPLE_INTERVAL_MS = 300;
+const EMA_ALPHA = 0.45;
 // Konfidensen når 1.0 redan vid ~25% himmelsandel i bilden — man pekar
 // sällan kameran rakt upp, så ute i det fria räcker det med ett gott stycke
 // himmel över horisonten för att räknas som "utomhus, fri sikt".
 const CONFIDENCE_SKY_RATIO_SCALE = 0.25;
 // Hysteres: kräver en tydlig marginal mellan tröskelvärdena innan status
 // växlar, så att gränsfall (t.ex. nära ett fönster) inte flimrar.
-const INDOOR_ENTER_THRESHOLD = 0.12;
-const INDOOR_EXIT_THRESHOLD = 0.32;
+const INDOOR_ENTER_THRESHOLD = 0.08;
+const INDOOR_EXIT_THRESHOLD = 0.28;
 
 // Om en enskild ML-segmentering tar längre än detta anses den för långsam
 // för realtidsbruk på den här enheten. Efter `ML_MAX_SLOW_SAMPLES` sådana
@@ -117,8 +117,9 @@ const INDOOR_EXIT_THRESHOLD = 0.32;
 // egna 30/60 fps-krav) — sätt tröskeln därefter, annars stängs ML av
 // permanent inom någon sekund på de flesta telefoner och ocklusionen
 // fungerar i praktiken aldrig.
-const ML_SLOW_MS = 3000;
-const ML_MAX_SLOW_SAMPLES = 6;
+const ML_SLOW_MS = 2500;
+const ML_MAX_SLOW_SAMPLES = 4;
+const ML_INFERENCE_TIMEOUT_MS = 5000;
 
 // Tensor-läckage-brytaren: hur många fler tensorer än baslinjen som anses
 // vara ett tecken på en läcka snarare än normal brus/variation mellan
@@ -187,9 +188,13 @@ function classifyCell(pixels: Uint8ClampedArray, col: number, row: number): bool
   // tillräckligt neutral/ofärgad) och felklassas som himmel. Verklig
   // himmel — även mulen — är typiskt betydligt ljusare än normal
   // rumsbelysning träffar en vägg med.
-  const bright = avgLum > 150;
-  const lowTexture = stdDev < 14;
-  return bright && lowTexture && (sat < 0.18 || (blueish && avgB > avgR + 8));
+  //
+  // JUSTERING: Något lägre ljusstyrkekrav (135 istället för 150) för att
+  // inte missa mulna, mörka vinterdagar, men kompenserar med strängare
+  // krav på "släthet" (lowTexture) för att undvika falska positiva inomhus.
+  const bright = avgLum > 135;
+  const lowTexture = stdDev < 12;
+  return bright && lowTexture && (sat < 0.2 || (blueish && avgB > avgR + 6));
 }
 
 /**
@@ -443,12 +448,16 @@ export function useSkyDetection(
       const isWarmup = !mlWarmedUpRef.current;
       const start = performance.now();
       try {
-        const { grid, skyRatio: mlSkyRatio, numTensors } = await segmentSkyGrid(
-          model,
-          mlCanvas,
-          GRID_COLS,
-          GRID_ROWS,
-        );
+        // Watchdog: avbryt om ML-inferensen tar orimligt lång tid (t.ex. hänger
+        // sig i WebGL-drivern).
+        const result = await Promise.race([
+          segmentSkyGrid(model, mlCanvas, GRID_COLS, GRID_ROWS),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("ML_TIMEOUT")), ML_INFERENCE_TIMEOUT_MS),
+          ),
+        ]);
+
+        const { grid, skyRatio: mlSkyRatio, numTensors } = result;
         const elapsed = performance.now() - start;
         mlWarmedUpRef.current = true;
         if (elapsed > ML_SLOW_MS && !isWarmup) {

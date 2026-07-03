@@ -2,6 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { TurbineSweref } from "@/lib/turbines";
 import { swerefToWgs84 } from "@/lib/sweref";
 import { distanceMeters, formatDistance } from "@/lib/geo";
+import {
+  ESRI_WORLD_IMAGERY_URL,
+  METERS_PER_DEGREE_LAT,
+  computeTileLayout,
+  fitBoundsToAspect,
+  makeProjector,
+} from "@/lib/webMercatorTiles";
 
 interface MapViewProps {
   turbines: TurbineSweref[];
@@ -10,7 +17,6 @@ interface MapViewProps {
   onClose: () => void;
 }
 
-const METERS_PER_DEGREE_LAT = 111320;
 // Högre gräns tillåter att kartan stannar på en djupare (skarpare) zoomnivå
 // innan den tvingas backa till en grövre/suddigare — fler, mindre plattor ger
 // betydligt vassare flygfoto, i nivå med Google Maps satellit.
@@ -25,22 +31,6 @@ const MAX_ZOOM = 19;
 // Katrineholms centrum — visas som en distinkt "stad"-etikett på kartan,
 // separat från vindkraftverkens markörer.
 const KATRINEHOLM = { lat: 58.9959, lon: 16.2072 };
-
-// Web Mercator (samma projektion som "slippy map"-plattor, t.ex. OSM/Esri).
-function lon2tileX(lon: number, z: number) {
-  return ((lon + 180) / 360) * 2 ** z;
-}
-function lat2tileY(lat: number, z: number) {
-  const rad = (lat * Math.PI) / 180;
-  return ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * 2 ** z;
-}
-function tileX2lon(x: number, z: number) {
-  return (x / 2 ** z) * 360 - 180;
-}
-function tileY2lat(y: number, z: number) {
-  const n = Math.PI - (2 * Math.PI * y) / 2 ** z;
-  return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
-}
 
 export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -98,36 +88,11 @@ export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
     const maxLon = maxLonRaw + padLon;
 
     const centerLat = (minLat + maxLat) / 2;
-    const centerLon = (minLon + maxLon) / 2;
     const metersPerDegreeLon = METERS_PER_DEGREE_LAT * Math.cos((centerLat * Math.PI) / 180);
 
-    // Bredda den kortare geografiska dimensionen (i grader) så att kartans
-    // bildförhållande i meter matchar containerns faktiska bildförhållande
-    // i pixlar. Då kan projektionen sedan skalas 1:1 utan att sträckas ut
-    // olika mycket i x- och y-led (dvs. utan distorsion vid rotation).
-    const latMeters = (maxLat - minLat) * METERS_PER_DEGREE_LAT;
-    const lonMeters = (maxLon - minLon) * metersPerDegreeLon;
     const containerAspect = containerSize.width / containerSize.height || 1;
-    const boundsAspect = lonMeters / latMeters || 1;
-
-    let bounds = { minLat, maxLat, minLon, maxLon };
-    if (boundsAspect > containerAspect) {
-      // Geografiska boxen är "bredare" än containern — öka höjden (latitud).
-      const targetLatMeters = lonMeters / containerAspect;
-      const extraLatDeg = (targetLatMeters - latMeters) / METERS_PER_DEGREE_LAT / 2;
-      bounds = { minLat: minLat - extraLatDeg, maxLat: maxLat + extraLatDeg, minLon, maxLon };
-    } else if (boundsAspect < containerAspect) {
-      // Geografiska boxen är "smalare" än containern — öka bredden (longitud).
-      const targetLonMeters = latMeters * containerAspect;
-      const extraLonDeg = (targetLonMeters - lonMeters) / metersPerDegreeLon / 2;
-      bounds = { minLat, maxLat, minLon: minLon - extraLonDeg, maxLon: maxLon + extraLonDeg };
-    }
-
-    function project(lat: number, lon: number) {
-      const x = ((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * 100;
-      const y = 100 - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * 100;
-      return { x, y };
-    }
+    const bounds = fitBoundsToAspect({ minLat, maxLat, minLon, maxLon }, containerAspect);
+    const project = makeProjector(bounds);
 
     const turbinePoints = wgs.map((p) => {
       const { x, y } = project(p.lat, p.lon);
@@ -141,44 +106,12 @@ export function MapView({ turbines, userLat, userLon, onClose }: MapViewProps) {
 
     const cityPoint = project(KATRINEHOLM.lat, KATRINEHOLM.lon);
 
-    // Hitta högsta zoomnivå (mest detaljerad flygfoto) där antalet plattor
-    // som täcker vår bounding box fortfarande är rimligt (prestanda/nätverk).
-    // På Retina-skärmar börjar vi en nivå djupare för skarpare bild.
-    let zoom = MAX_ZOOM + RETINA_ZOOM_BIAS;
-    let tileRange: { zoom: number; x1: number; x2: number; y1: number; y2: number } | null = null;
-    for (; zoom >= 9; zoom--) {
-      const x1 = Math.floor(lon2tileX(bounds.minLon, zoom));
-      const x2 = Math.floor(lon2tileX(bounds.maxLon, zoom));
-      const y1 = Math.floor(lat2tileY(bounds.maxLat, zoom));
-      const y2 = Math.floor(lat2tileY(bounds.minLat, zoom));
-      const count = (x2 - x1 + 1) * (y2 - y1 + 1);
-      if (count <= MAX_TILES) {
-        tileRange = { zoom, x1, x2, y1, y2 };
-        break;
-      }
-    }
-
-    const tiles: { key: string; url: string; left: number; top: number; width: number; height: number }[] = [];
-    if (tileRange) {
-      for (let tx = tileRange.x1; tx <= tileRange.x2; tx++) {
-        for (let ty = tileRange.y1; ty <= tileRange.y2; ty++) {
-          const lonW = tileX2lon(tx, tileRange.zoom);
-          const lonE = tileX2lon(tx + 1, tileRange.zoom);
-          const latN = tileY2lat(ty, tileRange.zoom);
-          const latS = tileY2lat(ty + 1, tileRange.zoom);
-          const topLeft = project(latN, lonW);
-          const bottomRight = project(latS, lonE);
-          tiles.push({
-            key: `${tileRange.zoom}-${tx}-${ty}`,
-            url: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileRange.zoom}/${ty}/${tx}`,
-            left: topLeft.x,
-            top: topLeft.y,
-            width: bottomRight.x - topLeft.x,
-            height: bottomRight.y - topLeft.y,
-          });
-        }
-      }
-    }
+    const { tiles } = computeTileLayout(bounds, project, {
+      maxTiles: MAX_TILES,
+      maxZoom: MAX_ZOOM,
+      retinaZoomBias: RETINA_ZOOM_BIAS,
+      tileUrlTemplate: ESRI_WORLD_IMAGERY_URL,
+    });
 
     return { turbinePoints, userPoint, cityPoint, metersPerDegreeLon, tiles };
   }, [turbines, userLat, userLon, containerSize]);
