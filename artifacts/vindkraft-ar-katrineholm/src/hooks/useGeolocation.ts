@@ -45,7 +45,13 @@ export function useGeolocation(enabled: boolean): GeoState {
   // reagerar även om användaren ändrar behörigheten i webbläsarens
   // inställningar medan sidan är öppen.
   useEffect(() => {
-    if (!enabled) return;
+    // OBS: körs oberoende av `enabled` (till skillnad från nedanstående
+    // effekt som faktiskt startar watchPosition) — att fråga Permissions
+    // API:et kostar ingenting och kräver ingen behörighetsdialog i sig, så
+    // vi kan visa "Platsbehörighet redan nekad"-vägledning direkt på
+    // startskärmen, innan användaren ens hunnit trycka "Starta visualisering"
+    // en gång, istället för att de måste trycka och se en förvirrande
+    // snurra/väntan först.
     if (!navigator.permissions?.query) return;
 
     let cancelled = false;
@@ -67,7 +73,7 @@ export function useGeolocation(enabled: boolean): GeoState {
       cancelled = true;
       if (status) status.onchange = null;
     };
-  }, [enabled]);
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;

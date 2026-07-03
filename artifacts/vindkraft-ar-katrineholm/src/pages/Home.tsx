@@ -122,6 +122,25 @@ export default function Home() {
   const geo = useGeolocation(started);
   const orientation = useDeviceOrientation(started);
   const camera = useCameraStream(started);
+
+  // Enkel, alltid-synlig diagnostiktext på väntesskärmen (sekunder sedan
+  // start + platsbehörighetens status). Kostar inget för vanliga användare,
+  // men gör det möjligt för en testare att rapportera exakt vad som händer
+  // om något hänger sig igen — istället för bara "det snurrar" — så vi kan
+  // slå fast om t.ex. behörigheten fastnat på "prompt" eller om GPS:en
+  // verkligen aldrig svarar.
+  const [waitSeconds, setWaitSeconds] = useState(0);
+  useEffect(() => {
+    if (!started) {
+      setWaitSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const id = window.setInterval(() => {
+      setWaitSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [started]);
   const ready = started && geo.lat !== null && geo.lon !== null && orientation.hasFix && camera.stream;
   const wind = useWindSound();
   // Kamerabaserad himmel/inomhus-heuristik (se `useSkyDetection`s jsdoc för
@@ -192,9 +211,19 @@ export default function Home() {
   // `ready`-krav som ovan, av samma anledning.
   const shouldAskAimAtSky = ready && mlActive && sky.ready && !shouldHide && confidence.tier === "aim";
 
+  // Om Permissions API redan känner till att platsbehörigheten är nekad
+  // (t.ex. från ett tidigare besök) visar vi det direkt på startskärmen,
+  // innan användaren ens tryckt "Starta visualisering" — annars ser de bara
+  // en förvirrande evig snurra efter att ha tryckt, utan att förstå varför.
+  const preStartPermissionError =
+    !started && geo.permissionState === "denied"
+      ? "Platsbehörighet nekad. Tillåt Plats för den här sidan i webbläsarens inställningar och ladda om sidan innan du startar."
+      : null;
+
   const errors = useMemo(
-    () => [geo.error, orientation.error, camera.error].filter((e): e is string => Boolean(e)),
-    [geo.error, orientation.error, camera.error],
+    () =>
+      [preStartPermissionError, geo.error, orientation.error, camera.error].filter((e): e is string => Boolean(e)),
+    [preStartPermissionError, geo.error, orientation.error, camera.error],
   );
 
   // Stabiliserad GPS-position: ignorerar små GPS-studs (<15 m) så att
@@ -321,10 +350,22 @@ export default function Home() {
     // vilket var precis vad testaren (Stephane) upplevde. Genom att trigga
     // alla tre förfrågningar parallellt, direkt här, ligger de alla kvar
     // inom samma giltiga gest-fönster.
+    //
+    // OBS enableHighAccuracy: false här (medvetet, till skillnad från den
+    // riktiga watchPosition-bevakningen i useGeolocation): den här anropet
+    // kastas bort — vi bryr oss bara om att trigga behörighetsdialogen. Om
+    // vi begär hög noggrannhet (GPS-chip) HÄR *samtidigt* som den riktiga
+    // watchPosition-bevakningen startar en bråkdel av en sekund senare, kan
+    // de två samtidiga GPS-chip-förfrågningarna konkurrera om samma
+    // hårdvara på många Android-enheter och avsevärt fördröja/blockera den
+    // riktiga positionsfixen — exakt det som såg ut som "GPS hänger sig".
+    // Med enableHighAccuracy: false används bara nätverks-/wifi-baserad
+    // positionering för detta bortkastade anrop, vilket inte konkurrerar om
+    // GPS-chipet.
     navigator.geolocation?.getCurrentPosition(
       () => {},
       () => {},
-      { enableHighAccuracy: true, timeout: 15000 },
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: Infinity },
     );
     navigator.mediaDevices
       ?.getUserMedia?.({ video: { facingMode: { ideal: "environment" } }, audio: false })
@@ -487,6 +528,18 @@ export default function Home() {
                 {camera.stream && geo.lat === null && "Hämtar GPS-position…"}
                 {camera.stream && geo.lat !== null && !orientation.hasFix && "Läser av kompass — rör telefonen i en åtta-rörelse."}
               </p>
+              {camera.stream && geo.lat === null && !geo.error && (
+                <p className="text-[11px] text-white/40">
+                  {waitSeconds}s — platsbehörighet:{" "}
+                  {geo.permissionState === "granted"
+                    ? "beviljad"
+                    : geo.permissionState === "denied"
+                      ? "nekad"
+                      : geo.permissionState === "prompt"
+                        ? "väntar på svar"
+                        : "okänd"}
+                </p>
+              )}
               {errors.length > 0 && (
                 <div className="mt-2 flex w-full max-w-xs flex-col gap-3">
                   <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-xs text-red-200">
