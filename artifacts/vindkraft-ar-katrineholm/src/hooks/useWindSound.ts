@@ -5,13 +5,17 @@ interface WindNodes {
   windGain: GainNode;
   whooshSource: AudioBufferSourceNode;
   whooshFilter: BiquadFilterNode;
+  whooshSwishGain: GainNode;
   whooshGain: GainNode;
   lfo: OscillatorNode;
+  lfoShaper: WaveShaperNode;
   lfoGain: GainNode;
   whoosh2Source: AudioBufferSourceNode;
   whoosh2Filter: BiquadFilterNode;
+  whoosh2SwishGain: GainNode;
   whoosh2Gain: GainNode;
   lfo2: OscillatorNode;
+  lfo2Shaper: WaveShaperNode;
   lfo2Gain: GainNode;
   rumbleOsc: OscillatorNode;
   rumbleOsc2: OscillatorNode;
@@ -25,31 +29,33 @@ interface WindNodes {
   streamDestination: MediaStreamAudioDestinationNode;
 }
 
-// Volymnivåerna är kraftigt höjda jämfört med en tidigare version — målet är
-// ett omedelbart märkbart, uppslukande ljudlandskap som påminner om att stå
-// utomhus nära flera stora, moderna 250 m-verk (Vestas V162-6.2MW, navhöjd
-// 169 m) i drift, snarare än ett diskret bakgrundssus. Projektets egen
-// bullerutredning anger som mest ca 40 dBA ekvivalent ljudnivå vid närmaste
-// bostad i värsta scenariot — det används här bara som inspiration för
-// ljudkaraktären (aerodynamiskt bredbandigt brus, lågfrekvent mull, rytmisk
-// bladpassage), inte som en exakt kalibrerad decibelnivå (webbljud kan inte
-// återge en fysisk dB-nivå ändå; se `lib/soundLevel.ts` för den separata,
-// informativa dBA-uppskattningen som INTE styr denna volym).
+// Basvolymen på avstånd är nu avsiktligt mer återhållsam och avtagandet
+// brantare (se `Math.pow(linear, PROXIMITY_CURVE_EXPONENT)` nedan) — närmare
+// verklighetens karaktär, där verkens bullerutredning anger ca 35–40 dBA
+// ekvivalent nivå vid närmaste bostad (ungefär som ett tyst kylskåpssus),
+// snarare än ett ständigt påtagligt dån redan på långt håll. Ju närmare
+// tornen man är desto mer stiger volymen dock tydligt, för att förmedla
+// hur upplevelsen faktiskt förändras när man rör sig genom området.
+// OBS: webbljud kan ändå inte återge en fysisk dB-nivå exakt (beror på
+// telefonens högtalare/volym) — se `lib/soundLevel.ts` för den separata,
+// informativa dBA-uppskattningen som INTE styr denna volym.
 //
-// Den stora volymökningen uppnås inte bara genom råa gain-värden, utan
-// framför allt genom en hårdare kompressor (lägre tröskel/högre ratio) +
-// en makeup-gain-nod efteråt som lyfter den komprimerade signalen tillbaka
-// upp mot fullt utslag — en klassisk "loudness"-teknik som ger ett tätt,
-// kraftfullt ljud utan att det digitalt klipper. En sista mjuk klippnings-
-// (WaveShaper-)nod fungerar som ett absolut säkerhetsnät mot överstyrning.
-const AMBIENCE_BASE = 0.55;
-const AMBIENCE_MAX = 0.95;
-const WHOOSH_BASE = 0.68;
-const WHOOSH_MAX = 1.15;
-const WHOOSH2_BASE = 0.4;
-const WHOOSH2_MAX = 0.72;
-const RUMBLE_BASE = 0.36;
-const RUMBLE_MAX = 0.66;
+// Hög upplevd ljudstyrka (utan att digitalt klippa) uppnås genom en hårdare
+// kompressor (lägre tröskel/högre ratio) + en makeup-gain-nod efteråt som
+// lyfter den komprimerade signalen tillbaka upp mot fullt utslag, och en
+// sista mjuk klippnings- (WaveShaper-)nod som säkerhetsnät.
+const AMBIENCE_BASE = 0.3;
+const AMBIENCE_MAX = 0.78;
+const WHOOSH_BASE = 0.5;
+const WHOOSH_MAX = 1.25;
+const WHOOSH2_BASE = 0.32;
+const WHOOSH2_MAX = 0.8;
+const RUMBLE_BASE = 0.18;
+const RUMBLE_MAX = 0.42;
+// Brantare avtagande än tidigare (var 0.55) — mer likt hur ljud faktiskt
+// dämpas med avstånd i verkligheten (ungefär kvadratiskt), så nivån känns
+// påtagligt lugnare på medel-/långt avstånd men växer märkbart nära tornen.
+const PROXIMITY_CURVE_EXPONENT = 1.3;
 const PROXIMITY_RANGE_M = 3500;
 // Flera närliggande verk kombineras (se updateProximity) till en total
 // "närhetsfaktor" som kan överstiga 1 — så att många verk nära inpå
@@ -149,6 +155,25 @@ export function useWindSound() {
     for (let i = 0; i < n; i++) {
       const x = (i / (n - 1)) * 2 - 1;
       curve[i] = Math.tanh(k * x) / norm;
+    }
+    return curve;
+  }
+
+  /**
+   * Formar en sinus-LFO (-1..1) till en toppig, unipolär pulskurva (0..1)
+   * som används för att skapa ett riktigt "bladsvisch" istället för en mjuk,
+   * vaglik vibrato: snabb stigning mot en kort topp när ett blad passerar,
+   * följt av en längre, tystare dal innan nästa passage — samma karaktär som
+   * riktiga vindkraftverk har. Högre `sharpness` ger kortare, tydligare
+   * "whoosh"-toppar och längre tystnad däremellan.
+   */
+  function makeSwishPulseCurve(sharpness: number): Float32Array {
+    const n = 4096;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      const unipolar = (x + 1) / 2;
+      curve[i] = Math.pow(unipolar, sharpness);
     }
     return curve;
   }
@@ -305,63 +330,82 @@ export function useWindSound() {
     windSource.start();
     windGain.gain.setTargetAtTime(AMBIENCE_BASE, ctx.currentTime, 0.6);
 
-    // Bladsvisch, lager 1 — smalare, ljusare brus, moduleras rytmiskt av en
-    // LFO vars frekvens motsvarar rotorernas ungefärliga bladpassage-frekvens.
+    // Bladsvisch, lager 1 — smalare, ljusare brus. Rytmen kommer nu från en
+    // riktig tremolo-kedja (whooshSwishGain) istället för att bara lägga en
+    // mjuk sinus ovanpå volymen: LFO:n formas via en WaveShaper till en
+    // toppig pulskurva (snabb "whoosh", längre tystnad däremellan — precis
+    // som en riktig bladpassage låter) som sedan multiplicerar signalen.
+    // whooshGain sitter kvar oförändrad efter och styr den övergripande
+    // avståndsberoende volymen (se updateProximity), så pulsformen förblir
+    // lika tydlig oavsett hur nära/långt bort verken är.
     const whooshSource = ctx.createBufferSource();
     whooshSource.buffer = makeNoiseBuffer(ctx, 0.1);
     whooshSource.loop = true;
     const whooshFilter = ctx.createBiquadFilter();
     whooshFilter.type = "bandpass";
-    whooshFilter.frequency.value = 850;
-    whooshFilter.Q.value = 0.85;
+    whooshFilter.frequency.value = 900;
+    whooshFilter.Q.value = 1.1;
     const whooshLowpass = ctx.createBiquadFilter();
     whooshLowpass.type = "lowpass";
-    whooshLowpass.frequency.value = 2200;
+    whooshLowpass.frequency.value = 2600;
+    const whooshSwishGain = ctx.createGain();
+    whooshSwishGain.gain.value = 0.16;
     const whooshGain = ctx.createGain();
     whooshGain.gain.value = 0.08;
     whooshSource.connect(whooshFilter);
     whooshFilter.connect(whooshLowpass);
-    whooshLowpass.connect(whooshGain);
+    whooshLowpass.connect(whooshSwishGain);
+    whooshSwishGain.connect(whooshGain);
     whooshGain.connect(masterGain);
     whooshSource.start();
 
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
     lfo.frequency.value = 0.6;
+    const lfoShaper = ctx.createWaveShaper();
+    lfoShaper.curve = makeSwishPulseCurve(2.4) as Float32Array<ArrayBuffer>;
     const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 0.3;
-    lfo.connect(lfoGain);
-    lfoGain.connect(whooshGain.gain);
+    lfoGain.gain.value = 0.82;
+    lfo.connect(lfoShaper);
+    lfoShaper.connect(lfoGain);
+    lfoGain.connect(whooshSwishGain.gain);
     lfo.start();
 
     whooshGain.gain.setTargetAtTime(WHOOSH_BASE, ctx.currentTime, 0.8);
 
     // Bladsvisch, lager 2 — ett andra, oberoende svischlager med en annan
-    // filterkaraktär och egen (lätt förskjuten) takt. Simulerar flera verk
-    // vars bladpassager inte är perfekt synkroniserade, vilket ger ett
-    // tätare, mer verklighetstroget och kraftfullare kombinerat ljudlandskap
-    // istället för ett enda, uppenbart repetitivt mönster.
+    // filterkaraktär, egen (lätt förskjuten) takt och en något mjukare
+    // pulsform, för att simulera flera verk vars bladpassager inte är
+    // perfekt synkroniserade — ett tätare, mer verklighetstroget och
+    // kraftfullare kombinerat ljudlandskap istället för ett enda,
+    // uppenbart repetitivt mönster.
     const whoosh2Source = ctx.createBufferSource();
     whoosh2Source.buffer = makeNoiseBuffer(ctx, 0.14);
     whoosh2Source.loop = true;
     const whoosh2Filter = ctx.createBiquadFilter();
     whoosh2Filter.type = "bandpass";
-    whoosh2Filter.frequency.value = 620;
-    whoosh2Filter.Q.value = 0.7;
+    whoosh2Filter.frequency.value = 650;
+    whoosh2Filter.Q.value = 0.95;
+    const whoosh2SwishGain = ctx.createGain();
+    whoosh2SwishGain.gain.value = 0.2;
     const whoosh2Gain = ctx.createGain();
     whoosh2Gain.gain.value = 0.06;
     whoosh2Source.connect(whoosh2Filter);
-    whoosh2Filter.connect(whoosh2Gain);
+    whoosh2Filter.connect(whoosh2SwishGain);
+    whoosh2SwishGain.connect(whoosh2Gain);
     whoosh2Gain.connect(masterGain);
     whoosh2Source.start();
 
     const lfo2 = ctx.createOscillator();
     lfo2.type = "sine";
     lfo2.frequency.value = 0.52;
+    const lfo2Shaper = ctx.createWaveShaper();
+    lfo2Shaper.curve = makeSwishPulseCurve(1.9) as Float32Array<ArrayBuffer>;
     const lfo2Gain = ctx.createGain();
-    lfo2Gain.gain.value = 0.22;
-    lfo2.connect(lfo2Gain);
-    lfo2Gain.connect(whoosh2Gain.gain);
+    lfo2Gain.gain.value = 0.75;
+    lfo2.connect(lfo2Shaper);
+    lfo2Shaper.connect(lfo2Gain);
+    lfo2Gain.connect(whoosh2SwishGain.gain);
     lfo2.start();
 
     whoosh2Gain.gain.setTargetAtTime(WHOOSH2_BASE, ctx.currentTime, 0.9);
@@ -389,13 +433,17 @@ export function useWindSound() {
       windGain,
       whooshSource,
       whooshFilter,
+      whooshSwishGain,
       whooshGain,
       lfo,
+      lfoShaper,
       lfoGain,
       whoosh2Source,
       whoosh2Filter,
+      whoosh2SwishGain,
       whoosh2Gain,
       lfo2,
+      lfo2Shaper,
       lfo2Gain,
       rumbleOsc,
       rumbleOsc2,
