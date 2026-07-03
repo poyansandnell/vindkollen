@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Source, Layer, Popup, type MapRef } from "react-map-gl/mapbox";
-import type { MapLayerMouseEvent, GeoJSONSource, Expression } from "mapbox-gl";
+import type { MapLayerMouseEvent, GeoJSONSource, Expression, Map as MapboxMap } from "mapbox-gl";
 import MapboxMapView from "@/lib/mapProvider/MapboxMapView";
 import type { MapBounds, MapViewport } from "@/lib/mapProvider/types";
 import type { WindTurbine, WindProjectArea } from "@workspace/api-client-react";
@@ -10,10 +10,20 @@ import {
   projectAreasToPolygonGeoJson,
 } from "@/lib/turbineGeojson";
 import { statusLabel } from "@/lib/statusMeta";
+import {
+  useLineOfSightVisibility,
+  type SightTarget,
+  type SightVisibilityResult,
+} from "@/hooks/useLineOfSightVisibility";
 
 export interface MapSelection {
   kind: "turbine" | "projectArea";
   id: number;
+}
+
+export interface SightResultsInfo {
+  results: Map<string, SightVisibilityResult>;
+  computing: boolean;
 }
 
 interface MapCanvasProps {
@@ -25,6 +35,10 @@ interface MapCanvasProps {
   projectAreas: WindProjectArea[];
   focusPoint?: { lat: number; lng: number } | null;
   onSelect: (selection: MapSelection) => void;
+  sightMode: boolean;
+  sightObserver?: { lat: number; lng: number } | null;
+  onPlaceSightObserver: (point: { lat: number; lng: number }) => void;
+  onSightResultsChange: (info: SightResultsInfo) => void;
 }
 
 const CLUSTER_LAYER = "turbine-clusters";
@@ -81,6 +95,52 @@ const DISTANCE_TIER_TURBINE_RADIUS: Expression = [
   4,
 ];
 
+// Line-of-sight ring: highlights the estimated result of a chosen "sight from this spot" check.
+// sightStatus is only set on features when a sight observer point is active.
+const SIGHT_STROKE_COLOR: Expression = [
+  "match",
+  ["get", "sightStatus"],
+  "visible",
+  "#16a34a",
+  "obstructed",
+  "#78716c",
+  "#ffffff",
+];
+
+const SIGHT_STROKE_WIDTH: Expression = [
+  "match",
+  ["get", "sightStatus"],
+  "visible",
+  3.5,
+  "obstructed",
+  2,
+  1.5,
+];
+
+const SIGHT_OPACITY: Expression = ["match", ["get", "sightStatus"], "obstructed", 0.35, 1];
+
+function annotateSightStatus(
+  fc: GeoJSON.FeatureCollection,
+  results: Map<string, SightVisibilityResult>,
+  keyPrefix: "turbine" | "projectArea",
+): GeoJSON.FeatureCollection {
+  if (results.size === 0) return fc;
+  return {
+    ...fc,
+    features: fc.features.map((feature) => {
+      const id = (feature.properties as { id?: number } | null)?.id;
+      const result = id !== undefined ? results.get(`${keyPrefix}:${id}`) : undefined;
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          sightStatus: result?.status ?? null,
+        },
+      };
+    }),
+  };
+}
+
 export default function MapCanvas({
   mapboxToken,
   viewport,
@@ -90,8 +150,13 @@ export default function MapCanvas({
   projectAreas,
   focusPoint,
   onSelect,
+  sightMode,
+  sightObserver,
+  onPlaceSightObserver,
+  onSightResultsChange,
 }: MapCanvasProps) {
   const mapRef = useRef<MapRef>(null);
+  const [mapInstance, setMapInstance] = useState<MapboxMap | null>(null);
   const [hoverInfo, setHoverInfo] = useState<{
     lng: number;
     lat: number;
@@ -99,14 +164,53 @@ export default function MapCanvas({
     status: string;
   } | null>(null);
 
-  const turbineGeojson = useMemo(() => turbinesToGeoJson(turbines), [turbines]);
+  const sightTargets = useMemo<SightTarget[]>(() => {
+    const turbineTargets = turbines
+      .filter((t) => typeof t.lat === "number" && typeof t.lng === "number")
+      .map((t) => ({
+        key: `turbine:${t.id}`,
+        lat: t.lat as number,
+        lng: t.lng as number,
+        heightM: t.totalHeightM ?? null,
+      }));
+    const areaTargets = projectAreas
+      .filter((a) => typeof a.centerLat === "number" && typeof a.centerLng === "number")
+      .map((a) => ({
+        key: `projectArea:${a.id}`,
+        lat: a.centerLat as number,
+        lng: a.centerLng as number,
+        heightM: a.heightMaxM ?? null,
+      }));
+    return [...turbineTargets, ...areaTargets];
+  }, [turbines, projectAreas]);
+
+  const { results: sightResults, computing: sightComputing } = useLineOfSightVisibility(
+    mapInstance,
+    sightObserver ?? null,
+    sightTargets,
+  );
+
+  useEffect(() => {
+    onSightResultsChange({ results: sightResults, computing: sightComputing });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sightResults, sightComputing]);
+
+  const turbineGeojson = useMemo(
+    () => annotateSightStatus(turbinesToGeoJson(turbines), sightResults, "turbine"),
+    [turbines, sightResults],
+  );
   const projectPolygonGeojson = useMemo(
     () => projectAreasToPolygonGeoJson(projectAreas),
     [projectAreas],
   );
   const projectPointGeojson = useMemo(
-    () => projectAreasToPointGeoJson(projectAreas.filter((a) => !a.polygon)),
-    [projectAreas],
+    () =>
+      annotateSightStatus(
+        projectAreasToPointGeoJson(projectAreas.filter((a) => !a.polygon)),
+        sightResults,
+        "projectArea",
+      ),
+    [projectAreas, sightResults],
   );
 
   const interactiveLayerIds = [
@@ -117,6 +221,11 @@ export default function MapCanvas({
   ];
 
   const handleClick = (event: MapLayerMouseEvent) => {
+    if (sightMode) {
+      onPlaceSightObserver({ lat: event.lngLat.lat, lng: event.lngLat.lng });
+      return;
+    }
+
     const feature = event.features?.[0];
     if (!feature) return;
     const layerId = feature.layer?.id;
@@ -166,6 +275,7 @@ export default function MapCanvas({
       interactiveLayerIds={interactiveLayerIds}
       onMapClick={handleClick}
       onMapMouseMove={handleMouseMove}
+      onMapReady={setMapInstance}
     >
       <Source
         id="turbines"
@@ -211,9 +321,9 @@ export default function MapCanvas({
           paint={{
             "circle-color": ["get", "color"],
             "circle-radius": DISTANCE_TIER_TURBINE_RADIUS,
-            "circle-opacity": DISTANCE_TIER_OPACITY,
-            "circle-stroke-width": 1.5,
-            "circle-stroke-color": "#ffffff",
+            "circle-opacity": ["*", DISTANCE_TIER_OPACITY, SIGHT_OPACITY],
+            "circle-stroke-width": SIGHT_STROKE_WIDTH,
+            "circle-stroke-color": SIGHT_STROKE_COLOR,
             "circle-stroke-opacity": DISTANCE_TIER_OPACITY,
           }}
         />
@@ -255,17 +365,21 @@ export default function MapCanvas({
           paint={{
             "circle-color": ["get", "color"],
             "circle-radius": DISTANCE_TIER_POINT_RADIUS,
-            "circle-stroke-width": 2,
-            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": SIGHT_STROKE_WIDTH,
+            "circle-stroke-color": SIGHT_STROKE_COLOR,
             "circle-opacity": [
-              "case",
-              ["==", ["get", "distanceKm"], null],
-              0.85,
-              ["<", ["get", "distanceKm"], 20],
-              0.85,
-              ["<", ["get", "distanceKm"], 35],
-              0.55,
-              0.3,
+              "*",
+              [
+                "case",
+                ["==", ["get", "distanceKm"], null],
+                0.85,
+                ["<", ["get", "distanceKm"], 20],
+                0.85,
+                ["<", ["get", "distanceKm"], 35],
+                0.55,
+                0.3,
+              ],
+              SIGHT_OPACITY,
             ],
           }}
         />
@@ -292,6 +406,34 @@ export default function MapCanvas({
             paint={{
               "circle-color": "#ef4444",
               "circle-radius": 9,
+              "circle-stroke-width": 3,
+              "circle-stroke-color": "#ffffff",
+            }}
+          />
+        </Source>
+      )}
+
+      {sightObserver && (
+        <Source
+          id="sight-observer"
+          type="geojson"
+          data={{
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: { type: "Point", coordinates: [sightObserver.lng, sightObserver.lat] },
+                properties: {},
+              },
+            ],
+          }}
+        >
+          <Layer
+            id="sight-observer-layer"
+            type="circle"
+            paint={{
+              "circle-color": "#7c3aed",
+              "circle-radius": 10,
               "circle-stroke-width": 3,
               "circle-stroke-color": "#ffffff",
             }}

@@ -17,6 +17,7 @@ const MapboxMapView = forwardRef<MapRef, MapboxMapViewProps>(function MapboxMapV
     interactiveLayerIds,
     onMapClick,
     onMapMouseMove,
+    onMapReady,
     children,
   },
   ref,
@@ -31,6 +32,21 @@ const MapboxMapView = forwardRef<MapRef, MapboxMapViewProps>(function MapboxMapV
         maxLng: bounds.getEast(),
       });
     }
+  };
+
+  // Loads a bare-earth elevation source and enables terrain so map.queryTerrainElevation() can be
+  // used for the line-of-sight visibility check (see useLineOfSightVisibility). Exaggeration is
+  // left at real-world scale (1) so it has no visible effect on the flat, top-down map view.
+  const setupTerrain = (map: mapboxgl.Map) => {
+    if (!map.getSource("mapbox-dem")) {
+      map.addSource("mapbox-dem", {
+        type: "raster-dem",
+        url: "mapbox://mapbox.mapbox-terrain-dem-v1",
+        tileSize: 512,
+        maxzoom: 14,
+      });
+    }
+    map.setTerrain({ source: "mapbox-dem", exaggeration: 1 });
   };
 
   const [webglSupported, setWebglSupported] = useState(true);
@@ -67,7 +83,12 @@ const MapboxMapView = forwardRef<MapRef, MapboxMapViewProps>(function MapboxMapV
         onViewportChange({ latitude: center.lat, longitude: center.lng, zoom: map.getZoom() });
         emitBounds(map);
       }}
-      onLoad={(evt) => emitBounds(evt.target)}
+      onLoad={(evt) => {
+        const map = evt.target;
+        emitBounds(map);
+        setupTerrain(map);
+        onMapReady?.(map);
+      }}
     >
       {children}
     </Map>

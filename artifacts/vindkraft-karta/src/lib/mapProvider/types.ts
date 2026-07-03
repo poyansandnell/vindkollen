@@ -1,4 +1,5 @@
 import type { MapLayerMouseEvent } from "mapbox-gl";
+import type mapboxgl from "mapbox-gl";
 
 export interface MapBounds {
   minLat: number;
@@ -20,5 +21,7 @@ export interface MapProviderProps {
   interactiveLayerIds?: string[];
   onMapClick?: (event: MapLayerMouseEvent) => void;
   onMapMouseMove?: (event: MapLayerMouseEvent) => void;
+  /** Fired once after the map (and its terrain DEM source) has finished loading. */
+  onMapReady?: (map: mapboxgl.Map) => void;
   children?: React.ReactNode;
 }

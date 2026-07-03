@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, ListOrdered } from "lucide-react";
+import { Loader2, ListOrdered, Crosshair } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import MapCanvas, { type MapSelection } from "@/components/MapCanvas";
+import MapCanvas, { type MapSelection, type SightResultsInfo } from "@/components/MapCanvas";
 import SearchBox from "@/components/SearchBox";
 import FilterBar, { type FilterState } from "@/components/FilterBar";
 import DetailPanel from "@/components/DetailPanel";
 import BestPlacesView from "@/components/BestPlacesView";
+import SightLinePanel, { type SightSummary } from "@/components/SightLinePanel";
 import { useGeolocation, type GeoPoint } from "@/hooks/useGeolocation";
 import { getMapboxToken } from "@/lib/config";
 import type { MapBounds, MapViewport } from "@/lib/mapProvider/types";
@@ -20,6 +21,8 @@ import type { UseQueryOptions } from "@tanstack/react-query";
 
 const SWEDEN_VIEWPORT: MapViewport = { latitude: 62.5, longitude: 15.5, zoom: 4.3 };
 const RADIUS_ZOOM = 10;
+const EMPTY_TURBINES: WindTurbine[] = [];
+const EMPTY_PROJECT_AREAS: WindProjectArea[] = [];
 
 export default function Home() {
   const [mapboxToken, setMapboxToken] = useState<string | null | undefined>(undefined);
@@ -29,6 +32,12 @@ export default function Home() {
   const [flyToken, setFlyToken] = useState(0);
   const [selection, setSelection] = useState<MapSelection | null>(null);
   const [showBestPlaces, setShowBestPlaces] = useState(false);
+  const [sightMode, setSightMode] = useState(false);
+  const [sightObserver, setSightObserver] = useState<GeoPoint | null>(null);
+  const [sightResultsInfo, setSightResultsInfo] = useState<SightResultsInfo>({
+    results: new Map(),
+    computing: false,
+  });
   const [filters, setFilters] = useState<FilterState>({
     statuses: ACTIVE_STATUSES,
     showTurbines: true,
@@ -50,6 +59,22 @@ export default function Home() {
   };
 
   const { locating, error: locateError, locate } = useGeolocation(handleLocated);
+
+  const handleToggleSightMode = () => {
+    if (sightMode) {
+      setSightMode(false);
+      return;
+    }
+    setSightObserver(null);
+    setSelection(null);
+    setSightMode(true);
+  };
+
+  const handlePlaceSightObserver = (point: { lat: number; lng: number }) => {
+    setSightObserver(point);
+    setSightMode(false);
+    setSelection(null);
+  };
 
   const statusParam = filters.statuses.length > 0 ? filters.statuses.join(",") : "__none__";
 
@@ -88,13 +113,53 @@ export default function Home() {
     } as UseQueryOptions<WindProjectArea[]>,
   });
 
-  const turbines = filters.showTurbines ? (turbinesQuery.data ?? []) : [];
-  const projectAreas = showAnyAreas
-    ? (projectAreasQuery.data ?? []).filter((a) =>
-        a.category === "offshore" ? filters.showOffshoreAreas : filters.showOnshoreAreas,
-      )
-    : [];
+  const turbines = useMemo<WindTurbine[]>(
+    () => (filters.showTurbines ? (turbinesQuery.data ?? EMPTY_TURBINES) : EMPTY_TURBINES),
+    [filters.showTurbines, turbinesQuery.data],
+  );
+  const projectAreas = useMemo<WindProjectArea[]>(
+    () =>
+      showAnyAreas
+        ? (projectAreasQuery.data ?? EMPTY_PROJECT_AREAS).filter((a) =>
+            a.category === "offshore" ? filters.showOffshoreAreas : filters.showOnshoreAreas,
+          )
+        : EMPTY_PROJECT_AREAS,
+    [
+      showAnyAreas,
+      projectAreasQuery.data,
+      filters.showOffshoreAreas,
+      filters.showOnshoreAreas,
+    ],
+  );
   const isFetching = turbinesQuery.isFetching || projectAreasQuery.isFetching;
+
+  const sightSummary = useMemo<SightSummary | null>(() => {
+    if (!sightObserver) return null;
+    let visible = 0;
+    let obstructed = 0;
+    let unknown = 0;
+    const visibleList: SightSummary["visibleList"] = [];
+
+    sightResultsInfo.results.forEach((result, key) => {
+      if (result.status === "visible") visible += 1;
+      else if (result.status === "obstructed") obstructed += 1;
+      else unknown += 1;
+
+      if (result.status === "visible") {
+        const [kind, idStr] = key.split(":") as ["turbine" | "projectArea", string];
+        const id = Number(idStr);
+        const name =
+          kind === "turbine"
+            ? turbines.find((t) => t.id === id)?.name
+            : projectAreas.find((a) => a.id === id)?.name;
+        if (name) visibleList.push({ key, name, distanceKm: result.distanceKm, kind });
+      }
+    });
+
+    visibleList.sort((a, b) => a.distanceKm - b.distanceKm);
+
+    return { visible, obstructed, unknown, computing: sightResultsInfo.computing, visibleList };
+  }, [sightObserver, sightResultsInfo, turbines, projectAreas]);
 
   if (mapboxToken === undefined) {
     return (
@@ -127,6 +192,10 @@ export default function Home() {
         projectAreas={projectAreas}
         focusPoint={focusPoint}
         onSelect={setSelection}
+        sightMode={sightMode}
+        sightObserver={sightObserver}
+        onPlaceSightObserver={handlePlaceSightObserver}
+        onSightResultsChange={setSightResultsInfo}
       />
 
       <div className="absolute top-3 left-3 right-3 sm:right-auto flex flex-col gap-2 z-10">
@@ -147,6 +216,16 @@ export default function Home() {
             <ListOrdered className="h-4 w-4 mr-1" />
             Bästa orter
           </Button>
+          <Button
+            variant={sightMode ? "default" : "secondary"}
+            size="sm"
+            className="shrink-0 shadow-sm"
+            onClick={handleToggleSightMode}
+            data-testid="button-toggle-sight-mode"
+          >
+            <Crosshair className="h-4 w-4 mr-1" />
+            {sightMode ? "Klicka på kartan…" : "Sikt från plats"}
+          </Button>
         </div>
         <FilterBar filters={filters} onChange={setFilters} hasFocusPoint={!!focusPoint} />
         {locateError && (
@@ -162,22 +241,39 @@ export default function Home() {
         </div>
       )}
 
-      {focusPoint && (
-        <div className="absolute bottom-3 left-3 z-10 bg-background/95 rounded-md px-3 py-2 shadow-sm text-sm">
-          <span className="font-medium">{focusPoint.label ?? "Vald plats"}</span>
-          <button
-            className="ml-2 text-xs text-primary underline"
-            onClick={() => {
-              setFocusPoint(null);
-              setViewport(SWEDEN_VIEWPORT);
-              setFlyToken((n) => n + 1);
+      <div className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-2">
+        {focusPoint && (
+          <div className="bg-background/95 rounded-md px-3 py-2 shadow-sm text-sm">
+            <span className="font-medium">{focusPoint.label ?? "Vald plats"}</span>
+            <button
+              className="ml-2 text-xs text-primary underline"
+              onClick={() => {
+                setFocusPoint(null);
+                setViewport(SWEDEN_VIEWPORT);
+                setFlyToken((n) => n + 1);
+              }}
+              data-testid="button-clear-focus"
+            >
+              Rensa
+            </button>
+          </div>
+        )}
+
+        {sightSummary && (
+          <SightLinePanel
+            summary={sightSummary}
+            onClear={() => {
+              setSightObserver(null);
+              setSightMode(false);
             }}
-            data-testid="button-clear-focus"
-          >
-            Rensa
-          </button>
-        </div>
-      )}
+            onReselect={() => {
+              setSightObserver(null);
+              setSelection(null);
+              setSightMode(true);
+            }}
+          />
+        )}
+      </div>
 
       {selection && (
         <DetailPanel selection={selection} onClose={() => setSelection(null)} focusPoint={focusPoint} />

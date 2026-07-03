@@ -15,3 +15,4 @@
 - [Uniform dB shift doesn't change contributing-count](uniform-db-shift-contributing-count.md) — a "within N dB of loudest" test is invariant to a uniform attenuation; add an absolute audibility floor too.
 - [TFJS + deeplab peer version pin](tfjs-deeplab-tfjs3-peer-pin.md) — `@tensorflow-models/deeplab` needs `@tensorflow/tfjs` pinned to 3.x, not the latest 4.x meta-package.
 - [Sky heuristic & ML disable tuning](sky-heuristic-and-ml-disable-tuning.md) — brightness/texture heuristics false-positive on bright walls if downsampled too far; aggressive ML slow-thresholds permanently disable heavy models within seconds of cold-start.
+- [Child-to-parent effect feedback loop](child-to-parent-effect-feedback-loop.md) — lifting child state to a parent callback loops infinitely if any effect dependency traces back to an unmemoized `data ?? []` prop.
