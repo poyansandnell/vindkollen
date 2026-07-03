@@ -59,6 +59,40 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,ico}"],
         navigateFallbackDenylist: [/^\/api/],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            urlPattern: ({ url, request }) =>
+              request.method === "GET" && url.pathname.startsWith("/api/wind/"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "wind-api-cache",
+              networkTimeoutSeconds: 4,
+              expiration: {
+                maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 14,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: ({ url, request }) =>
+              request.method === "GET" && url.pathname.startsWith("/api/config"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "config-api-cache",
+              networkTimeoutSeconds: 4,
+              expiration: {
+                maxEntries: 5,
+                maxAgeSeconds: 60 * 60 * 24 * 14,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
       },
       devOptions: {
         enabled: false,

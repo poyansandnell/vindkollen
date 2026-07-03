@@ -8,7 +8,9 @@ import DetailPanel from "@/components/DetailPanel";
 import BestPlacesView from "@/components/BestPlacesView";
 import SightLinePanel, { type SightSummary } from "@/components/SightLinePanel";
 import InstallPrompt from "@/components/InstallPrompt";
+import { WifiOff } from "lucide-react";
 import { useGeolocation, type GeoPoint } from "@/hooks/useGeolocation";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { getMapboxToken } from "@/lib/config";
 import type { MapBounds, MapViewport } from "@/lib/mapProvider/types";
 import { ACTIVE_STATUSES } from "@/lib/statusMeta";
@@ -133,6 +135,9 @@ export default function Home() {
     ],
   );
   const isFetching = turbinesQuery.isFetching || projectAreasQuery.isFetching;
+  const isOnline = useOnlineStatus();
+  const hasCachedData = turbines.length > 0 || projectAreas.length > 0;
+  const showOfflineBanner = !isOnline && (hasCachedData || turbinesQuery.isError || projectAreasQuery.isError);
 
   const sightSummary = useMemo<SightSummary | null>(() => {
     if (!sightObserver) return null;
@@ -239,6 +244,16 @@ export default function Home() {
       {isFetching && (
         <div className="absolute top-3 right-3 z-10 bg-background/90 rounded-full p-2 shadow-sm">
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {showOfflineBanner && (
+        <div
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-amber-500/95 text-amber-950 text-xs font-medium rounded-full px-3 py-1.5 shadow-sm"
+          data-testid="banner-offline"
+        >
+          <WifiOff className="h-3.5 w-3.5" />
+          {hasCachedData ? "Ingen anslutning – visar sparad data" : "Ingen anslutning"}
         </div>
       )}
 
