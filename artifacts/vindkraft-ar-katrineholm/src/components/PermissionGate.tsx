@@ -92,11 +92,19 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
           Försvarsmakten. Underlaget avser Ericsbergs Vind 1–5 i Katrineholms kommun och omfattar totalt 29
           vindkraftverk med maximal totalhöjd 250 meter.
         </p>
+        {/*
+          Ingen `download`-attribut här: den ignoreras eller misslyckas tyst
+          i iOS Safari, särskilt när appen körs installerad som PWA i
+          fristående läge (ingen nedladdningshanterare att spara till).
+          `target="_blank"` öppnar istället PDF:en i webbläsarens egen
+          visning på alla plattformar, där användaren kan spara/dela den via
+          det inbyggda dela-/nedladdningsverktyget — fungerar konsekvent på
+          både mobil och dator.
+        */}
         <a
           href="/samradsyttrande-forsvarsmakten.pdf"
           target="_blank"
           rel="noopener noreferrer"
-          download="Ericsbergs-samradsyttrande-forsvarsmakten.pdf"
           className="mx-auto flex w-fit items-center gap-1.5 rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 px-4 py-2 text-[11px] font-medium text-[#FFB347] transition hover:bg-[#FF8B01]/20"
         >
           📄 Visa/ladda ner underlaget (PDF)

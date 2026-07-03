@@ -12,14 +12,17 @@ import { PermissionGate } from "@/components/PermissionGate";
 import { InfoPanel } from "@/components/InfoPanel";
 import { VisualizationControls } from "@/components/VisualizationControls";
 import { SoundLevelPanel, SoundLevelBadge } from "@/components/SoundLevelPanel";
+import { NoiseImpactBadge, NoiseImpactPanel } from "@/components/NoiseImpactMonitor";
 import { PhotoMontageModal } from "@/components/PhotoMontageModal";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { TURBINES } from "@/lib/turbines";
-import { distanceMeters, isNightTime } from "@/lib/geo";
+import { distanceMeters, bearingDegrees, isNightTime } from "@/lib/geo";
 import { swerefToWgs84 } from "@/lib/sweref";
 import { getBladeRpm } from "@/lib/turbineAnimation";
 import { estimateSoundLevel } from "@/lib/soundLevel";
+import { estimateNoiseImpact } from "@/lib/noiseImpact";
+import { useWindDirection } from "@/hooks/useWindDirection";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
 
 const PHOTO_WATERMARK_TEXT = "Katrineholm FRAMÅT – Vindkraft AR";
@@ -36,6 +39,7 @@ export default function Home() {
   const [showControls, setShowControls] = useState(false);
   const [calibrated, setCalibrated] = useState(false);
   const [showSoundLevel, setShowSoundLevel] = useState(true);
+  const [showNoiseImpact, setShowNoiseImpact] = useState(false);
 
   const [sunMode, setSunMode] = useState<SunMode>("current");
   const [realScale, setRealScale] = useState(false);
@@ -83,6 +87,50 @@ export default function Home() {
     });
     return estimateSoundLevel(distances, sky.outdoorConfidence);
   }, [geo.lat, geo.lon, sky.outdoorConfidence]);
+
+  // Vindriktning (informativ, om tillgänglig) för infraljud-/bullermonitorn
+  // nedan — hämtas från ett fritt väder-API, degraderar tyst till "okänd"
+  // om nätverket saknas.
+  const windDirection = useWindDirection(geo.lat, geo.lon);
+
+  // Exponeringstid: hur länge användaren sammanhängande har stått i AR-vyn
+  // med GPS-fix, för att låta monitorn väga in längre vistelser. Nollställs
+  // om GPS-fixet tappas och sedan återfås (ny "session" på platsen).
+  const exposureStartRef = useRef<number | null>(null);
+  const [exposureNowTick, setExposureNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (geo.lat === null || geo.lon === null) {
+      exposureStartRef.current = null;
+      return;
+    }
+    if (exposureStartRef.current === null) {
+      exposureStartRef.current = Date.now();
+    }
+    const interval = window.setInterval(() => setExposureNowTick(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, [geo.lat, geo.lon]);
+
+  const noiseImpact = useMemo(() => {
+    const nearest = TURBINES.reduce<{ dist: number; bearing: number } | null>((closest, t) => {
+      if (geo.lat === null || geo.lon === null) return closest;
+      const { lat, lon } = swerefToWgs84(t.easting, t.northing);
+      const dist = distanceMeters(geo.lat, geo.lon, lat, lon);
+      if (!closest || dist < closest.dist) {
+        return { dist, bearing: bearingDegrees(geo.lat, geo.lon, lat, lon) };
+      }
+      return closest;
+    }, null);
+
+    const exposureSeconds =
+      exposureStartRef.current !== null ? (exposureNowTick - exposureStartRef.current) / 1000 : 0;
+
+    return estimateNoiseImpact({
+      estimate: soundLevelEstimate,
+      bearingToNearestDeg: nearest?.bearing ?? null,
+      windFromDeg: windDirection.windFromDeg,
+      exposureSeconds,
+    });
+  }, [soundLevelEstimate, geo.lat, geo.lon, windDirection.windFromDeg, exposureNowTick]);
 
   // Uppdatera vindljudets volym/svischtakt när GPS-position ändras. Alla
   // verks avstånd skickas med (inte bara det närmaste) så att flera
@@ -344,6 +392,11 @@ export default function Home() {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <SoundLevelBadge estimate={soundLevelEstimate} indoors={sky.ready && sky.indoors} />
+                <NoiseImpactBadge
+                  result={noiseImpact}
+                  expanded={showNoiseImpact}
+                  onToggle={() => setShowNoiseImpact((v) => !v)}
+                />
                 <button
                   onClick={() => setShowControls(true)}
                   aria-pressed={showControls}
@@ -400,6 +453,9 @@ export default function Home() {
                 indoors={sky.ready && sky.indoors}
                 onClose={() => setShowSoundLevel(false)}
               />
+            )}
+            {ready && showNoiseImpact && (
+              <NoiseImpactPanel result={noiseImpact} onClose={() => setShowNoiseImpact(false)} />
             )}
             <button
               onClick={() => setShowPetition(true)}
