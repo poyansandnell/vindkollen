@@ -136,8 +136,45 @@ export function dbaToGain(totalDba: number): number {
  * hela utjämningsfönstret (flera sekunder) innan en växling av väljaren
  * faktiskt hörs i det spelade ljudet, vilket var den rapporterade buggen
  * ("Ljud inne" uppdaterade bara texten/panelen, inte ljudmotorn).
+ *
+ * Används ENDAST för den visade dBA-siffran i panelen — se
+ * `indoorGainMultiplier`/`applyIndoorGain` nedan för hur den faktiska
+ * ljudvolymen dämpas. De två måste hållas separata (se motivering där) men
+ * representerar matematiskt samma -35 dB-dämpning.
  */
 export function applyIndoorAttenuation(totalDba: number, indoor: boolean): number {
   if (!Number.isFinite(totalDba)) return totalDba;
   return indoor ? totalDba - MAX_INDOOR_ATTENUATION_DBA : totalDba;
+}
+
+/**
+ * Korrekt dB→linjär-omvandling av `MAX_INDOOR_ATTENUATION_DBA` (en minskning
+ * på X dB motsvarar en multiplikation med 10^(-X/20) av den linjära
+ * amplituden/gainen).
+ *
+ * VIKTIGT: den faktiska ljudvolymen får INTE räknas ut genom att först dra av
+ * `MAX_INDOOR_ATTENUATION_DBA` från totalDba och sedan köra resultatet genom
+ * `dbaToGain` (dvs. `dbaToGain(applyIndoorAttenuation(totalDba, true))`).
+ * `dbaToGain` normaliserar linjärt mellan `AUDIBILITY_FLOOR_DBA` (20) och
+ * `REFERENCE_MAX_DBA` (55) och klipper allt under golvet till exakt 0 — och
+ * eftersom `MAX_INDOOR_ATTENUATION_DBA` (35) nästan motsvarar HELA det
+ * spannet, klipptes "Ljud inne"-volymen till exakt 0 för praktiskt taget
+ * alla realistiska utomhusnivåer (~20–55 dBA), OAVSETT hur hög den
+ * ursprungliga utomhusnivån faktiskt var. När den beräknade utomhusnivån
+ * redan låg nära golvet (vanligt på de faktiska GPS-avstånden i
+ * Katrineholm, flera km från Länsterberget) var resultatet redan nästan 0,
+ * så växlingen till "Ljud inne" gav ingen hörbar skillnad alls — precis den
+ * rapporterade buggen ("volymen ändras inte alls").
+ *
+ * Genom att i stället multiplicera den REDAN beräknade (icke-dämpade)
+ * utomhusgainen direkt med denna faktor garanteras en konstant, hörbar,
+ * proportionell sänkning (~-35 dB) oavsett hur tyst eller hög
+ * utomhusnivån råkar vara — aldrig beroende av var den ligger relativt
+ * `dbaToGain`s golv/tak.
+ */
+export const INDOOR_SOUND_GAIN_MULTIPLIER = 10 ** (-MAX_INDOOR_ATTENUATION_DBA / 20);
+
+/** Applicerar `INDOOR_SOUND_GAIN_MULTIPLIER` direkt på en redan beräknad linjär gain (0..1). */
+export function applyIndoorGain(gain: number, indoor: boolean): number {
+  return indoor ? gain * INDOOR_SOUND_GAIN_MULTIPLIER : gain;
 }

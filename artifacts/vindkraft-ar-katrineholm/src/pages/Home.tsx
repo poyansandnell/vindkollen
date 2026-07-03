@@ -24,7 +24,7 @@ import { TURBINES, type TurbineSweref } from "@/lib/turbines";
 import { distanceMeters, bearingDegrees, isNightTime } from "@/lib/geo";
 import { swerefToWgs84, wgs84ToSweref } from "@/lib/sweref";
 import { getBladeRpm } from "@/lib/turbineAnimation";
-import { estimateSoundLevel, dbaToGain, applyIndoorAttenuation } from "@/lib/soundLevel";
+import { estimateSoundLevel, dbaToGain, applyIndoorAttenuation, applyIndoorGain } from "@/lib/soundLevel";
 import { estimateNoiseImpact } from "@/lib/noiseImpact";
 import { useWindDirection } from "@/hooks/useWindDirection";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
@@ -325,11 +325,20 @@ export default function Home() {
   }, [activeTurbines, soundLevelEstimate, geo.lat, geo.lon, windDirection.windFromDeg, windDirection.windSpeedMs, exposureNowTick]);
 
   // Uppdatera vindljudets volym/svischtakt när GPS-position eller den
-  // beräknade ljudnivån ändras. Volymen följer nu KONTINUERLIGT den redan
-  // beräknade (och ev. "Ljud inne"-dämpade) `soundLevelEstimate.totalDba`
-  // via `dbaToGain` — inte en egen, fristående avståndskurva — så att
-  // ljudnivåpanelen och det faktiska ljudet alltid stämmer överens.
-  const windDbaGain = useMemo(() => dbaToGain(soundLevelEstimate.totalDba), [soundLevelEstimate.totalDba]);
+  // beräknade ljudnivån ändras. Utomhusgainen räknas fram från den
+  // icke-dämpade `smoothedOutdoorDba` (exakt samma tal som ligger bakom
+  // panelens "ute"-siffra), och "Ljud inne" appliceras sedan som en direkt,
+  // garanterad multiplikator (`applyIndoorGain`) på den REDAN beräknade
+  // gainen — INTE genom att köra en redan -35 dB-dämpad dBA-siffra genom
+  // `dbaToGain`s golv/tak-klippning igen. Se `applyIndoorGain`s jsdoc: det
+  // gamla sättet klippte "Ljud inne"-volymen till exakt 0 för i praktiken
+  // alla realistiska utomhusnivåer, så om utomhusnivån redan låg nära
+  // `dbaToGain`s golv (vanligt på riktiga GPS-avstånd i Katrineholm) gav
+  // växlingen ingen hörbar skillnad alls — den rapporterade buggen.
+  const windDbaGain = useMemo(
+    () => applyIndoorGain(dbaToGain(smoothedOutdoorDba), soundEnvironment === "inne"),
+    [smoothedOutdoorDba, soundEnvironment],
+  );
   useEffect(() => {
     if (!wind.playing) return;
     wind.updateProximity(windDbaGain, AVG_RPM);
