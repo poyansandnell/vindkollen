@@ -52,7 +52,11 @@ export interface SkyDetectionState {
 
 const GRID_COLS = 12;
 const GRID_ROWS = 8;
-const CELL_PX = 3;
+// 8x8 pixlar per cell (inte 3x3) — ger textur-signalen (`stdDev`) faktiskt
+// något att mäta. Med bara 3x3 källpixlar nedskalas nästan all textur bort
+// redan innan klassificeringen, vilket gjorde att en jämnt målad, ljus
+// innervägg/innertak lätt missklassades som himmel (se INDOOR_ENTER/EXIT).
+const CELL_PX = 8;
 const CANVAS_W = GRID_COLS * CELL_PX;
 const CANVAS_H = GRID_ROWS * CELL_PX;
 const SAMPLE_INTERVAL_MS = 350;
@@ -69,10 +73,17 @@ const INDOOR_EXIT_THRESHOLD = 0.32;
 // Om en enskild ML-segmentering tar längre än detta anses den för långsam
 // för realtidsbruk på den här enheten. Efter `ML_MAX_SLOW_SAMPLES` sådana
 // (icke nödvändigtvis i följd) stängs ML-vägen av permanent för sessionen
-// och den enkla, alltid-snabba heuristiken används istället — appen ska
-// aldrig hänga sig eller tappa bildfrekvens på grund av segmenteringen.
-const ML_SLOW_MS = 900;
-const ML_MAX_SLOW_SAMPLES = 3;
+// och verken förblir alltid synliga istället — appen ska aldrig hänga sig
+// eller tappa bildfrekvens på grund av segmenteringen.
+//
+// DeepLab är en tung modell för mobilwebbläsare: ett par sekunder per
+// bildruta på ett mellanklass-mobilnät är fortfarande fullt användbart för
+// en långsamt uppdaterad ocklusionsmask (till skillnad från t.ex. kamerans
+// egna 30/60 fps-krav) — sätt tröskeln därefter, annars stängs ML av
+// permanent inom någon sekund på de flesta telefoner och ocklusionen
+// fungerar i praktiken aldrig.
+const ML_SLOW_MS = 3000;
+const ML_MAX_SLOW_SAMPLES = 6;
 
 /**
  * Klassificerar en rutnätscell som "himmel-lik" baserat på ljusstyrka,
@@ -125,9 +136,15 @@ function classifyCell(pixels: Uint8ClampedArray, col: number, row: number): bool
   const minC = Math.min(avgR, avgG, avgB);
   const sat = maxC === 0 ? 0 : (maxC - minC) / maxC;
   const blueish = avgB >= avgR - 6 && avgB >= avgG - 10;
-  const bright = avgLum > 120;
-  const lowTexture = stdDev < 20;
-  return bright && lowTexture && (sat < 0.22 || (blueish && avgB > avgR + 8));
+  // Något strängare gränser än ursprungligen: en ljust upplyst, jämnt
+  // målad innervägg/innertak kunde annars lätt passera alla tre testen
+  // (tillräckligt ljus, tillräckligt "slät" efter nedskalning, och
+  // tillräckligt neutral/ofärgad) och felklassas som himmel. Verklig
+  // himmel — även mulen — är typiskt betydligt ljusare än normal
+  // rumsbelysning träffar en vägg med.
+  const bright = avgLum > 150;
+  const lowTexture = stdDev < 14;
+  return bright && lowTexture && (sat < 0.18 || (blueish && avgB > avgR + 8));
 }
 
 /**
@@ -185,6 +202,11 @@ export function useSkyDetection(
   const mlStateRef = useRef<"loading" | "ready" | "disabled">("loading");
   const mlBusyRef = useRef(false);
   const mlSlowCountRef = useRef(0);
+  // Den allra första ML-inferensen efter att modellen blivit redo måste
+  // kompilera WebGL-shaders m.m. och är därför alltid betydligt långsammare
+  // än stationärt läge — räknas inte mot slow-tröskeln, annars riskerar en
+  // enda kall uppstart att bidra i onödan till en permanent avstängning.
+  const mlWarmedUpRef = useRef(false);
 
   // Stabil funktionsreferens — läser alltid det senaste rutnätet via
   // `gridRef` (oavsett om det just nu kommer från ML-segmenteringen eller
@@ -292,11 +314,13 @@ export function useSkyDetection(
       if (!mlCtx) return;
       mlCtx.drawImage(video, 0, 0, mlCanvas.width, mlCanvas.height);
 
+      const isWarmup = !mlWarmedUpRef.current;
       const start = performance.now();
       try {
         const { grid, skyRatio } = await segmentSkyGrid(model, mlCanvas, GRID_COLS, GRID_ROWS);
         const elapsed = performance.now() - start;
-        if (elapsed > ML_SLOW_MS) {
+        mlWarmedUpRef.current = true;
+        if (elapsed > ML_SLOW_MS && !isWarmup) {
           mlSlowCountRef.current += 1;
           if (mlSlowCountRef.current >= ML_MAX_SLOW_SAMPLES) {
             mlStateRef.current = "disabled";
@@ -314,9 +338,13 @@ export function useSkyDetection(
         // En enskild bildruta misslyckades (t.ex. WebGL-kontext tillfälligt
         // upptagen) — räkna som en "långsam"/misslyckad sampling istället för
         // att krascha; efter tillräckligt många faller vi tillbaka permanent.
-        mlSlowCountRef.current += 1;
-        if (mlSlowCountRef.current >= ML_MAX_SLOW_SAMPLES) {
-          mlStateRef.current = "disabled";
+        // Ett fel under själva uppstarten (t.ex. shader-kompilering) räknas
+        // inte heller mot tröskeln.
+        if (!isWarmup) {
+          mlSlowCountRef.current += 1;
+          if (mlSlowCountRef.current >= ML_MAX_SLOW_SAMPLES) {
+            mlStateRef.current = "disabled";
+          }
         }
       }
       // Om DENNA sampling (lyckad eller ej) var den som korsade
