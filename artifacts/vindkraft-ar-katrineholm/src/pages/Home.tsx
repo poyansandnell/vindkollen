@@ -122,6 +122,7 @@ export default function Home() {
   const geo = useGeolocation(started);
   const orientation = useDeviceOrientation(started);
   const camera = useCameraStream(started);
+  const ready = started && geo.lat !== null && geo.lon !== null && orientation.hasFix && camera.stream;
   const wind = useWindSound();
   // Kamerabaserad himmel/inomhus-heuristik (se `useSkyDetection`s jsdoc för
   // begränsningar) — styr både AR-verkens synlighet (via `isPointSky`,
@@ -173,10 +174,23 @@ export default function Home() {
   // Dölj verk + visa "Gå utomhus" antingen vid indexets "hide"-nivå (<40%)
   // eller om himmelsandelen i bild är för låg — samma stora, prominenta
   // overlay som tidigare, men nu även styrd av det sammanvägda indexet.
-  const shouldHide = mlActive && sky.ready && (confidence.tier === "hide" || !hasEnoughSky);
+  //
+  // VIKTIGT: kräver `ready` (dvs. GPS + kompass + kamera har ALLA redan fått
+  // en fix). Overlayen visades tidigare oberoende av `ready`, vilket gjorde
+  // att den kunde täcka HELA skärmen — inklusive "Hämtar GPS-position…"-
+  // spinnern och ett eventuellt GPS-felmeddelande med "Försök igen"-knapp —
+  // så fort ML-modellen hann ladda och ge en låg himmelsandel (t.ex. om
+  // telefonen hålls nedåt/inomhus bara under uppstarten, innan GPS ens
+  // hunnit svara). Användaren upplevde detta som att "allt stängs av" efter
+  // några sekunder, som om GPS:en hade kraschat — i själva verket väntade
+  // GPS:en fortfarande i bakgrunden, dold bakom den svarta overlayen. Genom
+  // att kräva `ready` får loading-/felstaten för GPS/kompass/kamera alltid
+  // synas färdigt innan denna miljö-overlay ens kan aktiveras.
+  const shouldHide = ready && mlActive && sky.ready && (confidence.tier === "hide" || !hasEnoughSky);
   // 40-70%: be användaren rikta kameran mot himlen istället för att bara
-  // dölja tyst — en mellanliggande, mindre alarmerande banner.
-  const shouldAskAimAtSky = mlActive && sky.ready && !shouldHide && confidence.tier === "aim";
+  // dölja tyst — en mellanliggande, mindre alarmerande banner. Samma
+  // `ready`-krav som ovan, av samma anledning.
+  const shouldAskAimAtSky = ready && mlActive && sky.ready && !shouldHide && confidence.tier === "aim";
 
   const errors = useMemo(
     () => [geo.error, orientation.error, camera.error].filter((e): e is string => Boolean(e)),
@@ -424,8 +438,6 @@ export default function Home() {
     }
   }, []);
 
-  const ready = started && geo.lat !== null && geo.lon !== null && orientation.hasFix && camera.stream;
-
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#090909] text-white">
       {!started && (
@@ -503,15 +515,16 @@ export default function Home() {
             </div>
           )}
 
-          {/* "Gå utomhus"-overlay: visas oberoende av `ready` (dvs. även
-              medan GPS/kompass fortfarande söker fix) så fort kamerabilden
-              tolkas som en inomhusmiljö — turbinerna tonas då ändå bort i
-              AR-vyn (se ARScene/`isPointSky`), så detta ger en tydlig, stor
-              förklaring istället för en till synes tom/livlös vy. Ljudet
-              styrs numera separat av den explicita ute/inne-väljaren, inte
-              av detta automatiska kameraläge. Ligger på ett högre z-index
-              än både topp- och bottenraden (z-20) så att meddelandet ALDRIG
-              hamnar bakom knappar/paneler. */}
+          {/* "Gå utomhus"-overlay: visas bara EFTER att `ready` är sant
+              (dvs. GPS/kompass/kamera har redan fått fix) — se `shouldHide`s
+              jsdoc ovan för varför. Så fort kamerabilden tolkas som en
+              inomhusmiljö tonas turbinerna ändå bort i AR-vyn (se
+              ARScene/`isPointSky`), så detta ger en tydlig, stor förklaring
+              istället för en till synes tom/livlös vy. Ljudet styrs numera
+              separat av den explicita ute/inne-väljaren, inte av detta
+              automatiska kameraläge. Ligger på ett högre z-index än både
+              topp- och bottenraden (z-20) så att meddelandet ALDRIG hamnar
+              bakom knappar/paneler. */}
           {started && shouldHide && (
             <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/85 px-8 text-center">
               <span className="animate-pulse text-6xl">🏠➡️🌤️</span>

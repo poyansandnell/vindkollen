@@ -23,3 +23,4 @@
 - [Deployment type is not code-configurable](replit-deployment-type-not-code-configurable.md) — autoscale/vm/scheduled is a Deployments-pane setting; build an in-process scheduler as a default and document the Scheduled Deployment alternative for autoscale prod.
 - [Per-pixel occlusion via onBeforeCompile](per-pixel-occlusion-shader-injection.md) — mask only the covered part of a 3D mesh (not the whole object) by sampling a shared screen-space grid texture per-fragment in a shader, not per-object opacity toggling.
 - [ML inference fallback reliability](ml-inference-fallback-reliability.md) — bound warm-up exemptions by attempt count not success; a `Promise.race` timeout doesn't cancel the underlying work, so stale results can stack up.
+- [Full-screen overlay masks loading state](full-screen-overlay-masks-loading-state.md) — an env-quality overlay independent of the primary `ready` flag can cover a working feature's loading/error UI, causing misreported bugs.
