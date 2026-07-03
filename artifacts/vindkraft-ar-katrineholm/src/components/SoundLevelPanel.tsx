@@ -6,7 +6,7 @@ import { SEVERITY_COLORS, soundLevelSeverity, SOUND_LEVEL_DISCLAIMER, type Sound
  * vindkraftverk. Går inte att stänga — oberoende av om den större
  * `SoundLevelPanel` är öppen/stängd, syns denna badge i ett hörn av AR-vyn.
  */
-export function SoundLevelBadge({ estimate }: { estimate: SoundLevelEstimate }) {
+export function SoundLevelBadge({ estimate, indoors = false }: { estimate: SoundLevelEstimate; indoors?: boolean }) {
   const hasSignal = Number.isFinite(estimate.totalDba);
   const severity = hasSignal ? soundLevelSeverity(estimate.totalDba) : "green";
   const colors = SEVERITY_COLORS[severity];
@@ -19,6 +19,7 @@ export function SoundLevelBadge({ estimate }: { estimate: SoundLevelEstimate }) 
             {colors.emoji} {estimate.totalDba.toFixed(0)} dBA
           </span>
           <span className="text-white/50">· {estimate.contributingCount} verk</span>
+          {indoors && <span className="text-white/50">· 🏠 dämpat</span>}
         </>
       ) : (
         <span className="text-white/60">🔊 Väntar på GPS…</span>
@@ -27,7 +28,15 @@ export function SoundLevelBadge({ estimate }: { estimate: SoundLevelEstimate }) 
   );
 }
 
-export function SoundLevelPanel({ estimate, onClose }: { estimate: SoundLevelEstimate; onClose: () => void }) {
+export function SoundLevelPanel({
+  estimate,
+  indoors = false,
+  onClose,
+}: {
+  estimate: SoundLevelEstimate;
+  indoors?: boolean;
+  onClose: () => void;
+}) {
   const hasSignal = Number.isFinite(estimate.totalDba);
   const severity = hasSignal ? soundLevelSeverity(estimate.totalDba) : "green";
   const colors = SEVERITY_COLORS[severity];
@@ -62,6 +71,11 @@ export function SoundLevelPanel({ estimate, onClose }: { estimate: SoundLevelEst
           <p className="text-[11px] text-white/70">
             Antal vindkraftverk som bidrar: <span className="text-white/90">{estimate.contributingCount}</span>
           </p>
+          {indoors && (
+            <p className="mt-1.5 text-[11px] font-medium text-white/85">
+              🏠 Inomhus · ljudet dämpas i den här uppskattningen
+            </p>
+          )}
         </>
       ) : (
         <p className="text-xs text-white/60">Väntar på GPS-position…</p>

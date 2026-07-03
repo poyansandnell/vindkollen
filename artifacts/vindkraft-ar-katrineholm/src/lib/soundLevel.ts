@@ -39,21 +39,46 @@ export interface SoundLevelEstimate {
   contributingCount: number;
 }
 
+// Maximal antagen dämpning (dBA) av ljud genom väggar/tak när användaren är
+// inomhus, enligt `useSkyDetection`s `outdoorConfidence` (0 = helt inomhus,
+// 1 = fritt utomhus). Ungefär i linje med typisk fasaddämpning för lätta
+// byggnader/fönster (Sverige, äldre villa ~25–35 dB). Skalas linjärt med
+// `1 - outdoorConfidence`, så panelen tonar mjukt mellan lägena istället för
+// att hoppa abrupt när dörren/gränsvärdet passeras.
+const MAX_INDOOR_ATTENUATION_DBA = 35;
+// Absolut hörbarhetsgolv (dBA) — ett verk räknas bara som "bidragande" om
+// dess enskilda, dämpade nivå faktiskt ligger över denna gräns. Behövs
+// eftersom en enhetlig dB-dämpning av samtliga verk INTE ändrar deras
+// relativa avstånd till varandra (alla sjunker lika mycket), så det tidigare
+// "inom 15 dB av starkaste källan"-testet skulle annars ge samma
+// `contributingCount` inomhus som utomhus.
+const AUDIBILITY_FLOOR_DBA = 20;
+
 /**
  * Beräknar en total dBA-uppskattning från avstånd (meter) till varje verk.
  * Rent informativt — påverkar inte ljuduppspelningen.
+ *
+ * `outdoorConfidence` (0..1, standard 1) kommer från `useSkyDetection` och
+ * representerar hur säkert appen bedömer att användaren befinner sig
+ * utomhus. Ju lägre värde (dvs. ju mer sannolikt inomhus), desto mer dämpas
+ * varje enskilt verks nivå innan de kombineras — se `MAX_INDOOR_ATTENUATION_DBA`.
  */
-export function estimateSoundLevel(distancesM: number[]): SoundLevelEstimate {
+export function estimateSoundLevel(distancesM: number[], outdoorConfidence = 1): SoundLevelEstimate {
   if (distancesM.length === 0) {
     return { totalDba: -Infinity, nearestDistanceM: null, contributingCount: 0 };
   }
-  const levels = distancesM.map(attenuatedLevelDba);
+  const confidence = Math.min(Math.max(outdoorConfidence, 0), 1);
+  const indoorAttenuationDba = (1 - confidence) * MAX_INDOOR_ATTENUATION_DBA;
+  const levels = distancesM.map((d) => attenuatedLevelDba(d) - indoorAttenuationDba);
   const totalDba = combineLevelsDba(levels);
   const nearestDistanceM = Math.min(...distancesM);
-  // "Bidrar märkbart" = ligger inom 15 dB av den starkaste enskilda källan —
-  // källor mycket svagare än så påverkar totalsumman försumbart.
+  // "Bidrar märkbart" = ligger inom 15 dB av den starkaste enskilda källan
+  // OCH är faktiskt hörbar (över `AUDIBILITY_FLOOR_DBA`) — det senare krävs
+  // för att inomhusdämpningen ska minska antalet bidragande verk, inte bara
+  // den totala nivån (en enhetlig dB-förskjutning ändrar annars inte vilka
+  // verk som ligger inom 15 dB av varandra).
   const strongest = Math.max(...levels);
-  const contributingCount = levels.filter((l) => l >= strongest - 15).length;
+  const contributingCount = levels.filter((l) => l >= strongest - 15 && l >= AUDIBILITY_FLOOR_DBA).length;
   return { totalDba, nearestDistanceM, contributingCount };
 }
 

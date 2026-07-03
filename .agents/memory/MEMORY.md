@@ -12,3 +12,4 @@
 - [Playwright accessibility snapshot false "[active]"](playwright-active-snapshot-false-positive.md) — a toggle flagged as "not updating" via ARIA `[active]` may just be `:active` mouse-down noise; re-verify with a class-attribute diff before treating as a real bug.
 - [ArcGIS resultOffset pagination duplicates](arcgis-pagination-duplicates.md) — paging without `orderByFields` can return the same feature on two pages; add a stable order field and dedupe by external key before bulk upsert.
 - [vite-plugin-pwa workbox precache limit](vite-pwa-workbox-precache-limit.md) — apps with heavy bundles (mapbox-gl, three.js) exceed the default 2MB precache cap and fail the build; raise `maximumFileSizeToCacheInBytes` proactively.
+- [Uniform dB shift doesn't change contributing-count](uniform-db-shift-contributing-count.md) — a "within N dB of loudest" test is invariant to a uniform attenuation; add an absolute audibility floor too.

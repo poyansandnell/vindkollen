@@ -472,8 +472,15 @@ export function useWindSound() {
    * ju fler verk som är i drift nära lyssnaren. Varje bidrag använder en
    * uppmjukad (kvadratrotsliknande) avtagandekurva så att volymen förblir
    * tydligt hörbar även på medelavstånd, istället för att nästan tystna.
+   *
+   * `outdoorFactor` (0..1, standard 1) skalar samtliga målvolymer — används
+   * för att låta ljudet tona ned helt när `useSkyDetection` bedömer att
+   * användaren är inomhus (0 = helt tyst), och tona upp igen live så fort
+   * användaren går ut (1 = full volym). De befintliga `setTargetAtTime`-
+   * övertoningarna nedan ger en mjuk, ca 1-sekunders insvängning, inte ett
+   * abrupt hopp.
    */
-  function updateProximity(distancesMeters: number[], avgRpm: number) {
+  function updateProximity(distancesMeters: number[], avgRpm: number, outdoorFactor = 1) {
     const nodes = nodesRef.current;
     const ctx = ctxRef.current;
     if (!nodes || !ctx) return;
@@ -487,11 +494,12 @@ export function useWindSound() {
       combined += Math.pow(linear, 0.55); // mjukare avtagande — hörbart även på medelavstånd
     }
     const proximity = Math.min(combined, MAX_COMBINED_PROXIMITY);
+    const muffle = Math.min(Math.max(outdoorFactor, 0), 1);
 
-    const windTarget = AMBIENCE_BASE + proximity * (AMBIENCE_MAX - AMBIENCE_BASE);
-    const whooshTarget = WHOOSH_BASE + proximity * (WHOOSH_MAX - WHOOSH_BASE);
-    const whoosh2Target = WHOOSH2_BASE + proximity * (WHOOSH2_MAX - WHOOSH2_BASE);
-    const rumbleTarget = RUMBLE_BASE + proximity * (RUMBLE_MAX - RUMBLE_BASE);
+    const windTarget = (AMBIENCE_BASE + proximity * (AMBIENCE_MAX - AMBIENCE_BASE)) * muffle;
+    const whooshTarget = (WHOOSH_BASE + proximity * (WHOOSH_MAX - WHOOSH_BASE)) * muffle;
+    const whoosh2Target = (WHOOSH2_BASE + proximity * (WHOOSH2_MAX - WHOOSH2_BASE)) * muffle;
+    const rumbleTarget = (RUMBLE_BASE + proximity * (RUMBLE_MAX - RUMBLE_BASE)) * muffle;
 
     nodes.windGain.gain.setTargetAtTime(windTarget, ctx.currentTime, 1.2);
     nodes.whooshGain.gain.setTargetAtTime(whooshTarget, ctx.currentTime, 1.2);

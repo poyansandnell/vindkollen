@@ -17,7 +17,16 @@ interface ARSceneProps {
   visibility: VisibilityLevel;
   nightMode: boolean;
   shadowFlicker: boolean;
+  /**
+   * Slår upp om en normaliserad skärmpunkt (u, v i 0..1) klassas som himmel
+   * just nu (se `useSkyDetection`). Om utelämnad antas allt vara himmel —
+   * verken tonas då aldrig bort. Måste vara en stabil funktionsreferens
+   * (ändras inte varje render) eftersom den anropas i renderloopen.
+   */
+  isPointSky?: (u: number, v: number) => boolean;
 }
+
+const DEFAULT_IS_POINT_SKY = () => true;
 
 export interface ARSceneHandle {
   /**
@@ -45,6 +54,14 @@ interface TurbineObject {
   shadowMaterial: THREE.MeshBasicMaterial;
   shadowBaseOpacity: number;
   materials: (THREE.MeshStandardMaterial | THREE.MeshBasicMaterial)[];
+  /** Opacitet innan himmelsmasken tillämpas (från avstånd/siktläge). */
+  baseOpacity: number;
+  /**
+   * Utjämnad 0..1-faktor för hur mycket verket ska synas just nu utifrån
+   * himmelsmasken — 1 om verket projiceras mot himmel, glider mot 0 annars
+   * (inomhus, mot mark/vägg). Lerpas mjukt i renderloopen, se `animate`.
+   */
+  skyFactor: number;
   scaleDamp: number;
   bladeRadPerSec: number;
   blinkPeriodMs: number;
@@ -226,6 +243,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     visibility,
     nightMode,
     shadowFlicker,
+    isPointSky,
   },
   forwardedRef,
 ) {
@@ -242,6 +260,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   } | null>(null);
   const userRef = useRef({ lat: userLat, lon: userLon });
   const modeRef = useRef({ sunMode, realScale, visibility, nightMode, shadowFlicker });
+  const skyRef = useRef({ isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY });
   // Väntande Fotomontage-förfrågan — löses in synkront direkt efter nästa
   // renderade bildruta i animationsloopen (se `animate`), istället för att
   // sätta `preserveDrawingBuffer: true` på renderaren. Att läsa canvasen i
@@ -254,6 +273,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
 
   userRef.current = { lat: userLat, lon: userLon };
   modeRef.current = { sunMode, realScale, visibility, nightMode, shadowFlicker };
+  skyRef.current = { isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY };
 
   useImperativeHandle(forwardedRef, () => ({
     capturePhoto: () =>
@@ -401,6 +421,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         shadowMaterial,
         shadowBaseOpacity: 0,
         materials,
+        baseOpacity: 1,
+        skyFactor: 1,
         scaleDamp: 1,
         bladeRadPerSec,
         blinkPeriodMs,
@@ -486,19 +508,39 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       obj.shadow.visible = true;
     }
 
-    function applyVisibility(obj: TurbineObject, distM: number) {
-      const { visibility: vis } = modeRef.current;
-      const opacity = opacityForVisibility(vis, distM);
+    /**
+     * Skriver de faktiska material-opaciteterna utifrån `obj.baseOpacity`
+     * (avstånd/siktläge) multiplicerat med `obj.skyFactor` (himmelsmasken).
+     * Körs dels när basopaciteten ändras (`applyVisibility`), dels varje
+     * bildruta i renderloopen när himmelsmasken uppdateras.
+     */
+    function applyFinalOpacities(obj: TurbineObject) {
+      const opacity = obj.baseOpacity * obj.skyFactor;
       for (const mat of obj.materials) {
         mat.transparent = opacity < 1;
         mat.opacity = opacity;
       }
+      (obj.label.sprite.material as THREE.SpriteMaterial).opacity = obj.skyFactor;
+      (obj.distanceLabel.sprite.material as THREE.SpriteMaterial).opacity = obj.skyFactor;
+      (obj.light.material as THREE.SpriteMaterial).opacity = obj.skyFactor;
+      (obj.glow.material as THREE.SpriteMaterial).opacity = obj.skyFactor;
+    }
+
+    function applyVisibility(obj: TurbineObject, distM: number) {
+      const { visibility: vis } = modeRef.current;
+      const opacity = opacityForVisibility(vis, distM);
+      obj.baseOpacity = opacity;
       const shadowBaseOpacity = 0.85;
       obj.shadowBaseOpacity = shadowBaseOpacity * opacity;
-      obj.shadowMaterial.opacity = obj.shadowBaseOpacity;
+      applyFinalOpacities(obj);
     }
 
     layoutObjects();
+
+    // Återanvända vektorer för himmelsmaskens kamera-rymd/skärmprojektion —
+    // undviker att allokera nya `THREE.Vector3` varje verk, varje bildruta.
+    const camSpaceVec = new THREE.Vector3();
+    const ndcVec = new THREE.Vector3();
 
     let raf = 0;
     let lastLayoutLat = userRef.current.lat;
@@ -606,8 +648,30 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // stängs annars automatiskt av helt naturligt via `obj.shadow.visible`.
       const { shadowFlicker: curShadowFlicker } = modeRef.current;
       const flickerActive = shadowFlickerActive(curShadowFlicker, curMode);
+      const currentIsPointSky = skyRef.current.isPointSky;
+      const skyLerpRate = Math.min(dt * 4, 1);
       for (const obj of state.objects) {
         obj.bladesGroup.rotation.z += obj.bladeRadPerSec * dt;
+
+        // Himmelsmask: verk som (enligt kamerabildens ljus/färg-heuristik,
+        // se `useSkyDetection`) för närvarande INTE projiceras mot himmel —
+        // t.ex. användaren är inomhus, eller riktar kameran mot mark/vägg —
+        // tonas mjukt bort istället för att "spöka" genom väggar/tak.
+        // Navhöjdspunkten (`obj.light.position`) används som representativ
+        // ankarpunkt eftersom den täcker den mest synliga delen av verket.
+        camSpaceVec.copy(obj.light.position).applyMatrix4(state.camera.matrixWorldInverse);
+        let skyTarget = obj.skyFactor;
+        if (camSpaceVec.z < 0) {
+          ndcVec.copy(obj.light.position).project(state.camera);
+          const u = (ndcVec.x + 1) / 2;
+          const v = (1 - ndcVec.y) / 2;
+          skyTarget = u >= 0 && u <= 1 && v >= 0 && v <= 1 ? (currentIsPointSky(u, v) ? 1 : 0) : obj.skyFactor;
+        } else {
+          skyTarget = 0; // bakom kameran
+        }
+        obj.skyFactor += (skyTarget - obj.skyFactor) * skyLerpRate;
+        applyFinalOpacities(obj);
+
         const phase = (now + obj.blinkOffsetMs) % obj.blinkPeriodMs;
         const blinkOn = night && phase < obj.blinkOnMs;
         obj.light.visible = blinkOn;
@@ -615,9 +679,9 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
 
         if (flickerActive && obj.shadow.visible) {
           const flicker = 0.55 + 0.45 * Math.cos(obj.bladesGroup.rotation.z * 3);
-          obj.shadowMaterial.opacity = obj.shadowBaseOpacity * flicker;
-        } else if (obj.shadowMaterial.opacity !== obj.shadowBaseOpacity) {
-          obj.shadowMaterial.opacity = obj.shadowBaseOpacity;
+          obj.shadowMaterial.opacity = obj.shadowBaseOpacity * obj.skyFactor * flicker;
+        } else {
+          obj.shadowMaterial.opacity = obj.shadowBaseOpacity * obj.skyFactor;
         }
       }
 

@@ -3,6 +3,7 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useCameraStream } from "@/hooks/useCameraStream";
 import { useWindSound } from "@/hooks/useWindSound";
+import { useSkyDetection } from "@/hooks/useSkyDetection";
 import { CameraBackground } from "@/components/CameraBackground";
 import { ARScene, type ARSceneHandle } from "@/components/ARScene";
 import { MapView } from "@/components/MapView";
@@ -57,6 +58,11 @@ export default function Home() {
   const orientation = useDeviceOrientation(started);
   const camera = useCameraStream(started);
   const wind = useWindSound();
+  // Kamerabaserad himmel/inomhus-heuristik (se `useSkyDetection`s jsdoc för
+  // begränsningar) — styr både AR-verkens synlighet (via `isPointSky`,
+  // skickas till ARScene) och dämpningen av vindljudet/dBA-uppskattningen
+  // nedan när användaren bedöms vara inomhus.
+  const sky = useSkyDetection(videoElRef, started);
 
   const errors = useMemo(
     () => [geo.error, orientation.error, camera.error].filter((e): e is string => Boolean(e)),
@@ -65,6 +71,8 @@ export default function Home() {
 
   // Beräknar en informativ dBA-uppskattning baserat på GPS-avstånd till
   // samtliga verk. Rent visningssyfte — styr aldrig ljuduppspelningen.
+  // `sky.outdoorConfidence` dämpar uppskattningen live när användaren
+  // bedöms vara inomhus (se `estimateSoundLevel`).
   const soundLevelEstimate = useMemo(() => {
     if (geo.lat === null || geo.lon === null) {
       return { totalDba: -Infinity, nearestDistanceM: null, contributingCount: 0 };
@@ -73,21 +81,23 @@ export default function Home() {
       const { lat, lon } = swerefToWgs84(t.easting, t.northing);
       return distanceMeters(geo.lat as number, geo.lon as number, lat, lon);
     });
-    return estimateSoundLevel(distances);
-  }, [geo.lat, geo.lon]);
+    return estimateSoundLevel(distances, sky.outdoorConfidence);
+  }, [geo.lat, geo.lon, sky.outdoorConfidence]);
 
   // Uppdatera vindljudets volym/svischtakt när GPS-position ändras. Alla
   // verks avstånd skickas med (inte bara det närmaste) så att flera
   // närliggande verk kombineras till ett kraftigare, tätare ljudlandskap.
+  // `sky.outdoorConfidence` tonar ned ljudet helt (0 = tyst) när användaren
+  // bedöms vara inomhus, och tillbaka upp live så fort hen går ut igen.
   useEffect(() => {
     if (!wind.playing || geo.lat === null || geo.lon === null) return;
     const distances = TURBINES.map((t) => {
       const { lat, lon } = swerefToWgs84(t.easting, t.northing);
       return distanceMeters(geo.lat as number, geo.lon as number, lat, lon);
     });
-    wind.updateProximity(distances, AVG_RPM);
+    wind.updateProximity(distances, AVG_RPM, sky.outdoorConfidence);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wind.playing, geo.lat, geo.lon]);
+  }, [wind.playing, geo.lat, geo.lon, sky.outdoorConfidence]);
 
   const handleStart = useCallback(() => {
     setStarting(true);
@@ -248,6 +258,7 @@ export default function Home() {
               visibility={visibility}
               nightMode={nightMode}
               shadowFlicker={shadowFlicker}
+              isPointSky={sky.isPointSky}
             />
           )}
 
@@ -258,7 +269,12 @@ export default function Home() {
             <div className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-b from-[#0a1030]/55 via-[#0a1030]/35 to-[#0a1030]/60" />
           )}
 
-          {!ready && (
+          {/* Väntar-overlayen döljs om kameran istället bedöms visa en
+              inomhusmiljö (se "Gå utomhus"-overlayen nedan) — annars
+              skulle användaren se en evig snurrande laddningsindikator
+              istället för en tydlig förklaring till varför AR-vyn inte
+              startar. */}
+          {!ready && !(sky.ready && sky.indoors) && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/50 px-8 text-center">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#FF8B01] border-t-transparent" />
               <p className="text-sm text-white/90">
@@ -294,6 +310,23 @@ export default function Home() {
             </div>
           )}
 
+          {/* "Gå utomhus"-overlay: visas oberoende av `ready` (dvs. även
+              medan GPS/kompass fortfarande söker fix) så fort kamerabilden
+              tolkas som en inomhusmiljö — turbinerna skulle ändå tonas bort
+              i AR-vyn (se ARScene/`isPointSky`) och ljudet redan vara tyst
+              (se `sky.outdoorConfidence` ovan), så detta ger en tydlig,
+              stor förklaring istället för en till synes tom/livlös vy. */}
+          {started && sky.ready && sky.indoors && (
+            <div className="absolute inset-0 z-[15] flex flex-col items-center justify-center gap-4 bg-black/70 px-8 text-center">
+              <span className="text-5xl">🏠➡️🌤️</span>
+              <p className="text-lg font-semibold text-white">Gå utomhus för att se vindkraftverken</p>
+              <p className="max-w-xs text-sm text-white/70">
+                Kameran verkar just nu inte ha fri sikt mot himlen. AR-vyn och ljudet fungerar bara utomhus, med
+                fri sikt över horisonten.
+              </p>
+            </div>
+          )}
+
           {ready && calibrated && (
             <div className="pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center">
               <span className="rounded-full bg-[#FF8B01]/90 px-4 py-1.5 text-xs font-medium text-[#090909] shadow-lg">
@@ -310,7 +343,7 @@ export default function Home() {
                 <p className="text-sm text-white/90">Katrineholm · {TURBINES.length} verk</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <SoundLevelBadge estimate={soundLevelEstimate} />
+                <SoundLevelBadge estimate={soundLevelEstimate} indoors={sky.ready && sky.indoors} />
                 <button
                   onClick={() => setShowControls(true)}
                   aria-pressed={showControls}
@@ -362,7 +395,11 @@ export default function Home() {
           {/* Bottom controls */}
           <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-10">
             {ready && showSoundLevel && (
-              <SoundLevelPanel estimate={soundLevelEstimate} onClose={() => setShowSoundLevel(false)} />
+              <SoundLevelPanel
+                estimate={soundLevelEstimate}
+                indoors={sky.ready && sky.indoors}
+                onClose={() => setShowSoundLevel(false)}
+              />
             )}
             <button
               onClick={() => setShowPetition(true)}
