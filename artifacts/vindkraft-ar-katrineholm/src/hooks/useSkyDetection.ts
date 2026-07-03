@@ -271,11 +271,22 @@ export function useSkyDetection(
   const mlStateRef = useRef<"loading" | "ready" | "disabled">("loading");
   const mlBusyRef = useRef(false);
   const mlSlowCountRef = useRef(0);
-  // Den allra första ML-inferensen efter att modellen blivit redo måste
-  // kompilera WebGL-shaders m.m. och är därför alltid betydligt långsammare
-  // än stationärt läge — räknas inte mot slow-tröskeln, annars riskerar en
-  // enda kall uppstart att bidra i onödan till en permanent avstängning.
-  const mlWarmedUpRef = useRef(false);
+  // Den allra FÖRSTA ML-inferensen (oavsett om den lyckas eller ej) efter att
+  // modellen blivit redo måste kompilera WebGL-shaders m.m. och är därför
+  // alltid betydligt långsammare — den ENDA gången räknas inte försöket mot
+  // slow/fel-tröskeln. Detta är en engångs-räknare, INTE villkorad på att
+  // försöket faktiskt lyckas: om inferensen aldrig lyckas (t.ex. en
+  // körtidsinkompatibilitet som alltid time:as ut) måste efterföljande försök
+  // ändå räknas, annars skulle ML aldrig stängas av permanent och appen
+  // fortsätter försöka om och om igen istället för att falla tillbaka.
+  const mlAttemptCountRef = useRef(0);
+  // Genereringstoken: varje `sampleMlOcclusion`-anrop får ett unikt nummer.
+  // Om en inferens time:ar ut väntar vi ändå in den underliggande GPU-
+  // beräkningen (utan att tillämpa dess resultat) innan `mlBusyRef` släpps,
+  // så att aldrig fler än EN riktig inferens kan vara igång samtidigt — annars
+  // skulle en långsam enhet kunna stapla upp flera parallella GPU-anrop och
+  // själv orsaka den frysning fallbacken ska förhindra.
+  const mlGenerationRef = useRef(0);
   // Säkerhetsbrytare mot ett eventuellt minnesläckage i ML-pipelinen: sparar
   // hur många levande TF.js-tensorer som fanns direkt efter uppvärmningen,
   // och håller reda på hur många på varandra följande samples som visar en
@@ -442,33 +453,69 @@ export function useSkyDetection(
       if (!mlCtx) return;
       mlCtx.drawImage(video, 0, 0, mlCanvas.width, mlCanvas.height);
 
-      const isWarmup = !mlWarmedUpRef.current;
+      // Engångsundantag (se `mlAttemptCountRef`s jsdoc ovan) — gäller ENDAST
+      // det allra första försöket, oavsett utfall, aldrig fler.
+      const isWarmupAttempt = mlAttemptCountRef.current === 0;
+      mlAttemptCountRef.current += 1;
+      const generation = ++mlGenerationRef.current;
       const start = performance.now();
-      try {
-        // Watchdog: avbryt om ML-inferensen tar orimligt lång tid (t.ex. hänger
-        // sig i WebGL-drivern).
-        const result = await Promise.race([
-          segmentSkyGrid(model, mlCanvas, GRID_COLS, GRID_ROWS),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("ML_TIMEOUT")), ML_INFERENCE_TIMEOUT_MS),
-          ),
-        ]);
 
-        const { grid, skyRatio: mlSkyRatio, numTensors } = result;
+      function countFailureOrSlow() {
+        if (isWarmupAttempt) return;
+        mlSlowCountRef.current += 1;
+        if (mlSlowCountRef.current >= ML_MAX_SLOW_SAMPLES) {
+          mlStateRef.current = "disabled";
+        }
+      }
+
+      const workPromise = segmentSkyGrid(model, mlCanvas, GRID_COLS, GRID_ROWS);
+      const timedOut = await Promise.race([
+        workPromise.then(() => false),
+        new Promise<true>((resolve) => setTimeout(() => resolve(true), ML_INFERENCE_TIMEOUT_MS)),
+      ]);
+
+      if (timedOut) {
+        // Watchdog: inferensen tar orimligt lång tid (t.ex. hänger sig i
+        // WebGL-drivern). Räkna omedelbart som ett misslyckat/långsamt försök
+        // så att permanent avstängning kan triggas även om denna specifika
+        // GPU-beräkning aldrig avslutas.
+        countFailureOrSlow();
+        // VIKTIGT: vi låter ändå den bakomliggande `workPromise` göra klart
+        // (resultatet ignoreras nedan eftersom det då är inaktuellt) innan
+        // funktionen returnerar och därmed `mlBusyRef` släpps i `sample()`.
+        // Annars skulle nästa sampling-tick kunna starta en NY inferens
+        // ovanpå den redan hängande — flera parallella GPU-anrop skulle
+        // kunna stapla upp sig och själva orsaka den frysning som fallbacken
+        // ska förhindra.
+        try {
+          await workPromise;
+        } catch {
+          // Redan räknat ovan via timeout-grenen; inget mer att göra.
+        }
+        if (cancelled) return;
+        if (mlStateRef.current === "disabled") {
+          methodRef.current = "disabled";
+          setMethod("disabled");
+        }
+        return;
+      }
+
+      try {
+        const { grid, skyRatio: mlSkyRatio, numTensors } = await workPromise;
+        // Om en NYARE sampling redan hunnit starta (t.ex. om denna själv
+        // råkade bli klar strax efter att ha timeoutat en gång) är resultatet
+        // inaktuellt — släng det och rör varken räknare eller rutnät.
+        if (generation !== mlGenerationRef.current) return;
         const elapsed = performance.now() - start;
-        mlWarmedUpRef.current = true;
-        if (elapsed > ML_SLOW_MS && !isWarmup) {
-          mlSlowCountRef.current += 1;
-          if (mlSlowCountRef.current >= ML_MAX_SLOW_SAMPLES) {
-            mlStateRef.current = "disabled";
-          }
-        } else {
+        if (elapsed > ML_SLOW_MS) {
+          countFailureOrSlow();
+        } else if (!isWarmupAttempt) {
           mlSlowCountRef.current = 0;
         }
         // Tensor-läckage-brytare — se konstant-kommentaren ovan. `-1` betyder
         // att `tf.memory()` inte gick att läsa av (t.ex. import misslyckades);
         // ignorera signalen då istället för att räkna det som tillväxt.
-        if (numTensors >= 0 && !isWarmup) {
+        if (numTensors >= 0 && !isWarmupAttempt) {
           if (mlTensorBaselineRef.current === null) {
             mlTensorBaselineRef.current = numTensors;
           } else if (numTensors - mlTensorBaselineRef.current > ML_TENSOR_GROWTH_THRESHOLD) {
@@ -491,14 +538,7 @@ export function useSkyDetection(
         // En enskild bildruta misslyckades (t.ex. WebGL-kontext tillfälligt
         // upptagen) — räkna som en "långsam"/misslyckad sampling istället för
         // att krascha; efter tillräckligt många faller vi tillbaka permanent.
-        // Ett fel under själva uppstarten (t.ex. shader-kompilering) räknas
-        // inte heller mot tröskeln.
-        if (!isWarmup) {
-          mlSlowCountRef.current += 1;
-          if (mlSlowCountRef.current >= ML_MAX_SLOW_SAMPLES) {
-            mlStateRef.current = "disabled";
-          }
-        }
+        countFailureOrSlow();
       }
       // Om DENNA sampling (lyckad eller ej) var den som korsade
       // slow/error-tröskeln och stängde av ML permanent, nollställ
