@@ -81,6 +81,7 @@ _None recorded yet._
 
 - iOS Safari requires a user-gesture-triggered `DeviceOrientationEvent.requestPermission()` call before compass data is available — handled in `useCompassHeading.ts`, triggered from the "Starta AR-vyn" button.
 - Camera/GPS/compass are unavailable or limited in desktop/headless test browsers — the app's top/bottom UI chrome and map/petition overlays are intentionally still usable even if AR itself can't fully initialize. The dBA and Infraljud panels are gated behind `ready` (needs GPS + orientation + camera stream all present), so they cannot be opened/expanded in a headless/sensor-less test browser — this is expected, not a bug.
+- `getUserMedia()` can hang forever on some real devices (reported by users as an infinite "Startar kameran…" spinner) with neither a resolved stream nor a rejection — `useCameraStream.ts` now has a 15s watchdog timer (same pattern as `useGeolocation.ts`'s 20s GPS watchdog) that forces an error + a "🔄 Försök igen med kameran" retry button in `Home.tsx`'s `!ready` overlay if the camera hasn't started by then.
 
 ## Wind data sync (api-server + lib/wind-sync)
 

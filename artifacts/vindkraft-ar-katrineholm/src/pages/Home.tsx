@@ -614,6 +614,14 @@ export default function Home() {
                       </p>
                     )}
                   </div>
+                  {camera.error && (
+                    <button
+                      onClick={camera.retry}
+                      className="w-full rounded-full bg-[#FF8B01] py-2.5 text-xs font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347]"
+                    >
+                      🔄 Försök igen med kameran
+                    </button>
+                  )}
                   {geo.error && (
                     <button
                       onClick={geo.retry}
