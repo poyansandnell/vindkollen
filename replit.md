@@ -32,7 +32,10 @@ A Swedish-language progressive web app that lets people in Katrineholm point the
 - `src/components/PhotoMontageModal.tsx` — Fotomontage capture preview with Spara/Ta ny bild/Dela (Web Share API) actions.
 - `src/lib/soundLevel.ts` — dBA estimation from GPS distance to every turbine, logarithmic combination, severity color coding, exact disclaimer text.
 - `src/lib/visualizationTypes.ts` — shared visualization mode types, incl. `shadowFlickerActive()` gating (only active in "current"/"low" sun modes).
-- `src/pages/Home.tsx` — wires camera + AR + GPS + compass + permission gate + top/bottom UI chrome + dBA panel + Fotomontage capture together.
+- `src/lib/noiseImpact.ts` — weighted green/yellow/red "infraljud-/bullerpåverkan" score combining dBA level, contributing-turbine count, downwind wind direction (if available), and exposure duration; owns the exact Swedish disclaimer text (`NOISE_IMPACT_DISCLAIMER`) — do not reword it, must keep "kan bidra till"/"kan upplevas"/"för känsliga personer" phrasing and avoid absolute claims.
+- `src/hooks/useWindDirection.ts` — fetches current wind direction/speed for the user's GPS position from the free Open-Meteo API (no key required); fails silently to `null` on network errors so the noise monitor just ignores the wind factor.
+- `src/components/NoiseImpactMonitor.tsx` — `NoiseImpactBadge` (always-visible top-bar status) + `NoiseImpactPanel` (expandable detail panel with reasons + disclaimer), mirrors the `SoundLevelPanel.tsx` pattern.
+- `src/pages/Home.tsx` — wires camera + AR + GPS + compass + permission gate + top/bottom UI chrome + dBA panel + noise impact monitor (incl. exposure-duration timer) + Fotomontage capture together.
 
 ## Architecture decisions
 
@@ -49,6 +52,7 @@ A Swedish-language progressive web app that lets people in Katrineholm point the
 - Live "🔊 Beräknad ljudnivå" dBA panel estimating sound exposure from turbine distance (informational only, does not affect playback).
 - "🌗 Skuggflimmer" (shadow flicker) mode simulating blade-shadow flicker, only active in "Aktuell sol"/"Låg sol" sun modes, with an info tooltip explaining the effect.
 - "📸 Fotomontage": captures a composite photo (camera + AR overlay + watermark + disclaimer) with Spara/Ta ny bild/Dela (Web Share API) actions.
+- "🌬️ Infraljud"-monitor: always-visible green/yellow/red badge + expandable panel estimating overall noise/infrasound impact from distance, number of contributing turbines, wind direction (if available), and how long the user has been on-site, with a calm Swedish disclaimer (never claims guaranteed harm).
 - Map view (SVG-based) showing all turbines and the user's position.
 - "Skriv under för folkomröstning" petition button/modal referencing the real 2022 Katrineholm wind-power referendum.
 - Fully Swedish-language UI; installable as a PWA.

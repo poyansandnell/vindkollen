@@ -16,3 +16,5 @@
 - [TFJS + deeplab peer version pin](tfjs-deeplab-tfjs3-peer-pin.md) — `@tensorflow-models/deeplab` needs `@tensorflow/tfjs` pinned to 3.x, not the latest 4.x meta-package.
 - [Sky heuristic & ML disable tuning](sky-heuristic-and-ml-disable-tuning.md) — brightness/texture heuristics false-positive on bright walls if downsampled too far; aggressive ML slow-thresholds permanently disable heavy models within seconds of cold-start.
 - [Child-to-parent effect feedback loop](child-to-parent-effect-feedback-loop.md) — lifting child state to a parent callback loops infinitely if any effect dependency traces back to an unmemoized `data ?? []` prop.
+- [Downwind bearing vs wind direction "from"](downwind-bearing-vs-wind-from.md) — counterintuitive: downwind-of-source ⇔ meteorological wind-from-degrees ≈ bearing FROM listener TO source, not the reverse.
+- [PDF `download` attribute fails on iOS PWA](pdf-download-attribute-ios-pwa.md) — `<a download>` silently no-ops on iOS Safari/installed-PWA standalone mode; use plain `target="_blank"` so the OS share/save sheet works instead.
