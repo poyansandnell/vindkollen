@@ -19,17 +19,23 @@ export interface SkyDetectionState {
   ready: boolean;
   /**
    * Slår upp om en given normaliserad skärmpunkt (u, v i intervallet 0..1,
-   * där (0,0) är övre vänstra hörnet) för närvarande klassas som himmel.
-   * Returnerar alltid `true` (ingen ocklusion) — se modulens jsdoc för
-   * varför den tidigare ML-baserade per-pixel-ocklusionen togs bort helt.
-   * Stabil funktionsreferens (ändras aldrig), säker att anropa varje
-   * bildruta i AR-scenens renderloop.
+   * där (0,0) är övre vänstra hörnet) för närvarande klassas som himmel,
+   * baserat på samma lätta ljusstyrka/textur/mättnad-heuristik
+   * (`classifyCell`) som redan driver `outdoorConfidence` — se modulens
+   * jsdoc. Innan första bildrutan analyserats (eller om `enabled` är
+   * false) returneras alltid `true` (ingen ocklusion), så verken aldrig
+   * blixtrar till dolda innan heuristiken hunnit få data. Stabil
+   * funktionsreferens (ändras aldrig), säker att anropa varje bildruta i
+   * AR-scenens renderloop.
    */
   isPointSky: (u: number, v: number) => boolean;
   /**
-   * Returnerar HELA ocklusionsrutnätet — se `isPointSky` ovan, alltid "allt
-   * är himmel" (inga verk döljs av masken). Funktionsidentiteten ändras
-   * aldrig — säker att läsa varje bildruta.
+   * Returnerar HELA ocklusionsrutnätet (samma `GRID_COLS`x`GRID_ROWS`
+   * upplösning som `classifyCell`-heuristiken använder internt), 0..1 per
+   * cell, temporalt utjämnat (EMA) för att undvika flimmer mellan
+   * bildrutor — se `isPointSky` ovan. Funktionsidentiteten ändras aldrig
+   * (samma `Float32Array`-instans muteras på plats) — säker att läsa varje
+   * bildruta.
    */
   getOcclusionGrid: () => Float32Array;
   /**
@@ -48,12 +54,18 @@ export interface SkyDetectionState {
   avgLuminance: number;
   /**
    * Alltid "disabled" — den tidigare ML-segmenteringsmetoden ("ml") togs
-   * bort helt (se modulens jsdoc). Fältet behålls av bakåtkompatibilitet
-   * med konsumenter (`Home.tsx`s `mlActive = sky.method === "ml"`) som
-   * redan har en korrekt, väldefinierad fallback för "ML aldrig aktiv":
-   * verken förblir alltid fullt synliga och ingen "Gå utomhus"/aim-overlay
-   * visas — exakt samma beteende som denna modul alltid haft när ML inte
-   * var igång.
+   * bort helt (se modulens jsdoc) och ersätts INTE av den lätta
+   * heuristiken nedan (den är för grov för att styra det stora "Gå
+   * utomhus"/aim-indexet tillförlitligt). Fältet behålls av
+   * bakåtkompatibilitet med konsumenter (`Home.tsx`s
+   * `mlActive = sky.method === "ml"`) som redan har en korrekt,
+   * väldefinierad fallback för "ML aldrig aktiv": det övergripande
+   * Outdoor Confidence Index-läget (helskärms "Gå utomhus"/aim-overlay)
+   * förblir helt oförändrat/avstängt.
+   *
+   * OBS: detta styr INTE längre `isPointSky`/`getOcclusionGrid` ovan —
+   * den lätta heuristiken driver numera per-pixel-ocklusionen (verk döljs
+   * bakom träd/byggnader) oavsett detta fälts värde, se modulens jsdoc.
    */
   method: "loading" | "ml" | "disabled";
 }
@@ -163,9 +175,19 @@ function classifyCell(pixels: Uint8ClampedArray, col: number, row: number): bool
  * kosmetisk finess (verken syns ändå alltid om ML inte är aktiv — se
  * `isPointSky`/`getOcclusionGrid` nedan, som redan hade en fullt
  * fungerande "visa alltid"-fallback för detta läge) togs den bort helt
- * istället för att fortsätta jaga trösklar. Den enkla, kamera-baserade
- * ljusstyrke/textur-heuristiken (`classifyCell`) nedan är oberoende av
- * detta och fortsätter fungera precis som förut.
+ * istället för att fortsätta jaga trösklar.
+ *
+ * ÅTERINFÖRT (lätt variant): `isPointSky`/`getOcclusionGrid` drivs nu av
+ * samma redan körande, kamera-baserade ljusstyrke/textur/mättnad-heuristik
+ * (`classifyCell`) som `outdoorConfidence` bygger på — SAMMA 12x8-rutnät,
+ * SAMMA canvas-2D-nedskalning (ingen WebGL, ingen ML-modell, ingen andra
+ * GPU-kontext). Detta ger vindkraftverken en riktig (om än grövre än den
+ * borttagna ML-segmenteringen) per-pixel-ocklusion mot träd/byggnader/
+ * terräng utan att på något sätt återinföra den tunga TF.js/DeepLab-vägen
+ * eller dess frysningsrisk — det är bokstavligen samma pixelanalys som
+ * redan gjordes varje bildruta, bara att resultatet per cell nu även
+ * sparas (temporalt utjämnat) istället för att kastas efter att bara ha
+ * bidragit till den aggregerade `skyRatio`.
  */
 export function useSkyDetection(
   videoRef: React.RefObject<HTMLVideoElement | null>,
@@ -181,18 +203,29 @@ export function useSkyDetection(
   const confidenceRef = useRef(1);
   const indoorsRef = useRef(false);
 
-  // Alltid "allt är himmel" — se modulens jsdoc för varför den tidigare
-  // ML-baserade per-pixel-ocklusionen togs bort helt. Detta ÄR
-  // fallback-kravet: exakt samma "verken alltid synliga"-beteende som
-  // innan ML-ocklusionen någonsin fanns.
-  const allSkyGridRef = useRef<Float32Array>(new Float32Array(GRID_COLS * GRID_ROWS).fill(1));
-  const isPointSkyRef = useRef(() => true);
-  const getOcclusionGridRef = useRef((): Float32Array => allSkyGridRef.current);
+  // Ocklusionsrutnätet: 1 = himmel (visa verk), 0 = ockluderat (dölj verk).
+  // Startar på "allt är himmel" och muteras på plats i `sample()` nedan —
+  // samma array-instans hela komponentens livstid, EMA-utjämnad per cell
+  // för att undvika flimmer. Innan `enabled`/första bildrutan gäller
+  // fortfarande "verken alltid synliga", exakt som innan ocklusionen
+  // återinfördes.
+  const occlusionGridRef = useRef<Float32Array>(new Float32Array(GRID_COLS * GRID_ROWS).fill(1));
+  const gridReadyRef = useRef(false);
+
+  const isPointSkyRef = useRef((u: number, v: number): boolean => {
+    if (!gridReadyRef.current) return true;
+    const col = Math.min(GRID_COLS - 1, Math.max(0, Math.floor(u * GRID_COLS)));
+    const row = Math.min(GRID_ROWS - 1, Math.max(0, Math.floor(v * GRID_ROWS)));
+    return occlusionGridRef.current[row * GRID_COLS + col] >= 0.5;
+  });
+  const getOcclusionGridRef = useRef((): Float32Array => occlusionGridRef.current);
 
   useEffect(() => {
     if (!enabled) {
       confidenceRef.current = 1;
       indoorsRef.current = false;
+      gridReadyRef.current = false;
+      occlusionGridRef.current.fill(1);
       setOutdoorConfidence(1);
       setIndoors(false);
       setReady(false);
@@ -250,11 +283,21 @@ export function useSkyDetection(
 
       let skyCount = 0;
       let lumSum = 0;
+      const grid = occlusionGridRef.current;
       for (let row = 0; row < GRID_ROWS; row++) {
         for (let col = 0; col < GRID_COLS; col++) {
-          if (classifyCell(pixels, col, row)) skyCount++;
+          const isSky = classifyCell(pixels, col, row);
+          if (isSky) skyCount++;
+          // EMA per cell (samma alfa som `outdoorConfidence` ovan) — undviker
+          // att enskilda bildrutors brus (t.ex. en gren som svajar i vinden)
+          // gör att ett verk blinkar av och an. `isPointSky`/shadern läser
+          // detta som tröskelvärde 0.5 med ytterligare mjuk smoothstep
+          // (`OCCLUSION_THRESHOLD_LOW/HIGH` i ARScene.tsx).
+          const idx = row * GRID_COLS + col;
+          grid[idx] += EMA_ALPHA * ((isSky ? 1 : 0) - grid[idx]);
         }
       }
+      gridReadyRef.current = true;
       for (let i = 0; i < pixels.length; i += 4) {
         lumSum += 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
       }
