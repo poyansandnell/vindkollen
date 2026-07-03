@@ -14,14 +14,20 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
   const [appName] = useState(() => (typeof navigator !== "undefined" ? inAppBrowserName() : ""));
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col justify-between overflow-y-auto bg-[#090909] px-6 py-10 text-white">
+    <div
+      className={`absolute inset-0 z-30 flex flex-col justify-between overflow-y-auto bg-[#090909] px-6 text-white ${inApp ? "py-5" : "py-10"}`}
+    >
       <div className="mx-auto w-full max-w-md text-center">
         {/*
           Logotyp för Katrineholm FRAMÅT (transparent SVG). Om en ny logotypfil finns, lägg den i
           public/logo.svg (ersätter den nuvarande) — <img> nedan används automatiskt då.
           Faller tillbaka till textbaserad logotyp om bilden saknas.
         */}
-        <div className="mx-auto flex flex-col items-center justify-center" role="img" aria-label="Katrineholm FRAMÅT">
+        <div
+          className={`mx-auto flex flex-col items-center justify-center ${inApp ? "hidden" : ""}`}
+          role="img"
+          aria-label="Katrineholm FRAMÅT"
+        >
           <img
             src="/logo.svg"
             alt="Katrineholm FRAMÅT"
@@ -38,32 +44,49 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
           </span>
         </div>
 
-        <h1 className="mt-6 text-3xl font-bold leading-tight text-white">Vindkraft AR</h1>
-        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#FF8B01]/15 px-3 py-1 text-xs font-medium text-[#FFB347]">
-          📱 Kräver mobiltelefon — rikta mobilkameran runt dig
-        </p>
+        <h1 className={`font-bold leading-tight text-white ${inApp ? "text-xl" : "mt-6 text-3xl"}`}>Vindkraft AR</h1>
 
-        <p className="mt-4 text-sm leading-relaxed text-white/70">
-          Visualisera hur de planerade vindkraftverken kan komma att upplevas från olika platser i Katrineholm.
-        </p>
-        <p className="mt-3 text-sm leading-relaxed text-white/50">
-          Appen använder kameran, GPS och mobilens kompass för att placera vindkraftverken i rätt riktning och
-          på ungefär rätt avstånd.
-        </p>
+        {/*
+          I en in-app-webbläsare (Messenger m.fl.) visas notisen om att öppna
+          i Safari/Chrome direkt under rubriken, och resten av introt (bild,
+          taggen, brödtext) hoppas över helt — annars hamnar "Kopiera
+          länk"-knappen under vikningen och användaren måste scrolla för att
+          hitta den enda knapp som faktiskt fungerar i den webbläsaren.
+        */}
+        {inApp ? (
+          <div className="mt-3">
+            <InAppBrowserNotice appName={appName} />
+          </div>
+        ) : (
+          <>
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#FF8B01]/15 px-3 py-1 text-xs font-medium text-[#FFB347]">
+              📱 Kräver mobiltelefon — rikta mobilkameran runt dig
+            </p>
+
+            <p className="mt-4 text-sm leading-relaxed text-white/70">
+              Visualisera hur de planerade vindkraftverken kan komma att upplevas från olika platser i
+              Katrineholm.
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-white/50">
+              Appen använder kameran, GPS och mobilens kompass för att placera vindkraftverken i rätt riktning
+              och på ungefär rätt avstånd.
+            </p>
+          </>
+        )}
       </div>
 
-      <div className="mx-auto mt-8 w-full max-w-md space-y-4">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-          <p className="mb-2 font-medium text-white">Appen behöver tillgång till:</p>
-          <ul className="space-y-1.5">
-            <li>📷 Kamera — för att visa verkligheten i bakgrunden</li>
-            <li>📍 Plats (GPS) — för att räkna ut avstånd och riktning</li>
-            <li>🧭 Kompass — för att veta vart du tittar</li>
-          </ul>
-          <p className="mt-2 text-xs text-white/40">{turbineCount} planerade vindkraftverk visas i vyn.</p>
-        </div>
-
-        {inApp && <InAppBrowserNotice appName={appName} />}
+      <div className={`mx-auto w-full max-w-md space-y-4 ${inApp ? "mt-4" : "mt-8"}`}>
+        {!inApp && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+            <p className="mb-2 font-medium text-white">Appen behöver tillgång till:</p>
+            <ul className="space-y-1.5">
+              <li>📷 Kamera — för att visa verkligheten i bakgrunden</li>
+              <li>📍 Plats (GPS) — för att räkna ut avstånd och riktning</li>
+              <li>🧭 Kompass — för att veta vart du tittar</li>
+            </ul>
+            <p className="mt-2 text-xs text-white/40">{turbineCount} planerade vindkraftverk visas i vyn.</p>
+          </div>
+        )}
 
         {errors.length > 0 && (
           <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
@@ -80,41 +103,51 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
           </div>
         )}
 
-        <button
-          onClick={onStart}
-          disabled={starting}
-          className="w-full rounded-full bg-[#FF8B01] py-4 text-base font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] disabled:opacity-60"
-        >
-          {starting ? "Startar…" : "Starta visualisering"}
-        </button>
-        <p className="text-center text-[11px] leading-relaxed text-white/40">
-          Se begärd kopia från Ericsbergs Säteri/Renewable Sweden AB:s begäran om samrådsyttrande till
-          Försvarsmakten. Underlaget avser Ericsbergs Vind 1–5 i Katrineholms kommun och omfattar totalt 29
-          vindkraftverk med maximal totalhöjd 250 meter.
-        </p>
         {/*
-          Ingen `download`-attribut här: den ignoreras eller misslyckas tyst
-          i iOS Safari, särskilt när appen körs installerad som PWA i
-          fristående läge (ingen nedladdningshanterare att spara till).
-          `target="_blank"` öppnar istället PDF:en i webbläsarens egen
-          visning på alla plattformar, där användaren kan spara/dela den via
-          det inbyggda dela-/nedladdningsverktyget — fungerar konsekvent på
-          både mobil och dator.
+          I in-app-webbläsaren kan kamera/GPS ändå oftast inte startas, så
+          knappen och underlagets fotnoter tar bara upp värdefull yta ovanför
+          vikningen utan att vara till nytta — döljs tills länken öppnats i en
+          riktig webbläsare.
         */}
-        <a
-          href="/samradsyttrande-forsvarsmakten.pdf"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mx-auto flex w-fit items-center gap-1.5 rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 px-4 py-2 text-[11px] font-medium text-[#FFB347] transition hover:bg-[#FF8B01]/20"
-        >
-          📄 Visa/ladda ner underlaget (PDF)
-        </a>
-        <p className="text-center text-[10px] text-white/25">
-          Visualiseringen bygger på koordinater och uppgifter från det bifogade underlaget.
-        </p>
-        <p className="text-center text-[11px] text-white/30">
-          Fungerar bäst utomhus, i dagsljus eller kväll, med fri sikt mot horisonten.
-        </p>
+        {!inApp && (
+          <>
+            <button
+              onClick={onStart}
+              disabled={starting}
+              className="w-full rounded-full bg-[#FF8B01] py-4 text-base font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] disabled:opacity-60"
+            >
+              {starting ? "Startar…" : "Starta visualisering"}
+            </button>
+            <p className="text-center text-[11px] leading-relaxed text-white/40">
+              Se begärd kopia från Ericsbergs Säteri/Renewable Sweden AB:s begäran om samrådsyttrande till
+              Försvarsmakten. Underlaget avser Ericsbergs Vind 1–5 i Katrineholms kommun och omfattar totalt
+              29 vindkraftverk med maximal totalhöjd 250 meter.
+            </p>
+            {/*
+              Ingen `download`-attribut här: den ignoreras eller misslyckas tyst
+              i iOS Safari, särskilt när appen körs installerad som PWA i
+              fristående läge (ingen nedladdningshanterare att spara till).
+              `target="_blank"` öppnar istället PDF:en i webbläsarens egen
+              visning på alla plattformar, där användaren kan spara/dela den via
+              det inbyggda dela-/nedladdningsverktyget — fungerar konsekvent på
+              både mobil och dator.
+            */}
+            <a
+              href="/samradsyttrande-forsvarsmakten.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mx-auto flex w-fit items-center gap-1.5 rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 px-4 py-2 text-[11px] font-medium text-[#FFB347] transition hover:bg-[#FF8B01]/20"
+            >
+              📄 Visa/ladda ner underlaget (PDF)
+            </a>
+            <p className="text-center text-[10px] text-white/25">
+              Visualiseringen bygger på koordinater och uppgifter från det bifogade underlaget.
+            </p>
+            <p className="text-center text-[11px] text-white/30">
+              Fungerar bäst utomhus, i dagsljus eller kväll, med fri sikt mot horisonten.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

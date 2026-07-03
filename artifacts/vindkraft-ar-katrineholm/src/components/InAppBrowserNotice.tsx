@@ -20,18 +20,15 @@ export function InAppBrowserNotice({ appName }: { appName: string }) {
   };
 
   return (
-    <div className="rounded-xl border border-yellow-400/30 bg-yellow-500/10 p-3.5 text-sm text-yellow-100">
-      <p className="font-medium text-yellow-50">⚠️ Du öppnade länken i {appName}</p>
-      <p className="mt-1.5 text-[13px] leading-relaxed text-yellow-100/80">
-        {appName}s inbyggda webbläsare blockerar ofta kamera och GPS, så appen kanske inte kan fråga om
-        behörighet alls. Öppna länken i Safari eller Chrome istället — tryck på{" "}
-        <span className="font-medium">••• (eller ⋮)</span> uppe i hörnet och välj{" "}
-        <span className="font-medium">"Öppna i webbläsare"</span>, eller kopiera länken nedan och klistra in
-        den i Safari/Chrome.
+    <div className="rounded-lg border border-yellow-400/30 bg-yellow-500/10 p-2.5 text-sm text-yellow-100">
+      <p className="text-[13px] font-medium leading-snug text-yellow-50">⚠️ Öppnade i {appName}</p>
+      <p className="mt-1 text-[12px] leading-snug text-yellow-100/80">
+        Blockerar ofta kamera/GPS. Tryck <span className="font-medium">••• (eller ⋮)</span> och välj{" "}
+        <span className="font-medium">"Öppna i webbläsare"</span>, eller kopiera länken:
       </p>
       <button
         onClick={handleCopyLink}
-        className="mt-2.5 w-full rounded-full bg-yellow-400/20 py-2 text-xs font-semibold text-yellow-50 transition hover:bg-yellow-400/30"
+        className="mt-2 w-full rounded-full bg-yellow-400/20 py-1.5 text-xs font-semibold text-yellow-50 transition hover:bg-yellow-400/30"
       >
         {linkCopied ? "✓ Länk kopierad!" : "🔗 Kopiera länk"}
       </button>

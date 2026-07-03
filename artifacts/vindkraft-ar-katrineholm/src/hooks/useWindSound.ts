@@ -29,27 +29,25 @@ interface WindNodes {
   streamDestination: MediaStreamAudioDestinationNode;
 }
 
-// Bas-/maxvolymen håller ljudet återhållsamt på håll och tydligt kraftigare
-// nära tornen, ungefär som verkens bullerutredning anger (ca 35–40 dBA
-// ekvivalent nivå vid närmaste bostad, som ett tyst kylskåpssus). Var på
-// BASE..MAX-skalan volymen ligger just nu styrs helt av `updateProximity`s
-// `dbaGain`-parameter — dvs. DIREKT av den beräknade dBA-nivån i
-// `lib/soundLevel.ts` (`dbaToGain(totalDba)`), inte av en egen fristående
-// avståndskurva. OBS: webbljud kan ändå inte återge en fysisk dB-nivå exakt
-// (beror på telefonens högtalare/volym) — dBA-uppskattningen är informativ,
-// men den här kopplingen gör att volymen ändå kontinuerligt FÖLJER den.
+// Maxvolymen håller ljudet tydligt kraftigare nära tornen, ungefär som
+// verkens bullerutredning anger (ca 35–40 dBA ekvivalent nivå vid närmaste
+// bostad, som ett tyst kylskåpssus). Volymen skalas LINJÄRT 0..MAX och styrs
+// helt av `updateProximity`s `dbaGain`-parameter — dvs. DIREKT av den
+// beräknade dBA-nivån i `lib/soundLevel.ts` (`dbaToGain(totalDba)`), inte av
+// en egen fristående avståndskurva. Ingen hörbar bottenvolym vid `dbaGain=0`
+// (t.ex. "Ljud inne") — annars matchar inte den faktiska volymen den
+// nästan-noll dBA-siffran som visas i panelen. OBS: webbljud kan ändå inte
+// återge en fysisk dB-nivå exakt (beror på telefonens högtalare/volym) —
+// dBA-uppskattningen är informativ, men den här kopplingen gör att volymen
+// ändå kontinuerligt FÖLJER den.
 //
 // Hög upplevd ljudstyrka (utan att digitalt klippa) uppnås genom en hårdare
 // kompressor (lägre tröskel/högre ratio) + en makeup-gain-nod efteråt som
 // lyfter den komprimerade signalen tillbaka upp mot fullt utslag, och en
 // sista mjuk klippnings- (WaveShaper-)nod som säkerhetsnät.
-const AMBIENCE_BASE = 0.3;
 const AMBIENCE_MAX = 0.78;
-const WHOOSH_BASE = 0.5;
 const WHOOSH_MAX = 1.25;
-const WHOOSH2_BASE = 0.32;
 const WHOOSH2_MAX = 0.8;
-const RUMBLE_BASE = 0.18;
 const RUMBLE_MAX = 0.42;
 
 /**
@@ -319,7 +317,11 @@ export function useWindSound() {
     windFilter.connect(windGain);
     windGain.connect(masterGain);
     windSource.start();
-    windGain.gain.setTargetAtTime(AMBIENCE_BASE, ctx.currentTime, 0.6);
+    // Startar tyst (0) — den riktiga volymen sätts av `updateProximity`
+    // strax efter, direkt från den beräknade dBA-nivån. Ingen fast
+    // bottenvolym här, annars hörs ett kort "hopp" innan den första riktiga
+    // uppdateringen hinner köra, och "Ljud inne" skulle aldrig bli helt tyst.
+    windGain.gain.setTargetAtTime(0, ctx.currentTime, 0.6);
 
     // Bladsvisch, lager 1 — smalare, ljusare brus. Rytmen kommer nu från en
     // riktig tremolo-kedja (whooshSwishGain) istället för att bara lägga en
@@ -362,7 +364,9 @@ export function useWindSound() {
     lfoGain.connect(whooshSwishGain.gain);
     lfo.start();
 
-    whooshGain.gain.setTargetAtTime(WHOOSH_BASE, ctx.currentTime, 0.8);
+    // Se motsvarande kommentar vid windGain ovan — startar tyst, riktig
+    // volym sätts av `updateProximity`.
+    whooshGain.gain.setTargetAtTime(0, ctx.currentTime, 0.8);
 
     // Bladsvisch, lager 2 — ett andra, oberoende svischlager med en annan
     // filterkaraktär, egen (lätt förskjuten) takt och en något mjukare
@@ -399,7 +403,9 @@ export function useWindSound() {
     lfo2Gain.connect(whoosh2SwishGain.gain);
     lfo2.start();
 
-    whoosh2Gain.gain.setTargetAtTime(WHOOSH2_BASE, ctx.currentTime, 0.9);
+    // Se motsvarande kommentar vid windGain ovan — startar tyst, riktig
+    // volym sätts av `updateProximity`.
+    whoosh2Gain.gain.setTargetAtTime(0, ctx.currentTime, 0.9);
 
     // Lågfrekvent mull — grundton + en oktav över, för ett djupt, kraftfullt
     // brummande basljud som ger verken betydligt mer fysisk tyngd och närvaro,
@@ -417,7 +423,9 @@ export function useWindSound() {
     rumbleGain.connect(masterGain);
     rumbleOsc.start();
     rumbleOsc2.start();
-    rumbleGain.gain.setTargetAtTime(RUMBLE_BASE, ctx.currentTime, 1);
+    // Se motsvarande kommentar vid windGain ovan — startar tyst, riktig
+    // volym sätts av `updateProximity`.
+    rumbleGain.gain.setTargetAtTime(0, ctx.currentTime, 1);
 
     nodesRef.current = {
       windSource,
@@ -472,10 +480,16 @@ export function useWindSound() {
 
     const gain = Math.min(Math.max(dbaGain, 0), 1);
 
-    const windTarget = AMBIENCE_BASE + gain * (AMBIENCE_MAX - AMBIENCE_BASE);
-    const whooshTarget = WHOOSH_BASE + gain * (WHOOSH_MAX - WHOOSH_BASE);
-    const whoosh2Target = WHOOSH2_BASE + gain * (WHOOSH2_MAX - WHOOSH2_BASE);
-    const rumbleTarget = RUMBLE_BASE + gain * (RUMBLE_MAX - RUMBLE_BASE);
+    // OBS: skalas härifrån hela vägen ner mot 0 (inte BASE..MAX) så att
+    // "Ljud inne" — där `dbaGain` faller till 0 (se dbaToGain/
+    // applyIndoorAttenuation) — faktiskt blir tyst och matchar den nästan
+    // noll-visade dBA-siffran, istället för att fastna på en hörbar
+    // bottenvolym. Utomhus (gain > 0) låter fortfarande ljudet svälla mot
+    // AMBIENCE_MAX/WHOOSH_MAX osv, precis som förut.
+    const windTarget = gain * AMBIENCE_MAX;
+    const whooshTarget = gain * WHOOSH_MAX;
+    const whoosh2Target = gain * WHOOSH2_MAX;
+    const rumbleTarget = gain * RUMBLE_MAX;
 
     nodes.windGain.gain.setTargetAtTime(windTarget, ctx.currentTime, 1.2);
     nodes.whooshGain.gain.setTargetAtTime(whooshTarget, ctx.currentTime, 1.2);
