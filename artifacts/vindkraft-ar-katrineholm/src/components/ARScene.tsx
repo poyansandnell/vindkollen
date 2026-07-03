@@ -24,6 +24,15 @@ interface ARSceneProps {
    * (ändras inte varje render) eftersom den anropas i renderloopen.
    */
   isPointSky?: (u: number, v: number) => boolean;
+  /**
+   * Global styrka (0..1) från "Outdoor Confidence Index"-tröskelvärdet
+   * (`useOutdoorConfidenceIndex` i Home.tsx) — appliceras ovanpå per-punkts
+   * himmelsmasken (`isPointSky`) som ytterligare en försiktighetsspärr:
+   * 1 = visa normalt, ~0.6 = visa försiktigt (lägre opacitet, tier
+   * "cautious"), 0 = dölj helt (tier "aim"/"hide", eller otillräcklig
+   * himmelsandel i bild). Default 1 om utelämnad (bakåtkompatibelt).
+   */
+  globalVisibilityFactor?: number;
 }
 
 const DEFAULT_IS_POINT_SKY = () => true;
@@ -244,6 +253,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     nightMode,
     shadowFlicker,
     isPointSky,
+    globalVisibilityFactor,
   },
   forwardedRef,
 ) {
@@ -259,7 +269,14 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     sunGlow: THREE.Sprite;
   } | null>(null);
   const userRef = useRef({ lat: userLat, lon: userLon });
-  const modeRef = useRef({ sunMode, realScale, visibility, nightMode, shadowFlicker });
+  const modeRef = useRef({
+    sunMode,
+    realScale,
+    visibility,
+    nightMode,
+    shadowFlicker,
+    globalVisibilityFactor: globalVisibilityFactor ?? 1,
+  });
   const skyRef = useRef({ isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY });
   // Väntande Fotomontage-förfrågan — löses in synkront direkt efter nästa
   // renderade bildruta i animationsloopen (se `animate`), istället för att
@@ -272,7 +289,14 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   const pendingCaptureRef = useRef<((dataUrl: string | null) => void) | null>(null);
 
   userRef.current = { lat: userLat, lon: userLon };
-  modeRef.current = { sunMode, realScale, visibility, nightMode, shadowFlicker };
+  modeRef.current = {
+    sunMode,
+    realScale,
+    visibility,
+    nightMode,
+    shadowFlicker,
+    globalVisibilityFactor: globalVisibilityFactor ?? 1,
+  };
   skyRef.current = { isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY };
 
   useImperativeHandle(forwardedRef, () => ({
@@ -518,15 +542,21 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
      * bildruta i renderloopen när himmelsmasken uppdateras.
      */
     function applyFinalOpacities(obj: TurbineObject) {
-      const opacity = obj.baseOpacity * obj.skyFactor;
+      // `globalVisibilityFactor` (Outdoor Confidence Index-tröskeln) verkar
+      // som en global gate ovanpå per-punkts himmelsmasken — 0 döljer alla
+      // verk helt oavsett vad `skyFactor` säger, ~0.6 tonar ned dem för
+      // "cautious"-läget.
+      const globalFactor = modeRef.current.globalVisibilityFactor;
+      const skyFactor = obj.skyFactor * globalFactor;
+      const opacity = obj.baseOpacity * skyFactor;
       for (const mat of obj.materials) {
         mat.transparent = opacity < 1;
         mat.opacity = opacity;
       }
-      (obj.label.sprite.material as THREE.SpriteMaterial).opacity = obj.skyFactor;
-      (obj.distanceLabel.sprite.material as THREE.SpriteMaterial).opacity = obj.skyFactor;
-      (obj.light.material as THREE.SpriteMaterial).opacity = obj.skyFactor;
-      (obj.glow.material as THREE.SpriteMaterial).opacity = obj.skyFactor;
+      (obj.label.sprite.material as THREE.SpriteMaterial).opacity = skyFactor;
+      (obj.distanceLabel.sprite.material as THREE.SpriteMaterial).opacity = skyFactor;
+      (obj.light.material as THREE.SpriteMaterial).opacity = skyFactor;
+      (obj.glow.material as THREE.SpriteMaterial).opacity = skyFactor;
     }
 
     function applyVisibility(obj: TurbineObject, distM: number) {
@@ -680,11 +710,12 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         obj.light.visible = blinkOn;
         obj.glow.visible = blinkOn;
 
+        const shadowSkyFactor = obj.skyFactor * modeRef.current.globalVisibilityFactor;
         if (flickerActive && obj.shadow.visible) {
           const flicker = 0.55 + 0.45 * Math.cos(obj.bladesGroup.rotation.z * 3);
-          obj.shadowMaterial.opacity = obj.shadowBaseOpacity * obj.skyFactor * flicker;
+          obj.shadowMaterial.opacity = obj.shadowBaseOpacity * shadowSkyFactor * flicker;
         } else {
-          obj.shadowMaterial.opacity = obj.shadowBaseOpacity * obj.skyFactor;
+          obj.shadowMaterial.opacity = obj.shadowBaseOpacity * shadowSkyFactor;
         }
       }
 

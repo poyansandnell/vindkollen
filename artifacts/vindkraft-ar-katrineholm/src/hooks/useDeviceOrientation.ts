@@ -15,6 +15,14 @@ export interface DeviceOrientationApi {
   calibrateHorizon: () => void;
   /** Muteras varje sensoravläsning — kamerans quaternion kan kopieras direkt från denna ref utan re-render. */
   quaternionRef: React.MutableRefObject<THREE.Quaternion>;
+  /**
+   * 0..1 mått på hur stabil kompassriktningen (gir) varit över de senaste
+   * dryga sekunden — 1 = i princip stillastående, 0 = kraftigt/oregelbundet
+   * svängande. Används som en av flera svaga signaler i "Outdoor Confidence
+   * Index" (en skakig/svängande kompass tyder ofta på att telefonen just nu
+   * rörs runt snarare än hålls stadigt riktad mot himlen).
+   */
+  headingStabilityRef: React.MutableRefObject<number>;
 }
 
 // Dödzon: sensorbrus på bråkdelar av en grad ska inte alls påverka
@@ -78,6 +86,10 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   const quaternionRef = useRef(new THREE.Quaternion());
   const hasFixRef = useRef(false);
   const lastEventTimeRef = useRef<number | null>(null);
+  const headingStabilityRef = useRef(1);
+  // Litet rullande fönster av senaste |Δgir|/tidssteg-samples (grader/s) —
+  // används bara för att räkna fram `headingStabilityRef`, ingen render.
+  const headingDeltaSamplesRef = useRef<number[]>([]);
 
   const updateScreenAngle = useCallback(() => {
     const orientationApi = (screen as unknown as { orientation?: { angle: number } }).orientation;
@@ -111,9 +123,25 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     const headingFactor = timeSmoothingFactor(0.15, dt);
     const pitchRollFactor = timeSmoothingFactor(0.35, dt);
 
+    const prevHeading = headingRef.current;
     const smoothedHeading = smoothCircular(headingRef, heading, headingFactor);
     const smoothedBeta = smoothLinear(betaRef, event.beta, pitchRollFactor);
     const smoothedGamma = smoothLinear(gammaRef, event.gamma, pitchRollFactor);
+
+    // Kompass-stabilitet: rullande medel av |Δgir|/s över de senaste ~1.2s.
+    // Låg medelhastighet -> stabil (nära 1), hög -> instabil (nära 0).
+    if (prevHeading !== null && dt > 0) {
+      let delta = smoothedHeading - prevHeading;
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
+      const degPerSec = Math.abs(delta) / dt;
+      const samples = headingDeltaSamplesRef.current;
+      samples.push(degPerSec);
+      if (samples.length > 24) samples.shift();
+      const avgDegPerSec = samples.reduce((a, b) => a + b, 0) / samples.length;
+      // 0°/s -> stabilitet 1; >=20°/s (snabb vridning) -> stabilitet 0.
+      headingStabilityRef.current = Math.max(0, 1 - avgDegPerSec / 20);
+    }
 
     // Konvertera tillbaka till en "alpha" som ger rätt gir i standardformeln.
     const alphaForQuaternion = (360 - smoothedHeading) % 360;
@@ -186,5 +214,6 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     requestPermission,
     calibrateHorizon,
     quaternionRef,
+    headingStabilityRef,
   };
 }

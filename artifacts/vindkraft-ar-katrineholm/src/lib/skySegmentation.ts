@@ -46,6 +46,17 @@ export interface SkySegmentationResult {
   grid: boolean[];
   /** Andel av rutnätet som klassades som himmel just nu (0..1). */
   skyRatio: number;
+  /**
+   * Antal TensorFlow.js-tensorer som just nu lever i minnet (`tf.memory()
+   * .numTensors`), direkt efter denna segmentering. Används av
+   * `useSkyDetection` som en oberoende säkerhetsbrytare: om detta tal växer
+   * stadigt över tid (ett minnesläckage i modellen/pipelinen) stängs
+   * ML-vägen av permanent innan det hinner orsaka att hela appen fryser —
+   * ett komplement till den redan befintliga latens-baserade brytaren
+   * (`ML_SLOW_MS`/`ML_MAX_SLOW_SAMPLES`), som inte ensam kan upptäcka ett
+   * läckage som inte gör enskilda anrop långsammare.
+   */
+  numTensors: number;
 }
 
 /**
@@ -76,5 +87,14 @@ export async function segmentSkyGrid(
       if (isSky) skyCount++;
     }
   }
-  return { grid, skyRatio: skyCount / (cols * rows) };
+  let numTensors = -1;
+  try {
+    const tf = await import("@tensorflow/tfjs");
+    numTensors = tf.memory().numTensors;
+  } catch {
+    // Om tf.memory() av någon anledning inte går att läsa av fortsätter vi
+    // ändå — säkerhetsbrytaren i useSkyDetection ignorerar då bara denna
+    // signal (numTensors: -1) istället för att krascha.
+  }
+  return { grid, skyRatio: skyCount / (cols * rows), numTensors };
 }

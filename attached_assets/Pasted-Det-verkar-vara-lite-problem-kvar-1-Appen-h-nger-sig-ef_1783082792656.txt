@@ -1,0 +1,77 @@
+Det verkar vara lite problem kvar:
+
+1. Appen hänger sig efter en stund
+Efter en stund verkar appen frysa/hänga sig. De första sekunderna verkar inomhusdetekteringen fungera, men sedan blir appen instabil. Kontrollera särskilt ML-maskning, kameraloop, ljudloop och om någon analys körs för ofta utan throttling.
+
+2. Lägg till ett tydligt “utomhusindex”
+Appen ska inte bara gissa inne/ute med en enda signal. Lägg till ett Outdoor Confidence Index 0–100 %.
+
+Förslag på viktning:
+- Kamera/AI: 45 %
+- GPS-noggrannhet: 20 %
+- Ljussensor: 15 %
+- Kompass/magnetometer-stabilitet: 10 %
+- Rörelse/gyroscope/accelerometer: 5 %
+- WiFi/inomhusindikation: 5 %
+
+Tolkning:
+- 90–100 %: Utomhus, visa vindkraftverk
+- 70–90 %: Troligen utomhus, visa försiktigt
+- 40–70 %: Osäkert, be användaren rikta kameran mot himlen/horizonten
+- under 40 %: Inomhus, dölj vindkraftverk och visa tydligt “Gå utomhus”
+
+3. Extra regel: kräv synlig himmel
+Vindkraftverken ska bara visas om kamerabilden innehåller tillräckligt mycket himmel/fri sikt.
+
+Förslag:
+- minst 15–20 % av bilden ska klassas som himmel/fri sikt
+- om ingen himmel/fri sikt syns: dölj verken
+- om kameran ser vägg, tak, möbler eller inomhusmiljö: visa “Gå utomhus”
+- om systemet är osäkert: dölj hellre vindkraftverken än att visa dem fel
+
+4. “Gå utomhus”-informationen måste synas bättre
+När användaren är inomhus ska meddelandet vara stort, tydligt och ligga över panelerna:
+“🏠➡️🌤️ Gå utomhus för att se vindkraftverken”
+
+Det får inte döljas bakom ljudpanelen, knappar eller annan UI.
+
+5. dBA- och infraljudspanelen är för stor
+Nu täcker texten om dBA/infraljud för stor del av skärmen. Gör den mer kompakt:
+- mindre höjd
+- mindre text
+- gärna hopfällbar
+- visa bara viktigaste info först
+- mer info kan visas via “Visa mer”
+
+6. Varför ändras dBA så mycket när användaren står still?
+Ljudnivån verkar hoppa för mycket trots att GPS-positionen är samma. Lägg till smoothing/stabilisering.
+
+Förslag:
+- använd glidande medelvärde över 5–10 sekunder
+- uppdatera inte visad dBA mer än 1 gång per sekund
+- ignorera små GPS-hopp under t.ex. 10–20 meter
+- låt dBA ändras mjukt, inte hoppa snabbt upp/ner
+- visa gärna “beräknad nivå” snarare än exakt mätning
+
+7. Ljudet ska följa dBA
+Vindljudet ska följa den stabiliserade dBA-nivån:
+- låg dBA = lågt ljud
+- högre dBA = högre ljud
+- inomhusläge = dämpat ljud
+- utomhusläge = full beräknad ljudnivå
+
+8. Separera dBA och infraljud
+Ha två olika indikatorer:
+- dBA = hörbar ljudnivå
+- infraljud/lågfrekvent påverkan = egen riskindikator
+
+Infraljud ska visas med färg:
+🟢 låg
+🟡 måttlig
+🔴 hög
+
+Texten ska vara försiktig:
+“Detta är en uppskattad indikator, inte en medicinsk mätning. Långvarig exponering för lågfrekvent ljud kan hos vissa personer upplevas som störande och bidra till trötthet, huvudvärk eller sömnproblem.”
+
+9. Visa inte vindkraftverk framför objekt
+Vindkraftverken får inte ritas ovanpå väggar, tak, träd, hus eller inomhusmiljö. Om appen inte är säker på fri sikt ska verken döljas.

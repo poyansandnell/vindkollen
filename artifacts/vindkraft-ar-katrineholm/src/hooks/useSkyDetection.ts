@@ -28,6 +28,20 @@ export interface SkyDetectionState {
    */
   isPointSky: (u: number, v: number) => boolean;
   /**
+   * Rå (lätt utjämnad) andel av bildrutan som just nu klassas som himmel
+   * (0..1) — samma underliggande signal som `outdoorConfidence` bygger på,
+   * men utan EMA-fördröjningen, så konsumenter som behöver ett direkt
+   * "minst X% himmel"-villkor (t.ex. Outdoor Confidence Index) slipper vänta
+   * in utjämningen.
+   */
+  skyRatio: number;
+  /**
+   * Genomsnittlig luminans (0..1) i den senaste bildrutan — en enkel,
+   * alltid tillgänglig proxy för omgivande ljusnivå när en riktig
+   * `AmbientLightSensor` inte finns/tillåts (svagt webbläsarstöd).
+   */
+  avgLuminance: number;
+  /**
    * Vilket läge himmel-ocklusionen (`isPointSky`) just nu befinner sig i —
    * nyttigt för felsökning/UI, styr aldrig något annat beteende i sig.
    * - "loading": ML-segmenteringsmodellen laddas fortfarande i bakgrunden.
@@ -84,6 +98,16 @@ const INDOOR_EXIT_THRESHOLD = 0.32;
 // fungerar i praktiken aldrig.
 const ML_SLOW_MS = 3000;
 const ML_MAX_SLOW_SAMPLES = 6;
+
+// Tensor-läckage-brytaren: hur många fler tensorer än baslinjen som anses
+// vara ett tecken på en läcka snarare än normal brus/variation mellan
+// anrop, och hur många på varandra följande sådana samples som krävs innan
+// ML stängs av permanent. Generöst tilltaget (läckor växer obegränsat över
+// tid, så ens ett högt men konstant tröskelvärde fångar dem till slut) för
+// att undvika falska positiva på enheter som legitimt håller fler tensorer
+// vid liv (t.ex. WebGL-texturcache).
+const ML_TENSOR_GROWTH_THRESHOLD = 80;
+const ML_TENSOR_GROWTH_MAX_SAMPLES = 5;
 
 /**
  * Klassificerar en rutnätscell som "himmel-lik" baserat på ljusstyrka,
@@ -186,6 +210,8 @@ export function useSkyDetection(
   const [indoors, setIndoors] = useState(false);
   const [ready, setReady] = useState(false);
   const [method, setMethod] = useState<"loading" | "ml" | "disabled">("loading");
+  const [skyRatio, setSkyRatio] = useState(0);
+  const [avgLuminance, setAvgLuminance] = useState(0.5);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mlCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -218,6 +244,17 @@ export function useSkyDetection(
   // än stationärt läge — räknas inte mot slow-tröskeln, annars riskerar en
   // enda kall uppstart att bidra i onödan till en permanent avstängning.
   const mlWarmedUpRef = useRef(false);
+  // Säkerhetsbrytare mot ett eventuellt minnesläckage i ML-pipelinen: sparar
+  // hur många levande TF.js-tensorer som fanns direkt efter uppvärmningen,
+  // och håller reda på hur många på varandra följande samples som visar en
+  // fortsatt växande tensorräkning därefter. Om den växer stadigt (istället
+  // för att plana ut, vilket normal drift gör) stängs ML av permanent —
+  // exakt samma fallback-väg som den redan befintliga latens-brytaren,
+  // eftersom en läcka annars kan orsaka att hela appen fryser efter en
+  // längre stunds användning utan att någonsin göra ETT enskilt anrop
+  // tillräckligt långsamt för att triggra `ML_SLOW_MS`.
+  const mlTensorBaselineRef = useRef<number | null>(null);
+  const mlTensorGrowthCountRef = useRef(0);
 
   // Stabil funktionsreferens — läser alltid det senaste rutnätet via
   // `gridRef` (oavsett om det just nu kommer från ML-segmenteringen eller
@@ -248,9 +285,13 @@ export function useSkyDetection(
       methodRef.current = "loading";
       gridRef.current.fill(false);
       heuristicGridRef.current.fill(false);
+      mlTensorBaselineRef.current = null;
+      mlTensorGrowthCountRef.current = 0;
       setOutdoorConfidence(1);
       setIndoors(false);
       setReady(false);
+      setSkyRatio(0);
+      setAvgLuminance(0.5);
       return;
     }
 
@@ -284,8 +325,8 @@ export function useSkyDetection(
     // utomhus" — redan befintlig funktion sedan tidigare). Körs alltid,
     // oavsett ML-status, så detta beteende aldrig påverkas av om
     // segmenteringsmodellen lyckas ladda eller inte.
-    function applyConfidence(skyRatio: number) {
-      const target = Math.min(skyRatio / CONFIDENCE_SKY_RATIO_SCALE, 1);
+    function applyConfidence(rawSkyRatio: number) {
+      const target = Math.min(rawSkyRatio / CONFIDENCE_SKY_RATIO_SCALE, 1);
       confidenceRef.current += EMA_ALPHA * (target - confidenceRef.current);
       const nextConfidence = confidenceRef.current;
 
@@ -297,6 +338,7 @@ export function useSkyDetection(
 
       if (cancelled) return;
       setOutdoorConfidence(nextConfidence);
+      setSkyRatio(rawSkyRatio);
       if (nowIndoors !== wasIndoors) setIndoors(nowIndoors);
       setReady(true);
     }
@@ -311,6 +353,7 @@ export function useSkyDetection(
       }
 
       let skyCount = 0;
+      let lumSum = 0;
       for (let row = 0; row < GRID_ROWS; row++) {
         for (let col = 0; col < GRID_COLS; col++) {
           const isSky = classifyCell(pixels, col, row);
@@ -318,6 +361,10 @@ export function useSkyDetection(
           if (isSky) skyCount++;
         }
       }
+      for (let i = 0; i < pixels.length; i += 4) {
+        lumSum += 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+      }
+      if (!cancelled) setAvgLuminance(lumSum / (pixels.length / 4) / 255);
       applyConfidence(skyCount / (GRID_COLS * GRID_ROWS));
     }
 
@@ -343,7 +390,12 @@ export function useSkyDetection(
       const isWarmup = !mlWarmedUpRef.current;
       const start = performance.now();
       try {
-        const { grid, skyRatio } = await segmentSkyGrid(model, mlCanvas, GRID_COLS, GRID_ROWS);
+        const { grid, skyRatio: mlSkyRatio, numTensors } = await segmentSkyGrid(
+          model,
+          mlCanvas,
+          GRID_COLS,
+          GRID_ROWS,
+        );
         const elapsed = performance.now() - start;
         mlWarmedUpRef.current = true;
         if (elapsed > ML_SLOW_MS && !isWarmup) {
@@ -354,12 +406,27 @@ export function useSkyDetection(
         } else {
           mlSlowCountRef.current = 0;
         }
+        // Tensor-läckage-brytare — se konstant-kommentaren ovan. `-1` betyder
+        // att `tf.memory()` inte gick att läsa av (t.ex. import misslyckades);
+        // ignorera signalen då istället för att räkna det som tillväxt.
+        if (numTensors >= 0 && !isWarmup) {
+          if (mlTensorBaselineRef.current === null) {
+            mlTensorBaselineRef.current = numTensors;
+          } else if (numTensors - mlTensorBaselineRef.current > ML_TENSOR_GROWTH_THRESHOLD) {
+            mlTensorGrowthCountRef.current += 1;
+            if (mlTensorGrowthCountRef.current >= ML_TENSOR_GROWTH_MAX_SAMPLES) {
+              mlStateRef.current = "disabled";
+            }
+          } else {
+            mlTensorGrowthCountRef.current = 0;
+          }
+        }
         if (cancelled) return;
         gridRef.current = grid;
         // ML:s eget himmel-mått är mer träffsäkert än ljusstyrke-heuristiken
         // (skiljer t.ex. riktig himmel från en ljus vit vägg) — använd det
         // för ljuddämpningen/"Gå utomhus" också när det finns tillgängligt.
-        applyConfidence(skyRatio);
+        applyConfidence(mlSkyRatio);
       } catch {
         // En enskild bildruta misslyckades (t.ex. WebGL-kontext tillfälligt
         // upptagen) — räkna som en "långsam"/misslyckad sampling istället för
@@ -389,6 +456,12 @@ export function useSkyDetection(
     }
 
     function sample() {
+      // Pausa allt arbete (heuristik + ML) när fliken/appen är i bakgrunden —
+      // t.ex. skärmen låst eller användaren växlat app under en lång AR-
+      // session. Sparar CPU/GPU och batteri, och minskar risken att en lång
+      // bakgrundskörning bidrar till frysning/överhettning över tid.
+      if (document.hidden) return;
+
       const video = videoRef.current;
       if (!video || video.readyState < 2 || video.videoWidth === 0) return;
 
@@ -418,5 +491,13 @@ export function useSkyDetection(
     };
   }, [enabled, videoRef]);
 
-  return { outdoorConfidence, indoors, ready, isPointSky: isPointSkyRef.current, method };
+  return {
+    outdoorConfidence,
+    indoors,
+    ready,
+    isPointSky: isPointSkyRef.current,
+    method,
+    skyRatio,
+    avgLuminance,
+  };
 }

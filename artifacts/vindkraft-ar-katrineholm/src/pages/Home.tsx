@@ -4,6 +4,9 @@ import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useCameraStream } from "@/hooks/useCameraStream";
 import { useWindSound } from "@/hooks/useWindSound";
 import { useSkyDetection } from "@/hooks/useSkyDetection";
+import { useOutdoorConfidenceIndex } from "@/hooks/useOutdoorConfidenceIndex";
+import { useStableGeoPosition } from "@/hooks/useStableGeoPosition";
+import { useSmoothedDba } from "@/hooks/useSmoothedDba";
 import { CameraBackground } from "@/components/CameraBackground";
 import { ARScene, type ARSceneHandle } from "@/components/ARScene";
 import { MapView } from "@/components/MapView";
@@ -74,27 +77,76 @@ export default function Home() {
   // nedan när användaren bedöms vara inomhus.
   const sky = useSkyDetection(videoElRef, started);
 
+  // "Outdoor Confidence Index" (0-100%): väger samman kamera/AI-himmelsandel,
+  // GPS-precision, ljusnivå, kompass-stabilitet, rörelse och wifi-antydan
+  // till ett enda index som styr HUR verken visas (normalt/försiktigt/
+  // dolt), utöver den redan befintliga per-punkts himmelsmasken ovan.
+  const confidence = useOutdoorConfidenceIndex({
+    enabled: started,
+    cameraSkyRatio: sky.skyRatio,
+    gpsAccuracy: geo.accuracy,
+    ambientLuminance: sky.avgLuminance,
+    headingStabilityRef: orientation.headingStabilityRef,
+  });
+
+  // Minimikrav enligt produktkrav: minst 15-20% synlig himmel i bild innan
+  // verk visas överhuvudtaget, oavsett vad de övriga signalerna i indexet
+  // ovan säger — en enstaka ljus yta (t.ex. en vit vägg) ska inte räcka.
+  const MIN_SKY_RATIO = 0.15;
+  const hasEnoughSky = sky.skyRatio >= MIN_SKY_RATIO;
+
+  // Global synlighetsstyrka som skickas till ARScene: 1 = visa normalt,
+  // 0.6 = "cautious"-tonat, 0 = dölj helt ("aim"/"hide", eller otillräcklig
+  // himmelsandel). `sky.ready` väntar in det allra första samplet så verken
+  // inte blixtrar till fullt synliga under den första bildrutan.
+  const globalVisibilityFactor = !sky.ready || !hasEnoughSky ? 0 : confidence.tier === "show" ? 1 : confidence.tier === "cautious" ? 0.6 : 0;
+
+  // Dölj verk + visa "Gå utomhus" antingen vid indexets "hide"-nivå (<40%)
+  // eller om himmelsandelen i bild är för låg — samma stora, prominenta
+  // overlay som tidigare, men nu även styrd av det sammanvägda indexet.
+  const shouldHide = sky.ready && (confidence.tier === "hide" || !hasEnoughSky);
+  // 40-70%: be användaren rikta kameran mot himlen istället för att bara
+  // dölja tyst — en mellanliggande, mindre alarmerande banner.
+  const shouldAskAimAtSky = sky.ready && !shouldHide && confidence.tier === "aim";
+
   const errors = useMemo(
     () => [geo.error, orientation.error, camera.error].filter((e): e is string => Boolean(e)),
     [geo.error, orientation.error, camera.error],
   );
 
-  // Beräknar dBA-uppskattningen baserat på GPS-avstånd till samtliga verk.
-  // Dämpningen styrs numera av den explicita "Ljud ute/inne"-väljaren
-  // (`soundEnvironment`) i stället för kameraheuristiken — användaren ska
-  // kunna lita på och kontrollera detta läge själv. Samma tal används både
-  // för visningen (SoundLevelPanel/NoiseImpactMonitor) OCH för att driva
-  // wind.updateProximitys volym nedan, så allt hänger konsekvent ihop.
-  const soundLevelEstimate = useMemo(() => {
-    if (geo.lat === null || geo.lon === null) {
+  // Stabiliserad GPS-position: ignorerar små GPS-studs (<15 m) så att
+  // dBA-uppskattningen nedan inte omberäknas för varje litet, naturligt
+  // GPS-brus medan användaren i praktiken står still.
+  const stableGeo = useStableGeoPosition(geo.lat, geo.lon);
+
+  // Beräknar dBA-uppskattningen baserat på (den stabiliserade) GPS-avstånd
+  // till samtliga verk. Dämpningen styrs numera av den explicita "Ljud
+  // ute/inne"-väljaren (`soundEnvironment`) i stället för kameraheuristiken
+  // — användaren ska kunna lita på och kontrollera detta läge själv. Samma
+  // tal (efter ytterligare utjämning, se `smoothedTotalDba` nedan) används
+  // både för visningen (SoundLevelPanel/NoiseImpactMonitor) OCH för att
+  // driva wind.updateProximitys volym, så allt hänger konsekvent ihop.
+  const rawSoundLevelEstimate = useMemo(() => {
+    if (stableGeo.lat === null || stableGeo.lon === null) {
       return { totalDba: -Infinity, nearestDistanceM: null, contributingCount: 0 };
     }
     const distances = TURBINES.map((t) => {
       const { lat, lon } = swerefToWgs84(t.easting, t.northing);
-      return distanceMeters(geo.lat as number, geo.lon as number, lat, lon);
+      return distanceMeters(stableGeo.lat as number, stableGeo.lon as number, lat, lon);
     });
     return estimateSoundLevel(distances, soundEnvironment === "ute" ? 1 : 0);
-  }, [geo.lat, geo.lon, soundEnvironment]);
+  }, [stableGeo.lat, stableGeo.lon, soundEnvironment]);
+
+  // Glidande medelvärde (5-10s) av den råa totalnivån ovan, uppdaterat högst
+  // en gång per sekund — se `useSmoothedDba`s jsdoc. Alla konsumenter
+  // (panelerna nedan OCH vindljudets volym) använder detta utjämnade tal,
+  // inte `rawSoundLevelEstimate.totalDba` direkt, så ingen av dem kan
+  // "hoppa" ryckigt oberoende av den andra.
+  const smoothedTotalDba = useSmoothedDba(rawSoundLevelEstimate.totalDba);
+  const soundLevelEstimate = useMemo(
+    () => ({ ...rawSoundLevelEstimate, totalDba: smoothedTotalDba }),
+    [rawSoundLevelEstimate, smoothedTotalDba],
+  );
 
   // Vindriktning (informativ, om tillgänglig) för infraljud-/bullermonitorn
   // nedan — hämtas från ett fritt väder-API, degraderar tyst till "okänd"
@@ -312,6 +364,7 @@ export default function Home() {
               nightMode={nightMode}
               shadowFlicker={shadowFlicker}
               isPointSky={sky.isPointSky}
+              globalVisibilityFactor={globalVisibilityFactor}
             />
           )}
 
@@ -327,7 +380,7 @@ export default function Home() {
               skulle användaren se en evig snurrande laddningsindikator
               istället för en tydlig förklaring till varför AR-vyn inte
               startar. */}
-          {!ready && !(sky.ready && sky.indoors) && (
+          {!ready && !shouldHide && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/50 px-8 text-center">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#FF8B01] border-t-transparent" />
               <p className="text-sm text-white/90">
@@ -372,13 +425,33 @@ export default function Home() {
               av detta automatiska kameraläge. Ligger på ett högre z-index
               än både topp- och bottenraden (z-20) så att meddelandet ALDRIG
               hamnar bakom knappar/paneler. */}
-          {started && sky.ready && sky.indoors && (
+          {started && shouldHide && (
             <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/85 px-8 text-center">
               <span className="animate-pulse text-6xl">🏠➡️🌤️</span>
               <p className="text-xl font-bold text-white">Gå utomhus för att se vindkraftverken</p>
               <p className="max-w-xs text-sm text-white/80">
                 Kameran verkar just nu inte ha fri sikt mot himlen. AR-vyn visas bara utomhus, med fri sikt över
                 horisonten.
+              </p>
+            </div>
+          )}
+
+          {/* "Sikta mot himlen"-banner: index (40-69%) är för lågt för att
+              visa verk säkert, men inte så lågt att den stora "Gå
+              utomhus"-overlayen ovan behövs — mindre alarmerande, ber bara
+              användaren rikta kameran mot en öppnare del av himlen. Ligger
+              på samma z-index som "Gå utomhus" eftersom de aldrig visas
+              samtidigt (`shouldHide`/`shouldAskAimAtSky` är ömsesidigt
+              uteslutande). */}
+          {started && shouldAskAimAtSky && (
+            <div className="pointer-events-none absolute inset-x-0 top-1/3 z-40 flex flex-col items-center gap-3 px-8 text-center">
+              <span className="text-5xl">📱↗️☁️</span>
+              <p className="rounded-2xl bg-black/70 px-4 py-2 text-base font-semibold text-white">
+                Rikta kameran mot öppen himmel
+              </p>
+              <p className="max-w-xs text-xs text-white/70">
+                Osäker sikt just nu ({Math.round(confidence.score)}% tillförlitlighet) — vindkraftverken visas
+                igen så fort himlen syns tydligare.
               </p>
             </div>
           )}

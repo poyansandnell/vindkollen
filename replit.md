@@ -34,8 +34,11 @@ A Swedish-language progressive web app that lets people in Katrineholm point the
 - `src/lib/visualizationTypes.ts` — shared visualization mode types, incl. `shadowFlickerActive()` gating (only active in "current"/"low" sun modes).
 - `src/lib/noiseImpact.ts` — weighted green/yellow/red "infraljud-/bullerpåverkan" score combining dBA level, contributing-turbine count, downwind wind direction (if available), and exposure duration; owns the exact Swedish disclaimer text (`NOISE_IMPACT_DISCLAIMER`) — do not reword it, must keep "kan bidra till"/"kan upplevas"/"för känsliga personer" phrasing and avoid absolute claims.
 - `src/hooks/useWindDirection.ts` — fetches current wind direction/speed for the user's GPS position from the free Open-Meteo API (no key required); fails silently to `null` on network errors so the noise monitor just ignores the wind factor.
-- `src/components/NoiseImpactMonitor.tsx` — `NoiseImpactBadge` (always-visible top-bar status) + `NoiseImpactPanel` (expandable detail panel with reasons + disclaimer), mirrors the `SoundLevelPanel.tsx` pattern.
-- `src/pages/Home.tsx` — wires camera + AR + GPS + compass + permission gate + top/bottom UI chrome + dBA panel + noise impact monitor (incl. exposure-duration timer) + Fotomontage capture together.
+- `src/components/NoiseImpactMonitor.tsx` — `NoiseImpactBadge` (always-visible top-bar status) + `NoiseImpactPanel` (expandable detail panel with reasons + disclaimer), mirrors the `SoundLevelPanel.tsx` pattern. Both `SoundLevelPanel` and `NoiseImpactPanel` default to a compact view (headline number/level + independent "Visa mer" toggle) and only render distance/count/disclaimer detail when expanded.
+- `src/hooks/useOutdoorConfidenceIndex.ts` — weighted "Outdoor Confidence Index" (0-100%: camera/AI sky-detection 45%, GPS accuracy 20%, ambient light 15%, compass stability 10%, motion/gyro 5%, WiFi/indoor signal 5%) with four tiers (`show` ≥90, `cautious` ≥70, `aim` ≥40, `hide` <40) driving turbine visibility gating in `Home.tsx`/`ARScene.tsx`.
+- `src/hooks/useStableGeoPosition.ts` — freezes the lat/lon fed into the dBA calculation until the user moves ≥15m, so ordinary GPS jitter doesn't recompute sound level.
+- `src/hooks/useSmoothedDba.ts` — 7s rolling average of the raw dBA estimate, throttled to at most one visible update per second; both `SoundLevelPanel`/`NoiseImpactMonitor` display and the wind sound's `dbaToGain` volume consume this same smoothed value so they always agree.
+- `src/pages/Home.tsx` — wires camera + AR + GPS + compass + permission gate + top/bottom UI chrome + dBA panel + noise impact monitor (incl. exposure-duration timer) + Fotomontage capture + Outdoor Confidence Index gating together.
 
 ## Architecture decisions
 
@@ -56,7 +59,7 @@ A Swedish-language progressive web app that lets people in Katrineholm point the
 - "🌬️ Infraljud"-monitor: always-visible green/yellow/red badge + expandable panel estimating overall noise/infrasound impact (a distinct indicator from the dBA panel above) from distance, number of contributing turbines, wind direction (if available), and how long the user has been on-site, with a calm Swedish disclaimer emphasizing it is an estimated indicator, not a medical measurement (never claims guaranteed harm).
 - Map view (SVG-based) showing all turbines and the user's position.
 - "Skriv under för folkomröstning" petition button/modal referencing the real 2022 Katrineholm wind-power referendum.
-- Turbines only render in the AR view when the camera-based sky detection is confident of a clear outdoor sky view; any uncertainty (including "indoors" classification) hides turbines and shows a large, high-z-index "Gå utomhus" (go outside) message that always renders above all UI chrome (top/bottom bars, badges).
+- Turbines only render in the AR view when the weighted Outdoor Confidence Index (camera/AI sky detection, GPS accuracy, ambient light, compass stability, motion/gyro, WiFi/indoor signal) is in its "show" or "cautious" tier AND camera-based sky coverage is ≥15% of the frame; the "aim" tier (40-70%) shows a "Rikta kameran mot öppen himmel" banner instead of turbines, and the "hide" tier (<40%) or insufficient sky coverage shows the large, high-z-index "Gå utomhus" (go outside) message that always renders above all UI chrome (top/bottom bars, badges).
 - Fully Swedish-language UI; installable as a PWA.
 
 ## User preferences
@@ -66,7 +69,7 @@ _None recorded yet._
 ## Gotchas
 
 - iOS Safari requires a user-gesture-triggered `DeviceOrientationEvent.requestPermission()` call before compass data is available — handled in `useCompassHeading.ts`, triggered from the "Starta AR-vyn" button.
-- Camera/GPS/compass are unavailable or limited in desktop/headless test browsers — the app's top/bottom UI chrome and map/petition overlays are intentionally still usable even if AR itself can't fully initialize.
+- Camera/GPS/compass are unavailable or limited in desktop/headless test browsers — the app's top/bottom UI chrome and map/petition overlays are intentionally still usable even if AR itself can't fully initialize. The dBA and Infraljud panels are gated behind `ready` (needs GPS + orientation + camera stream all present), so they cannot be opened/expanded in a headless/sensor-less test browser — this is expected, not a bug.
 
 ## Wind data sync (api-server + lib/wind-sync)
 
