@@ -1,0 +1,12 @@
+---
+name: Dual heavy WebGL contexts freeze mobile browsers
+description: Running a second heavy WebGL-backed workload (e.g. TF.js model inference) alongside an already-active Three.js/WebGL canvas can hang the whole page on mobile Safari/Chrome, even with careful timeout/fallback logic around the second workload.
+---
+
+An app already rendering a live 3D scene (Three.js, one WebGL context) that also runs a separate heavy GPU workload (e.g. a TensorFlow.js model doing per-frame inference, its own WebGL context) can experience full-page freezes on real mobile devices — not just dropped frames in the secondary feature, but the primary render loop (and the whole page) becoming unresponsive.
+
+Symptom pattern that points here: things work fine for the first second or two (before the second workload's model/context finishes initializing or runs its first real inference), then everything — including unrelated animations driven by `requestAnimationFrame` — stops updating at once. This is a stronger and different symptom than "the secondary feature runs slowly/never engages" (a merely-slow secondary workload would just fall back gracefully if it has its own timeout/disable logic).
+
+**Why:** mobile Safari/Chrome impose tight limits on simultaneous WebGL contexts and their combined GPU/driver resource usage. Two independently-heavy consumers (a live AR/3D canvas + an ML inference engine) compete for the same constrained GPU pipeline; the resulting contention/driver stall can block the main thread regardless of how well-tuned the secondary workload's own timeout/slow-sample/tensor-leak safety nets are, because those safety nets only govern when the secondary feature disables *itself* — they can't prevent the underlying GPU/driver contention from stalling the primary render loop while a stuck inference is still in flight.
+
+**How to apply:** if a secondary GPU-heavy feature (especially on-device ML inference) is layered on top of an already-active WebGL/3D canvas and users report full-app hangs/freezes on real mobile devices that don't reproduce in desktop/sandboxed testing (no real WebGL there), first suspect resource contention between the two WebGL consumers — not just tune the secondary feature's fallback thresholds further. Prefer removing/disabling the second heavy GPU consumer over incrementally tightening its safety nets if repeated tuning rounds haven't resolved real-device hangs; only keep it if the feature is core (not a cosmetic enhancement) and a single shared WebGL context can be used instead of two.
