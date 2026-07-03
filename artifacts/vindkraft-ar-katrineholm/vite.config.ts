@@ -43,7 +43,13 @@ export default defineConfig({
       // flik förrän användaren själv laddar om sidan (t.ex. nästa gång appen
       // öppnas) — ingen befintlig session avbryts.
       registerType: "prompt",
-      injectRegister: "auto",
+      // Vi registrerar service workern manuellt i src/lib/pwaUpdate.ts (via
+      // `virtual:pwa-register`) för att kunna visa en egen, icke-blockerande
+      // "Ny version tillgänglig"-banner istället för att antingen (a) tvinga
+      // en omedelbar omladdning ("autoUpdate"-läget, se tidigare bugg) eller
+      // (b) tyst göra ingenting så att nya versioner aldrig når användaren
+      // (standardbeteendet för "prompt" utan egen onNeedRefresh-hantering).
+      injectRegister: false,
       includeAssets: ["favicon.svg", "robots.txt", "icons/apple-touch-icon.png"],
       manifest: {
         id: basePath,
