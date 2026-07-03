@@ -34,7 +34,15 @@ export default defineConfig({
     tailwindcss(),
     runtimeErrorOverlay(),
     VitePWA({
-      registerType: "autoUpdate",
+      // OBS: INTE "autoUpdate". Det läget laddar om sidan automatiskt, utan
+      // förvarning, så fort en ny service worker upptäcks (t.ex. direkt efter
+      // en publicering) — kan trigga mitt i en pågående AR-session, precis
+      // när GPS/kamera väntar på fix, vilket upplevs som att "appen startar
+      // om sig själv". "prompt" registrerar/laddar ner den nya service
+      // workern i bakgrunden men tar aldrig kontroll över en redan öppen
+      // flik förrän användaren själv laddar om sidan (t.ex. nästa gång appen
+      // öppnas) — ingen befintlig session avbryts.
+      registerType: "prompt",
       injectRegister: "auto",
       includeAssets: ["favicon.svg", "robots.txt", "icons/apple-touch-icon.png"],
       manifest: {
