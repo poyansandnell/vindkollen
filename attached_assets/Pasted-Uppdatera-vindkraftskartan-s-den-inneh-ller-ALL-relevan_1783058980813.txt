@@ -1,0 +1,140 @@
+Uppdatera vindkraftskartan så den innehåller ALL relevant vindkraftsdata i Sverige.
+
+Datakälla:
+Använd Vindbrukskollen som huvudkälla. Den visar både planerad och etablerad vindkraft i Sverige och uppdateras löpande. Den innehåller både:
+
+1. Projekteringsområden
+2. Enskilda vindkraftverk
+
+Viktigt:
+Vi ska alltså INTE bara importera projekteringsområden. Vi ska även importera alla enskilda vindkraftverk.
+
+Datakällor:
+
+* Vindbrukskollen – projekteringsområden och vägar
+* Vindbrukskollen – vindkraftverk
+* WMS-tjänst för karta
+* ATOM-filer för shape/geopackage-import
+
+Importera följande lager:
+
+1. Projekteringsområden, landbaserade
+2. Projekteringsområden, havsbaserade
+3. Enskilda vindkraftverk
+4. Uppförda verk
+5. Beviljade verk
+6. Verk som handläggs
+7. Avslagna verk
+8. Inte aktuella / återkallade verk
+9. Verk där uppgift saknas
+
+För varje projekt/verk ska databasen spara:
+
+* id
+* namn/projektnamn
+* typ: projekteringsområde eller enskilt vindkraftverk
+* status
+* kommun
+* län
+* koordinater lat/lng
+* polygon/område om det finns
+* antal planerade verk om det är ett projektområde
+* totalhöjd/navhöjd/rotordiameter om det finns
+* planerad byggstart om det finns
+* planerad driftsättning om det finns
+* projektör/verksamhetsutövare om det finns
+* installerad effekt om det finns
+* källa
+* senast uppdaterad
+
+Statusar som ska stödjas:
+
+* Uppfört
+* Handläggs
+* Beviljat
+* Avslaget
+* Inte aktuellt / återkallat
+* Uppgift saknas
+
+Kartfunktion:
+Kartan ska ha Google Maps eller Mapbox i bakgrunden.
+
+Användaren ska kunna:
+
+* använda sin nuvarande plats
+* söka på annan ort/stad/adress
+* flytta kartan manuellt
+* zooma
+* klicka på projekt
+* klicka på enskilda verk
+* se lista över närmaste projekt/verk
+* se avstånd från vald plats
+* se vilken kommun som påverkas
+* se om projektet är planerat, handläggs, beviljat eller redan uppfört
+
+Lägg till två huvudlägen:
+
+1. Min plats
+
+* Använd GPS.
+* Visa projekt och vindkraftverk inom 60 km.
+* Sortera efter avstånd.
+* Markera särskilt projekt inom 25 km.
+
+2. Testa annan ort
+
+* Användaren kan söka på valfri stad, ort eller adress.
+* Kartan flyttas dit.
+* Appen visar alla projekt och verk inom 60 km från vald punkt.
+* Det ska gå att testa Katrineholm, Vingåker, Flen, Nyköping, Örebro, Eskilstuna, Vimmerby, Västervik osv.
+
+Synlighetslogik:
+Använd praktisk standardregel:
+
+* 0–10 km: mycket nära
+* 10–25 km: stark påverkan
+* 25–40 km: möjlig visuell påverkan
+* 40–60 km: regional påverkan / kan synas vid fri sikt
+* över 60 km: dölj i standardläge
+
+Lägg till filter:
+
+* Visa endast planerade projekt
+* Visa endast beviljade
+* Visa endast handläggs
+* Visa uppförda verk
+* Visa avslagna/återkallade
+* Visa allt i Sverige
+* Visa endast inom 25 km
+* Visa endast inom 60 km
+
+UI:
+
+* Projekteringsområden visas som polygoner.
+* Enskilda vindkraftverk visas som punkter.
+* Klustra punkter när många verk ligger nära varandra.
+* Använd olika färger/ikoner per status.
+* När användaren klickar på ett projekt visas faktaruta:
+    * namn
+    * kommun
+    * status
+    * antal verk
+    * avstånd
+    * projektör
+    * höjd om tillgängligt
+    * länk/källinfo
+
+Extra funktion:
+Skapa en vy som heter “Bästa orter att testa”.
+Den ska automatiskt lista orter/städer där det finns många planerade eller beviljade projekt nära tätorten.
+
+Sortera orterna efter:
+
+1. Antal projekt/verk inom 25 km
+2. Antal projekt/verk inom 60 km
+3. Projektstatus, där handläggs och beviljat väger tyngst
+4. Närhet till tätort
+5. Antal potentiellt berörda invånare om SCB-data finns
+
+Målet:
+Appen ska snabbt kunna visa var i Sverige vindkraftsfrågan är politiskt relevant och var en lokal kampanj/namninsamling skulle kunna testas.
