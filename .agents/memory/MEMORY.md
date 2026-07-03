@@ -13,3 +13,4 @@
 - [ArcGIS resultOffset pagination duplicates](arcgis-pagination-duplicates.md) — paging without `orderByFields` can return the same feature on two pages; add a stable order field and dedupe by external key before bulk upsert.
 - [vite-plugin-pwa workbox precache limit](vite-pwa-workbox-precache-limit.md) — apps with heavy bundles (mapbox-gl, three.js) exceed the default 2MB precache cap and fail the build; raise `maximumFileSizeToCacheInBytes` proactively.
 - [Uniform dB shift doesn't change contributing-count](uniform-db-shift-contributing-count.md) — a "within N dB of loudest" test is invariant to a uniform attenuation; add an absolute audibility floor too.
+- [TFJS + deeplab peer version pin](tfjs-deeplab-tfjs3-peer-pin.md) — `@tensorflow-models/deeplab` needs `@tensorflow/tfjs` pinned to 3.x, not the latest 4.x meta-package.

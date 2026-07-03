@@ -77,6 +77,8 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@tensorflow-models/deeplab": "0.2.2",
+    "@tensorflow/tfjs": "3.21.0",
     "proj4": "^2.20.9",
     "three": "^0.185.1"
   }

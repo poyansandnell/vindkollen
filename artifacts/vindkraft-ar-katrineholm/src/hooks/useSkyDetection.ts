@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { loadSkySegmentationModel, segmentSkyGrid } from "@/lib/skySegmentation";
+import type { SemanticSegmentation } from "@tensorflow-models/deeplab";
 
 export interface SkyDetectionState {
   /**
    * Utjämnad (EMA) uppskattning 0..1 av hur mycket av bilden som är
    * "himmel" just nu — 1 = fri sikt mot himlen, 0 = i princip ingen himmel
-   * synlig (typiskt inomhus, eller kameran riktad rakt mot mark/vägg).
-   * Uppdateras kontinuerligt och används för att låta ljudet toning
+   * synlig (typiskt inomhus, eller kameran riktad rakt mot mark/vägg/träd/
+   * byggnad). Uppdateras kontinuerligt och används för att låta ljudet tona
    * mjukt mellan tyst/fullt istället för att hoppa direkt.
    */
   outdoorConfidence: number;
@@ -19,11 +21,22 @@ export interface SkyDetectionState {
   ready: boolean;
   /**
    * Slår upp om en given normaliserad skärmpunkt (u, v i intervallet 0..1,
-   * där (0,0) är övre vänstra hörnet) för närvarande klassas som himmel.
-   * Stabil funktionsreferens (ändras aldrig), säker att anropa varje
-   * bildruta i AR-scenens renderloop.
+   * där (0,0) är övre vänstra hörnet) för närvarande klassas som himmel —
+   * dvs. inte skymd av träd, byggnad, terräng, tak eller vägg. Stabil
+   * funktionsreferens (ändras aldrig), säker att anropa varje bildruta i
+   * AR-scenens renderloop.
    */
   isPointSky: (u: number, v: number) => boolean;
+  /**
+   * Vilken metod som just nu producerar himmelsrutnätet — nyttigt för
+   * felsökning/UI, styr aldrig något beteende i sig.
+   * - "loading": ML-segmenteringsmodellen laddas fortfarande i bakgrunden.
+   * - "ml": DeepLabv3/Cityscapes-segmentering används (ockluderar även
+   *   träd/byggnader, inte bara "inomhus").
+   * - "heuristic": enkel ljusstyrka/textur-heuristik används (permanent
+   *   fallback om ML-modellen misslyckades ladda eller var för långsam).
+   */
+  method: "loading" | "ml" | "heuristic";
 }
 
 const GRID_COLS = 12;
@@ -42,9 +55,13 @@ const CONFIDENCE_SKY_RATIO_SCALE = 0.25;
 const INDOOR_ENTER_THRESHOLD = 0.12;
 const INDOOR_EXIT_THRESHOLD = 0.32;
 
-function clamp01(v: number): number {
-  return Math.min(1, Math.max(0, v));
-}
+// Om en enskild ML-segmentering tar längre än detta anses den för långsam
+// för realtidsbruk på den här enheten. Efter `ML_MAX_SLOW_SAMPLES` sådana
+// (icke nödvändigtvis i följd) stängs ML-vägen av permanent för sessionen
+// och den enkla, alltid-snabba heuristiken används istället — appen ska
+// aldrig hänga sig eller tappa bildfrekvens på grund av segmenteringen.
+const ML_SLOW_MS = 900;
+const ML_MAX_SLOW_SAMPLES = 3;
 
 /**
  * Klassificerar en rutnätscell som "himmel-lik" baserat på ljusstyrka,
@@ -55,6 +72,10 @@ function clamp01(v: number): number {
  *   hörn, lampor, möbler, träd eller fasader).
  * - Antingen låg mättnad (vit/grå — mulen himmel) eller tydligt blåaktig
  *   (klarblå himmel).
+ *
+ * Detta är den enkla, alltid tillgängliga fallback-metoden — se modulens
+ * jsdoc-kommentar och `method` i `SkyDetectionState` för hur den samspelar
+ * med den tyngre ML-baserade segmenteringen i `skySegmentation.ts`.
  */
 function classifyCell(pixels: Uint8ClampedArray, col: number, row: number): boolean {
   let sumR = 0;
@@ -96,17 +117,29 @@ function classifyCell(pixels: Uint8ClampedArray, col: number, row: number): bool
 }
 
 /**
- * Analyserar kameraströmmen — nedskalad till en liten 12x8-rutnätscanvas för
- * prestanda — för att uppskatta VAR i bilden det är himmel kontra inte
- * himmel (väggar, tak, möbler, träd, mark m.m.), samt en samlad "inomhus"-
- * bedömning för hela bilden.
+ * Analyserar kameraströmmen löpande för att uppskatta VAR i bilden det är fri
+ * himmel kontra ockluderat av något annat (träd, byggnader, terräng, väggar/
+ * tak inomhus), samt en samlad "inomhus"-bedömning för hela bilden.
  *
- * VIKTIGT — detta är en enkel kamerabaserad HEURISTIK, inte en tillförlitlig
- * "är jag inomhus"-sensor. Den kan t.ex. felaktigt tolka en helt slät, ljus
- * innertaksyta som himmel, eller en mörk, mulen himmel som "inte himmel".
- * Kombinerat med utjämning (EMA) och hysteres blir det ändå en användbar,
- * live-uppdaterad signal för att dölja vindkraftverk som annars skulle synas
- * "spöka" genom väggar/tak, och för att dämpa ljudet inomhus.
+ * Två metoder samverkar:
+ * 1. En tyngre, mer tillförlitlig ML-baserad semantisk segmentering
+ *    (DeepLabv3/Cityscapes via `skySegmentation.ts`) som körs i bakgrunden så
+ *    fort den hunnit laddas, och som explicit klassificerar "sky" skilt från
+ *    t.ex. "vegetation"/"building" — den ockluderar alltså riktiga träd och
+ *    byggnader, inte bara "inomhus".
+ * 2. En enkel, alltid omedelbart tillgänglig ljusstyrka/textur-heuristik
+ *    (`classifyCell`) som täcker upp innan ML-modellen laddats klart, och
+ *    som blir permanent fallback för resten av sessionen om modellen
+ *    misslyckas ladda eller visar sig vara för långsam för realtidsbruk på
+ *    enheten (se `ML_SLOW_MS`/`ML_MAX_SLOW_SAMPLES`).
+ *
+ * VIKTIGT — även ML-vägen är en heuristik i produktsyfte, inte en perfekt
+ * djupsensor: gränser vid tunna detaljer (kvistar, ledningar) blir inte
+ * pixelexakta, och ett mycket ovanligt scenario kan fortfarande
+ * felklassificeras. Kombinerat med utjämning (EMA) och hysteres blir det
+ * ändå en användbar, live-uppdaterad signal för att dölja vindkraftverk som
+ * annars skulle synas "spöka" genom väggar/tak/träd/byggnader, och för att
+ * dämpa ljudet/dBA-uppskattningen inomhus.
  */
 export function useSkyDetection(
   videoRef: React.RefObject<HTMLVideoElement | null>,
@@ -115,15 +148,24 @@ export function useSkyDetection(
   const [outdoorConfidence, setOutdoorConfidence] = useState(1);
   const [indoors, setIndoors] = useState(false);
   const [ready, setReady] = useState(false);
+  const [method, setMethod] = useState<"loading" | "ml" | "heuristic">("loading");
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const mlCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const gridRef = useRef<boolean[]>(new Array(GRID_COLS * GRID_ROWS).fill(true));
   const confidenceRef = useRef(1);
   const indoorsRef = useRef(false);
 
+  const mlModelRef = useRef<SemanticSegmentation | null>(null);
+  const mlStateRef = useRef<"loading" | "ready" | "disabled">("loading");
+  const mlBusyRef = useRef(false);
+  const mlSlowCountRef = useRef(0);
+
   // Stabil funktionsreferens — läser alltid det senaste rutnätet via
-  // `gridRef`, men själva funktionsidentiteten ändras aldrig. Det gör den
-  // säker att skicka som prop till ARScene utan att trigga om-renderingar.
+  // `gridRef` (oavsett om det just nu kommer från ML-segmenteringen eller
+  // den enkla heuristiken), men själva funktionsidentiteten ändras aldrig.
+  // Det gör den säker att skicka som prop till ARScene utan att trigga
+  // om-renderingar.
   const isPointSkyRef = useRef((u: number, v: number) => {
     const col = Math.min(GRID_COLS - 1, Math.max(0, Math.floor(u * GRID_COLS)));
     const row = Math.min(GRID_ROWS - 1, Math.max(0, Math.floor(v * GRID_ROWS)));
@@ -152,9 +194,40 @@ export function useSkyDetection(
 
     let cancelled = false;
 
-    function sample() {
-      const video = videoRef.current;
-      if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+    // Laddar ML-segmenteringsmodellen i bakgrunden. Kastar den — t.ex. ingen
+    // nätverksanslutning eller ingen WebGL-backend tillgänglig — förblir
+    // `mlStateRef` på "loading" -> sätts till "disabled" och den enkla
+    // heuristiken används resten av sessionen. Ingen krasch, ingen frysning.
+    loadSkySegmentationModel()
+      .then((model) => {
+        if (cancelled) return;
+        mlModelRef.current = model;
+        mlStateRef.current = "ready";
+      })
+      .catch(() => {
+        if (cancelled) return;
+        mlStateRef.current = "disabled";
+      });
+
+    function applySkyRatio(skyRatio: number, usedMethod: "ml" | "heuristic") {
+      const target = Math.min(skyRatio / CONFIDENCE_SKY_RATIO_SCALE, 1);
+      confidenceRef.current += EMA_ALPHA * (target - confidenceRef.current);
+      const nextConfidence = confidenceRef.current;
+
+      const wasIndoors = indoorsRef.current;
+      let nowIndoors = wasIndoors;
+      if (wasIndoors && nextConfidence > INDOOR_EXIT_THRESHOLD) nowIndoors = false;
+      if (!wasIndoors && nextConfidence < INDOOR_ENTER_THRESHOLD) nowIndoors = true;
+      indoorsRef.current = nowIndoors;
+
+      if (cancelled) return;
+      setOutdoorConfidence(nextConfidence);
+      if (nowIndoors !== wasIndoors) setIndoors(nowIndoors);
+      setReady(true);
+      setMethod((prev) => (prev === usedMethod ? prev : usedMethod));
+    }
+
+    function sampleHeuristic(video: HTMLVideoElement) {
       ctx!.drawImage(video, 0, 0, CANVAS_W, CANVAS_H);
       let pixels: Uint8ClampedArray;
       try {
@@ -172,21 +245,63 @@ export function useSkyDetection(
           if (isSky) skyCount++;
         }
       }
-      const skyRatio = skyCount / (GRID_COLS * GRID_ROWS);
-      const target = Math.min(skyRatio / CONFIDENCE_SKY_RATIO_SCALE, 1);
-      confidenceRef.current += EMA_ALPHA * (target - confidenceRef.current);
-      const nextConfidence = confidenceRef.current;
+      applySkyRatio(skyCount / (GRID_COLS * GRID_ROWS), "heuristic");
+    }
 
-      const wasIndoors = indoorsRef.current;
-      let nowIndoors = wasIndoors;
-      if (wasIndoors && nextConfidence > INDOOR_EXIT_THRESHOLD) nowIndoors = false;
-      if (!wasIndoors && nextConfidence < INDOOR_ENTER_THRESHOLD) nowIndoors = true;
-      indoorsRef.current = nowIndoors;
+    async function sampleMl(video: HTMLVideoElement) {
+      const model = mlModelRef.current;
+      if (!model) return;
+      if (!mlCanvasRef.current) {
+        mlCanvasRef.current = document.createElement("canvas");
+      }
+      const mlCanvas = mlCanvasRef.current;
+      mlCanvas.width = 160;
+      mlCanvas.height = 120;
+      const mlCtx = mlCanvas.getContext("2d");
+      if (!mlCtx) return;
+      mlCtx.drawImage(video, 0, 0, mlCanvas.width, mlCanvas.height);
 
-      if (cancelled) return;
-      setOutdoorConfidence(nextConfidence);
-      if (nowIndoors !== wasIndoors) setIndoors(nowIndoors);
-      setReady(true);
+      const start = performance.now();
+      try {
+        const { grid, skyRatio } = await segmentSkyGrid(model, mlCanvas, GRID_COLS, GRID_ROWS);
+        const elapsed = performance.now() - start;
+        if (elapsed > ML_SLOW_MS) {
+          mlSlowCountRef.current += 1;
+          if (mlSlowCountRef.current >= ML_MAX_SLOW_SAMPLES) {
+            mlStateRef.current = "disabled";
+          }
+        } else {
+          mlSlowCountRef.current = 0;
+        }
+        if (cancelled) return;
+        gridRef.current = grid;
+        applySkyRatio(skyRatio, "ml");
+      } catch {
+        // En enskild bildruta misslyckades (t.ex. WebGL-kontext tillfälligt
+        // upptagen) — räkna som en "långsam"/misslyckad sampling istället för
+        // att krascha; efter tillräckligt många faller vi tillbaka permanent.
+        mlSlowCountRef.current += 1;
+        if (mlSlowCountRef.current >= ML_MAX_SLOW_SAMPLES) {
+          mlStateRef.current = "disabled";
+        }
+      }
+    }
+
+    function sample() {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+
+      if (mlStateRef.current === "ready" && !mlBusyRef.current) {
+        mlBusyRef.current = true;
+        void sampleMl(video).finally(() => {
+          mlBusyRef.current = false;
+        });
+        return;
+      }
+
+      // ML laddas fortfarande, eller är avstängd (misslyckad/långsam) — kör
+      // alltid den snabba heuristiken så att himmelsmasken aldrig saknas.
+      sampleHeuristic(video);
     }
 
     const interval = window.setInterval(sample, SAMPLE_INTERVAL_MS);
@@ -198,5 +313,5 @@ export function useSkyDetection(
     };
   }, [enabled, videoRef]);
 
-  return { outdoorConfidence, indoors, ready, isPointSky: isPointSkyRef.current };
+  return { outdoorConfidence, indoors, ready, isPointSky: isPointSkyRef.current, method };
 }
