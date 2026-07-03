@@ -10,8 +10,10 @@ import { PetitionModal } from "@/components/PetitionModal";
 import { PermissionGate } from "@/components/PermissionGate";
 import { InfoPanel } from "@/components/InfoPanel";
 import { VisualizationControls } from "@/components/VisualizationControls";
-import { SoundLevelPanel } from "@/components/SoundLevelPanel";
+import { SoundLevelPanel, SoundLevelBadge } from "@/components/SoundLevelPanel";
 import { PhotoMontageModal } from "@/components/PhotoMontageModal";
+import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
+import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { TURBINES } from "@/lib/turbines";
 import { distanceMeters, isNightTime } from "@/lib/geo";
 import { swerefToWgs84 } from "@/lib/sweref";
@@ -44,6 +46,9 @@ export default function Home() {
   const [shadowFlicker, setShadowFlicker] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+
+  const [inApp] = useState(() => (typeof navigator !== "undefined" ? isInAppBrowser() : false));
+  const [appName] = useState(() => (typeof navigator !== "undefined" ? inAppBrowserName() : ""));
 
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const arSceneRef = useRef<ARSceneHandle | null>(null);
@@ -262,10 +267,28 @@ export default function Home() {
                 {camera.stream && geo.lat !== null && !orientation.hasFix && "Läser av kompass — rör telefonen i en åtta-rörelse."}
               </p>
               {errors.length > 0 && (
-                <div className="mt-2 max-w-xs rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-xs text-red-200">
-                  {errors.map((e, i) => (
-                    <p key={i}>{e}</p>
-                  ))}
+                <div className="mt-2 flex w-full max-w-xs flex-col gap-3">
+                  <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-xs text-red-200">
+                    {errors.map((e, i) => (
+                      <p key={i}>{e}</p>
+                    ))}
+                    {geo.permissionDenied && (
+                      <p className="mt-2 text-[11px] text-red-200/70">
+                        Tips: Om du redan nekat platsbehörighet frågar inte webbläsaren igen automatiskt. Gå
+                        till telefonens inställningar för Safari/Chrome → Webbplatsinställningar för den här
+                        sidan → tillåt Plats, och tryck sedan Försök igen.
+                      </p>
+                    )}
+                  </div>
+                  {geo.error && (
+                    <button
+                      onClick={geo.retry}
+                      className="w-full rounded-full bg-[#FF8B01] py-2.5 text-xs font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347]"
+                    >
+                      🔄 Försök igen med platsåtkomst
+                    </button>
+                  )}
+                  {inApp && <InAppBrowserNotice appName={appName} />}
                 </div>
               )}
             </div>
@@ -286,13 +309,16 @@ export default function Home() {
                 <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKRAFT AR</p>
                 <p className="text-sm text-white/90">Katrineholm · {TURBINES.length} verk</p>
               </div>
-              <button
-                onClick={() => setShowControls(true)}
-                aria-pressed={showControls}
-                className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
-              >
-                ⚙️ Visning
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <SoundLevelBadge estimate={soundLevelEstimate} />
+                <button
+                  onClick={() => setShowControls(true)}
+                  aria-pressed={showControls}
+                  className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+                >
+                  ⚙️ Visning
+                </button>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {wind.playing && (

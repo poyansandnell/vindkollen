@@ -1,6 +1,32 @@
 import { formatDistance } from "@/lib/geo";
 import { SEVERITY_COLORS, soundLevelSeverity, SOUND_LEVEL_DISCLAIMER, type SoundLevelEstimate } from "@/lib/soundLevel";
 
+/**
+ * Kompakt, alltid synlig liten textrad med ljudnivå (dBA) + antal bidragande
+ * vindkraftverk. Går inte att stänga — oberoende av om den större
+ * `SoundLevelPanel` är öppen/stängd, syns denna badge i ett hörn av AR-vyn.
+ */
+export function SoundLevelBadge({ estimate }: { estimate: SoundLevelEstimate }) {
+  const hasSignal = Number.isFinite(estimate.totalDba);
+  const severity = hasSignal ? soundLevelSeverity(estimate.totalDba) : "green";
+  const colors = SEVERITY_COLORS[severity];
+
+  return (
+    <span className="pointer-events-none flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[10px] font-medium text-white/90 backdrop-blur-sm">
+      {hasSignal ? (
+        <>
+          <span className={colors.text}>
+            {colors.emoji} {estimate.totalDba.toFixed(0)} dBA
+          </span>
+          <span className="text-white/50">· {estimate.contributingCount} verk</span>
+        </>
+      ) : (
+        <span className="text-white/60">🔊 Väntar på GPS…</span>
+      )}
+    </span>
+  );
+}
+
 export function SoundLevelPanel({ estimate, onClose }: { estimate: SoundLevelEstimate; onClose: () => void }) {
   const hasSignal = Number.isFinite(estimate.totalDba);
   const severity = hasSignal ? soundLevelSeverity(estimate.totalDba) : "green";

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
+import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 
 interface PermissionGateProps {
   onStart: () => void;
@@ -11,17 +12,6 @@ interface PermissionGateProps {
 export function PermissionGate({ onStart, starting, errors, turbineCount }: PermissionGateProps) {
   const [inApp] = useState(() => (typeof navigator !== "undefined" ? isInAppBrowser() : false));
   const [appName] = useState(() => (typeof navigator !== "undefined" ? inAppBrowserName() : ""));
-  const [linkCopied, setLinkCopied] = useState(false);
-
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setLinkCopied(true);
-      window.setTimeout(() => setLinkCopied(false), 2500);
-    } catch {
-      setLinkCopied(false);
-    }
-  };
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col justify-between overflow-y-auto bg-[#090909] px-6 py-10 text-white">
@@ -73,24 +63,7 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
           <p className="mt-2 text-xs text-white/40">{turbineCount} planerade vindkraftverk visas i vyn.</p>
         </div>
 
-        {inApp && (
-          <div className="rounded-xl border border-yellow-400/30 bg-yellow-500/10 p-3.5 text-sm text-yellow-100">
-            <p className="font-medium text-yellow-50">⚠️ Du öppnade länken i {appName}</p>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-yellow-100/80">
-              {appName}s inbyggda webbläsare blockerar ofta kamera och GPS, så appen kanske inte kan fråga om
-              behörighet alls. Öppna länken i Safari eller Chrome istället — tryck på{" "}
-              <span className="font-medium">••• (eller ⋮)</span> uppe i hörnet och välj{" "}
-              <span className="font-medium">"Öppna i webbläsare"</span>, eller kopiera länken nedan och klistra in
-              den i Safari/Chrome.
-            </p>
-            <button
-              onClick={handleCopyLink}
-              className="mt-2.5 w-full rounded-full bg-yellow-400/20 py-2 text-xs font-semibold text-yellow-50 transition hover:bg-yellow-400/30"
-            >
-              {linkCopied ? "✓ Länk kopierad!" : "🔗 Kopiera länk"}
-            </button>
-          </div>
-        )}
+        {inApp && <InAppBrowserNotice appName={appName} />}
 
         {errors.length > 0 && (
           <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
