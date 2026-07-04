@@ -68,6 +68,8 @@ export default function PlaceTurbines() {
   const [compareOpen, setCompareOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [showEstateBoundary, setShowEstateBoundary] = useState(false);
+  const [boundaryDebugMode, setBoundaryDebugMode] = useState(false);
+  const [debugPanelOpen, setDebugPanelOpen] = useState(false);
 
   const turbinesRef = useRef(turbines);
   turbinesRef.current = turbines;
@@ -187,6 +189,22 @@ export default function PlaceTurbines() {
         >
           🗺️ Visa Ericsbergs mark
         </button>
+        <button
+          onClick={() => setBoundaryDebugMode((v) => !v)}
+          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+            boundaryDebugMode ? "bg-sky-400 text-[#090909]" : "border border-white/20 bg-white/5 text-white hover:bg-white/10"
+          }`}
+        >
+          🛠️ Redigeringsläge (gräns)
+        </button>
+        <button
+          onClick={() => setDebugPanelOpen((v) => !v)}
+          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+            debugPanelOpen ? "bg-emerald-400 text-[#090909]" : "border border-white/20 bg-white/5 text-white hover:bg-white/10"
+          }`}
+        >
+          🐞 Felsökning (poäng)
+        </button>
         <p className="text-[11px] text-white/40">{turbines.length} verk placerade</p>
       </div>
 
@@ -199,7 +217,54 @@ export default function PlaceTurbines() {
           onRemove={handleRemove}
           outsideBoundaryIds={result.outsideBoundaryIds}
           showEstateBoundary={showEstateBoundary}
+          boundaryDebugMode={boundaryDebugMode}
         />
+
+        {debugPanelOpen && (
+          <div className="pointer-events-auto absolute right-3 top-3 max-h-[70%] w-64 overflow-y-auto rounded-xl border border-emerald-400/30 bg-black/85 p-3 text-xs text-white shadow-xl">
+            <p className="mb-2 font-semibold text-emerald-300">🐞 Felsökning — poängbidrag</p>
+            <p className="mb-1 text-white/70">
+              Total poäng: <span className="font-semibold text-white">{Math.round(result.totalScore)}</span>/100
+            </p>
+            <p className="mb-1 text-white/70">
+              Närmaste hushåll:{" "}
+              <span className="font-semibold text-white">
+                {result.nearestHouseholdName ?? "—"}
+                {result.nearestHouseholdDistanceM !== null ? ` (${Math.round(result.nearestHouseholdDistanceM)} m)` : ""}
+              </span>
+            </p>
+            <p className="mb-1 text-white/70">
+              Avstånd till tätort:{" "}
+              <span className="font-semibold text-white">
+                {result.nearestUrbanDistanceM !== null ? `${Math.round(result.nearestUrbanDistanceM)} m` : "—"}
+              </span>
+            </p>
+            <p className="mb-2 text-[10px] text-white/40">
+              Baserat på senast beräknade placering (committedTurbines).
+            </p>
+            <p className="mb-1 font-medium text-white/80">Faktorer (bidrag till total poäng):</p>
+            <ul className="mb-2 space-y-0.5">
+              {result.factors.map((f) => (
+                <li key={f.key} className="flex items-center justify-between">
+                  <span className="text-white/70">{f.label}</span>
+                  <span className={f.impactPoints < 0 ? "text-emerald-300" : "text-white/90"}>
+                    {f.impactPoints > 0 ? "+" : ""}
+                    {f.impactPoints.toFixed(1)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mb-1 font-medium text-white/80">Verk som bidrar mest (enskild poäng):</p>
+            <ul className="space-y-0.5">
+              {result.turbineContributions.map((tc) => (
+                <li key={tc.id} className="flex items-center justify-between">
+                  <span className="text-white/70">{tc.id}</span>
+                  <span className="text-white/90">{Math.round(tc.score)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {calculating && (
           <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">

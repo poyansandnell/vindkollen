@@ -1,0 +1,117 @@
+Här är en prompt du kan klistra in i Replit:
+
+⸻
+
+Fixa följande i appen:
+
+1. Kartfunktionen / placera vindkraftverk
+
+Kartan blev bra, men två saker måste rättas:
+
+A. Rätta markområdet för Caroline / Ericsberg
+
+Det polygonområde som används för Carolines/Ericsbergs mark stämmer inte.
+Utgå från de bifogade kartbilderna och justera markpolygonen så den matchar området bättre.
+
+Viktigt:
+
+* Polygonen ska följa den mörka markerade gränsen på kartbilden.
+* Om det finns osäkerhet: gör polygonen enkel att justera i koden, gärna som en separat GeoJSON-fil.
+* Lägg gärna in debug-läge där polygonens hörnpunkter kan visas/ändras.
+
+B. Beräkningen av påverkan är fel
+
+Just nu visar påverkan 0 även när jag flyttar två vindkraftverk in mot centrala Katrineholm. Det ska absolut inte kunna bli 0.
+
+Fixa beräkningen så att den räknar om direkt när ett verk flyttas.
+
+Beräkningen ska minst reagera på:
+
+* Avstånd till bostäder/tätort
+* Närhet till Katrineholm centrum
+* Antal hushåll inom påverkningszon
+* Visuell påverkan
+* Bullerzon
+* Skuggpåverkan vid låg sol
+* Natur/friluftsområden om sådana data finns
+
+Om ett verk placeras nära eller i Katrineholm centrum ska kartan bli kraftigt röd och ge tydlig varning.
+
+Lägg till tydlig debug-information:
+
+* Vilka verk som påverkar beräkningen
+* Avstånd till närmaste bostad/tätort
+* Antal berörda hushåll eller uppskattad påverkan
+* Total riskpoäng
+* Varför kartan blir grön/gul/röd
+
+2. AR-läget
+
+Det finns fortfarande problem med AR.
+
+A. Kalibreringsläget fastnar
+
+Appen fastnar ibland i kalibreringsläge och kommer inte vidare.
+
+Fixa så att:
+
+* Kalibreringen har timeout
+* Användaren alltid kan trycka “Fortsätt ändå”
+* Appen går vidare även om kompassen inte är perfekt
+* Visa status: GPS, kompass, kameratillstånd och AR-status
+
+Exempel:
+“Kalibrerar kompass…”
+“Hittar GPS-position…”
+“Placerar vindkraftverk…”
+“Klart – du kan nu se vindkraftverken”
+
+B. Vindkraftverken får inte försvinna bakom moln
+
+Vindkraftverken ska inte döljas av moln/himmel.
+Moln ska inte fungera som occlusion-mask.
+
+Regel:
+
+* Himmel och moln ska aldrig dölja vindkraftverken.
+* Endast verkliga objekt som träd, byggnader, mark, kullar eller andra fasta objekt får skymma dem.
+
+C. Delar som skyms ska visas rött
+
+Om ett vindkraftverk skyms av riktiga objekt, till exempel träd eller byggnader, ska den skymda delen markeras röd/transparent röd så användaren förstår vad som döljs.
+
+Men:
+
+* Synliga delar av verket ska visas i verkliga färger.
+* Endast skymda delar ska bli röda.
+* Moln/himmel ska aldrig göra verket rött eller dolt.
+
+D. Vindkraftverken fastnar i fel riktning/läge
+
+Ibland verkar vindkraftverken fastna i ett läge, troligen på grund av kompassfel eller att heading inte uppdateras korrekt.
+
+Fixa så att:
+
+* GPS-position och compass heading uppdateras löpande
+* Verken räknas om när användaren rör sig eller vrider mobilen
+* Lägg smoothing/filter så de inte hoppar för mycket
+* Lägg fallback om kompassen ger orimliga värden
+* Visa knapp: “Kalibrera om riktning”
+* Visa knapp: “Lås upp / uppdatera position”
+
+Målet:
+Vindkraftverken ska alltid ligga kvar på sina verkliga koordinater i rätt riktning och avstånd, även när användaren vrider sig eller flyttar sig.
+
+3. Viktigt UX-krav
+
+Lägg till tydliga felmeddelanden och statusrutor så man förstår vad som händer.
+
+Exempel:
+
+* “GPS-signal svag – använder senaste kända position”
+* “Kompass osäker – vrid mobilen i en åtta”
+* “AR aktiv – 29 verk placerade”
+* “Beräkning uppdaterad efter flytt”
+* “Varning: mycket hög påverkan nära tätort”
+
+Gör detta stabilt före nya funktioner.

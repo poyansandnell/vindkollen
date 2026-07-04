@@ -98,7 +98,12 @@ function CalibrationStep({
   );
 }
 
-export function LoadingSequence({ onComplete, calibrationPhase, calibrationProgress, skipCalibration }: LoadingSequenceProps) {
+export function LoadingSequence({
+  onComplete,
+  calibrationPhase,
+  calibrationProgress,
+  skipCalibration,
+}: LoadingSequenceProps) {
   const [uiPhase, setUiPhase] = useState<"calibration" | "countdown" | "checklist">(
     skipCalibration ? "countdown" : "calibration",
   );
@@ -200,9 +205,17 @@ export function LoadingSequence({ onComplete, calibrationPhase, calibrationProgr
           </p>
 
           {showCalibrationHint && calibrationPhase !== "done" && (
-            <p className="mt-1 text-[11px] text-white/40" aria-live="polite">
-              Tar det lång tid? Se till att telefonen inte ligger nära metall eller elektronik, och fortsätt vrida den.
-            </p>
+            <>
+              <p className="mt-1 text-[11px] text-white/40" aria-live="polite">
+                Tar det lång tid? Se till att telefonen inte ligger nära metall eller elektronik, och fortsätt vrida den.
+              </p>
+              <button
+                onClick={() => setUiPhase("countdown")}
+                className="mt-3 rounded-full border border-white/20 bg-white/5 px-4 py-1.5 text-xs font-medium text-white/80 hover:bg-white/10"
+              >
+                Fortsätt ändå →
+              </button>
+            </>
           )}
         </div>
       )}

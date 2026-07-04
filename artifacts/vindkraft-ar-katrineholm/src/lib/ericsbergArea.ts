@@ -14,6 +14,11 @@
 // `ERICSBERG_AREA_DISCLAIMER` för den text som alltid ska visas tillsammans
 // med kartan.
 import { distanceMeters } from "./geo";
+import {
+  ERICSBERG_ESTATE_AREA_BOUNDARY,
+  ERICSBERG_PLACEMENT_BOUNDARY,
+  geoJsonPolygonToLatLon,
+} from "./ericsbergBoundaryData";
 
 export interface LatLon {
   lat: number;
@@ -23,48 +28,37 @@ export interface LatLon {
 /** Katrineholms centrum — samma referenspunkt som i `MapView.tsx`. */
 export const KATRINEHOLM_CENTER: LatLon = { lat: 58.9959, lon: 16.2072 };
 
+/**
+ * Ungefärlig radie (meter) för Katrineholms tätortsbebyggelse räknat från
+ * `KATRINEHOLM_CENTER` — används för att avgöra hur nära en placering ligger
+ * den FAKTISKA tätortsbebyggelsen (inte bara en enda punkt), se
+ * `placementScoring.ts`s "mycket nära centrum"-faktor.
+ */
+export const KATRINEHOLM_URBAN_RADIUS_M = 2000;
+
 /** Ungefärligt mittpunkt för Ericsbergs marker, sydväst om Katrineholm. */
 export const ERICSBERG_CENTER: LatLon = { lat: 58.883, lon: 16.058 };
 
 /**
  * Ungefärlig markgräns (polygon, WGS84) för det område inom Ericsbergs
  * marker där verken kan placeras. Handritad utifrån de bifogade
- * referensbilderna — INTE en exakt fastighetsgräns.
+ * referensbilderna — INTE en exakt fastighetsgräns. Källdata (redigerbar
+ * separat) finns i `ericsbergBoundaryData.ts`.
  */
-export const ERICSBERG_BOUNDARY: LatLon[] = [
-  { lat: 58.897, lon: 16.03 },
-  { lat: 58.9, lon: 16.065 },
-  { lat: 58.893, lon: 16.095 },
-  { lat: 58.878, lon: 16.098 },
-  { lat: 58.868, lon: 16.078 },
-  { lat: 58.867, lon: 16.045 },
-  { lat: 58.874, lon: 16.022 },
-  { lat: 58.888, lon: 16.018 },
-];
+export const ERICSBERG_BOUNDARY: LatLon[] = geoJsonPolygonToLatLon(ERICSBERG_PLACEMENT_BOUNDARY);
 
 /**
  * "Ericsbergs mark" — en betydligt STÖRRE, illustrativ markering av
  * Ericsbergs samlade godsmark (inte bara placeringsområdet ovan), grovt
- * dragen så den sträcker sig mellan de omgivande orterna/platserna Forssjö,
- * Stora Malm, Ericsberg, Djulöfors och Strångsjö/Norrlunda, per användarens
- * referensbild. Precis som `ERICSBERG_BOUNDARY` är detta EN GROV
+ * dragen så den sträcker sig mellan de omgivande orterna/platserna
+ * Katrineholm, Forssjö, Stora Malm, Ericsberg och Strångsjö/Norrlunda, per
+ * användarens referensbild. Precis som `ERICSBERG_BOUNDARY` är detta EN GROV
  * UPPSKATTNING — se `ERICSBERG_AREA_DISCLAIMER` — inte en exakt
  * fastighets- eller lantmäterigräns. Visas som ett separat, valbart lager
- * ("Visa Ericsbergs mark") skilt från placeringsområdet.
+ * ("Visa Ericsbergs mark") skilt från placeringsområdet. Källdata
+ * (redigerbar separat) finns i `ericsbergBoundaryData.ts`.
  */
-export const ERICSBERG_ESTATE_AREA: LatLon[] = [
-  { lat: 58.936, lon: 16.02 },
-  { lat: 58.932, lon: 16.11 },
-  { lat: 58.915, lon: 16.155 },
-  { lat: 58.88, lon: 16.16 },
-  { lat: 58.845, lon: 16.14 },
-  { lat: 58.815, lon: 16.1 },
-  { lat: 58.802, lon: 16.03 },
-  { lat: 58.815, lon: 15.96 },
-  { lat: 58.85, lon: 15.94 },
-  { lat: 58.89, lon: 15.95 },
-  { lat: 58.92, lon: 15.975 },
-];
+export const ERICSBERG_ESTATE_AREA: LatLon[] = geoJsonPolygonToLatLon(ERICSBERG_ESTATE_AREA_BOUNDARY);
 
 /** Ray-casting punkt-i-polygon-test. */
 export function isInsideBoundary(point: LatLon, boundary: LatLon[] = ERICSBERG_BOUNDARY): boolean {

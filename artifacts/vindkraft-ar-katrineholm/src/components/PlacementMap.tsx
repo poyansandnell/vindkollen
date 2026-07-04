@@ -34,6 +34,14 @@ interface PlacementMapProps {
   onRemove: (id: string) => void;
   outsideBoundaryIds: string[];
   showEstateBoundary: boolean;
+  /**
+   * Redigeringsläge för markgränserna: visar numrerade hörnpunkter (med
+   * lat/lon) för både placeringsgränsen och "Ericsbergs mark"-polygonen, så
+   * de kan verifieras visuellt mot referensbilder/PDF:er och redigeras i
+   * `ericsbergBoundaryData.ts` — se `PlaceTurbines.tsx`s "🛠️
+   * Redigeringsläge (gräns)"-knapp.
+   */
+  boundaryDebugMode?: boolean;
 }
 
 const MAX_TILES = 48;
@@ -145,6 +153,7 @@ export function PlacementMap({
   onRemove,
   outsideBoundaryIds,
   showEstateBoundary,
+  boundaryDebugMode = false,
 }: PlacementMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 1, height: 1 });
@@ -464,6 +473,31 @@ export function PlacementMap({
         )}
 
         <polygon points={boundaryPoints} fill="rgba(255,139,1,0.08)" stroke="#FF8B01" strokeWidth="0.4" strokeDasharray="1.2,0.8" />
+
+        {boundaryDebugMode &&
+          ERICSBERG_BOUNDARY.map((v, i) => {
+            const p = project(v.lat, v.lon);
+            return (
+              <g key={`boundary-v-${i}`}>
+                <circle cx={p.x} cy={p.y} r="0.9" fill="#FF8B01" stroke="#000000" strokeWidth="0.25" />
+                <text x={p.x + 1.2} y={p.y - 1} fontSize="2" fill="#FF8B01" style={{ paintOrder: "stroke", stroke: "#000", strokeWidth: 0.3 }}>
+                  {i}: {v.lat.toFixed(4)},{v.lon.toFixed(4)}
+                </text>
+              </g>
+            );
+          })}
+        {boundaryDebugMode &&
+          ERICSBERG_ESTATE_AREA.map((v, i) => {
+            const p = project(v.lat, v.lon);
+            return (
+              <g key={`estate-v-${i}`}>
+                <circle cx={p.x} cy={p.y} r="0.9" fill="#38bdf8" stroke="#000000" strokeWidth="0.25" />
+                <text x={p.x + 1.2} y={p.y - 1} fontSize="2" fill="#38bdf8" style={{ paintOrder: "stroke", stroke: "#000", strokeWidth: 0.3 }}>
+                  {i}: {v.lat.toFixed(4)},{v.lon.toFixed(4)}
+                </text>
+              </g>
+            );
+          })}
 
         {[...SENSITIVE_ZONES, ...POSITIVE_ZONES].map((zone) => {
           const center = project(zone.lat, zone.lon);

@@ -173,7 +173,20 @@ function classifyCell(pixels: Uint8ClampedArray, col: number, row: number): bool
   // så här, se ovan).
   const bright = avgLum > 110;
   const lowTexture = stdDev < 18;
-  return bright && lowTexture && (sat < 0.25 || (blueish && avgB > avgR + 4));
+  // JUSTERING 3: Moln (särskilt "lurviga" cumulus-moln mot blå himmel) har
+  // RIKTIG lokal textur — ljusa/mörka kanter mellan molntapparna — vilket
+  // tidigare gjorde att `lowTexture` slog till och en hel molnig himmel
+  // klassades som "ockluderat" precis som ett träd, med resultatet att
+  // vindkraftverk tonades röda ("dolda") bakom moln trots fri sikt. Verkliga
+  // moln är dock nästan alltid mycket ljusa OCH mycket ofärgade (vitt/grått),
+  // till skillnad från lövverk/fasader som nästan alltid har någon
+  // färgmättnad (grönt, tegel, etc). Ett eget, textur-oberoende villkor för
+  // "mycket ljust + mycket ofärgat" låter alltså moln (oavsett hur texturerade
+  // de är) alltid räknas som himmel, utan att öppna för falska positiva
+  // inomhus (en normalt upplyst vägg/tak är sällan såhär ljus OCH samtidigt
+  // såhär helt ofärgad).
+  const veryBrightAndDesaturated = avgLum > 160 && sat < 0.15;
+  return (bright && lowTexture && (sat < 0.25 || (blueish && avgB > avgR + 4))) || veryBrightAndDesaturated;
 }
 
 /**

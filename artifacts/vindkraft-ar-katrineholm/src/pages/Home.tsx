@@ -176,13 +176,33 @@ export default function Home() {
     return () => window.clearTimeout(id);
   }, [geo.lat, geo.lon, orientation.hasFix, orientation.hasSettled, camera.stream]);
 
+  // Manuell nödbroms: en explicit "Fortsätt ändå"-knapp för HELA
+  // väntar-overlayen (inte bara kompass-delen som `forceSettled` ovan
+  // hanterar), som blir tillgänglig efter `MANUAL_CONTINUE_ANYWAY_MS` om
+  // GPS-fix redan finns men kameran/kompassen ändå inte blivit klara — så en
+  // användare aldrig behöver vänta ut appen om den upplevs som "fastnad".
+  // Kräver fortfarande att kameraströmmen finns (annars finns inget att visa
+  // AR mot), men tvingar igenom GPS-fix-krav OCH kompassfix/settle-krav.
+  const MANUAL_CONTINUE_ANYWAY_MS = 12_000;
+  const [manualContinueAvailable, setManualContinueAvailable] = useState(false);
+  const [manualContinue, setManualContinue] = useState(false);
+  useEffect(() => {
+    if (!started) {
+      setManualContinueAvailable(false);
+      setManualContinue(false);
+      return;
+    }
+    const id = window.setTimeout(() => setManualContinueAvailable(true), MANUAL_CONTINUE_ANYWAY_MS);
+    return () => window.clearTimeout(id);
+  }, [started]);
+
   const ready =
     started &&
     geo.lat !== null &&
     geo.lon !== null &&
-    orientation.hasFix &&
-    (orientation.hasSettled || forceSettled) &&
-    camera.stream;
+    (orientation.hasFix || manualContinue) &&
+    (orientation.hasSettled || forceSettled || manualContinue) &&
+    Boolean(camera.stream);
 
   // Enkel nedräkning (upp till 5s) som visas medan kompassen "räter in sig"
   // (`hasFix` men inte `hasSettled` än) — samma princip som en användare
@@ -638,6 +658,70 @@ export default function Home() {
                   !orientation.hasSettled &&
                   "Kalibrerar kompass — håll telefonen stilla…"}
               </p>
+
+              {/* Statuspanel: visar GPS/kompass/kamera/AR-status var för sig
+                  så en användare (eller testare) alltid ser EXAKT vad som
+                  saknas, istället för att bara gissa utifrån en enda
+                  textrad. */}
+              <ul className="w-full max-w-xs space-y-1 rounded-xl bg-black/30 p-3 text-left text-[11px] text-white/70">
+                <li className="flex items-center justify-between">
+                  <span>📷 Kamera</span>
+                  <span>{camera.stream ? "✅ Redo" : camera.error ? "❌ Fel" : "⏳ Startar…"}</span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span>📍 GPS</span>
+                  <span>{geo.lat !== null ? "✅ Fix" : geo.error ? "❌ Fel" : "⏳ Söker…"}</span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span>🧭 Kompass</span>
+                  <span>
+                    {orientation.hasSettled
+                      ? "✅ Stabil"
+                      : orientation.hasFix
+                        ? "⏳ Stabiliserar…"
+                        : orientation.error
+                          ? "❌ Fel"
+                          : "⏳ Söker…"}
+                  </span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span>🌬️ AR-scen</span>
+                  <span>{ready ? "✅ Redo" : "⏳ Väntar"}</span>
+                </li>
+              </ul>
+
+              {/* Åtgärdsknappar för de vanligaste "fastnat"-lägena: låter
+                  användaren själv trigga om en ny GPS-fix eller starta om
+                  kompassens riktningskalibrering, istället för att bara
+                  kunna vänta eller ladda om hela sidan. Alltid synliga
+                  (oberoende av kamerastatus) — GPS/kompass kan behöva
+                  återstartas även om kameran inte har startat ännu. */}
+              <div className="flex w-full max-w-xs flex-wrap justify-center gap-2">
+                <button
+                  onClick={() => {
+                    orientation.startCalibrationTracking();
+                    orientation.calibrateHorizon();
+                  }}
+                  className="rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-white/80 hover:bg-white/10"
+                >
+                  🧭 Kalibrera om riktning
+                </button>
+                <button
+                  onClick={geo.retry}
+                  className="rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-white/80 hover:bg-white/10"
+                >
+                  📍 Uppdatera position
+                </button>
+              </div>
+
+              {manualContinueAvailable && !manualContinue && camera.stream && geo.lat !== null && (
+                <button
+                  onClick={() => setManualContinue(true)}
+                  className="rounded-full bg-[#FF8B01] px-4 py-2 text-xs font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347]"
+                >
+                  Fortsätt ändå →
+                </button>
+              )}
               {/* Samma hjälptexter som produktkravet specificerar för de två
                   vanligaste fastnandena, så användaren aldrig bara ser en
                   snurrande spinner utan förklaring. */}
