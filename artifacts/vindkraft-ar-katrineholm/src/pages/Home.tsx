@@ -164,31 +164,13 @@ export default function Home() {
     }, 1000);
     return () => window.clearInterval(id);
   }, [started]);
-  // Nödbroms: om GPS, kompassfix och kamera ALLA redan är på plats men
-  // kompassen ändå inte hinner rapportera `hasSettled` inom 10s (borde
-  // normalt redan lösas av `useDeviceOrientation`s egna 5s-fallback, men
-  // vissa enheter/webbläsare kan ändå fastna), tvingar vi igenom AR-vyn med
-  // en synlig varning istället för att låta väntar-overlayen hänga för
-  // evigt. GPS/kamera tvingas ALDRIG igenom på samma sätt — utan dem finns
-  // inget vettigt att rendera.
-  const [forceSettled, setForceSettled] = useState(false);
-  useEffect(() => {
-    const softBlocked = geo.lat !== null && geo.lon !== null && orientation.hasFix && camera.stream && !orientation.hasSettled;
-    if (!softBlocked) {
-      setForceSettled(false);
-      return;
-    }
-    const id = window.setTimeout(() => setForceSettled(true), 10_000);
-    return () => window.clearTimeout(id);
-  }, [geo.lat, geo.lon, orientation.hasFix, orientation.hasSettled, camera.stream]);
-
   // Manuell nödbroms: en explicit "Fortsätt ändå"-knapp för HELA
-  // väntar-overlayen (inte bara kompass-delen som `forceSettled` ovan
-  // hanterar), som blir tillgänglig efter `MANUAL_CONTINUE_ANYWAY_MS` om
-  // GPS-fix redan finns men kameran/kompassen ändå inte blivit klara — så en
-  // användare aldrig behöver vänta ut appen om den upplevs som "fastnad".
+  // väntar-overlayen, som blir tillgänglig efter `MANUAL_CONTINUE_ANYWAY_MS`
+  // om GPS-fix redan finns men kameran/kompassen ändå inte blivit klara — så
+  // en användare aldrig behöver vänta ut appen om den upplevs som "fastnad".
   // Kräver fortfarande att kameraströmmen finns (annars finns inget att visa
-  // AR mot), men tvingar igenom GPS-fix-krav OCH kompassfix/settle-krav.
+  // AR mot), men tvingar igenom kompassfix-kravet (`orientation.hasFix`) om
+  // sensorn aldrig ger en fix alls.
   const MANUAL_CONTINUE_ANYWAY_MS = 12_000;
   const [manualContinueAvailable, setManualContinueAvailable] = useState(false);
   const [manualContinue, setManualContinue] = useState(false);
@@ -202,31 +184,28 @@ export default function Home() {
     return () => window.clearTimeout(id);
   }, [started]);
 
+  // PRODUKTKRAV: så fort kamera, GPS och kompass har GRUNDDATA (en fix, inte
+  // nödvändigtvis en färdigkalibrerad/"settled" kompass) ska verken visas
+  // direkt, mot senaste stabila position — kalibreringen (`hasSettled`) får
+  // fortsätta i bakgrunden men får ALDRIG blockera AR-vyn. `hasSettled`
+  // krävdes tidigare här, vilket kunde få appen att stå och "tugga" på
+  // "Kalibrerar kompass…" i flera sekunder trots att det redan fanns
+  // fullt tillräcklig data för att rendera. Positionens/riktningens
+  // faktiska STABILITET (frysning vid svag signal, mjuk uttoning) hanteras
+  // separat av `useArTrackingStability` nedan — den är oberoende av detta
+  // grindvillkor och gäller även efter att `ready` blivit sant.
   const ready =
     started &&
     geo.lat !== null &&
     geo.lon !== null &&
     (orientation.hasFix || manualContinue) &&
-    (orientation.hasSettled || forceSettled || manualContinue) &&
     Boolean(camera.stream);
 
-  // Enkel nedräkning (upp till 5s) som visas medan kompassen "räter in sig"
-  // (`hasFix` men inte `hasSettled` än) — samma princip som en användare
-  // annars skulle behöva vänta manuellt på, men styrd av verklig
-  // sensorstabilitet snarare än en blind timer (se `useDeviceOrientation`s
-  // `hasSettled`-logik för detaljerna).
-  const [compassSettleSeconds, setCompassSettleSeconds] = useState(5);
-  useEffect(() => {
-    if (!orientation.hasFix || orientation.hasSettled) {
-      setCompassSettleSeconds(5);
-      return;
-    }
-    const startedAt = Date.now();
-    const id = window.setInterval(() => {
-      setCompassSettleSeconds(Math.max(0, 5 - Math.floor((Date.now() - startedAt) / 1000)));
-    }, 200);
-    return () => window.clearInterval(id);
-  }, [orientation.hasFix, orientation.hasSettled]);
+  // Ren informationstext (blockerar INGET) som visas medan kompassen
+  // fortfarande kalibrerar sig i bakgrunden efter att `ready` redan blivit
+  // sant — så användaren vet att precisionen fortfarande förbättras utan
+  // att AR-vyn för den skull döljs eller fördröjs.
+  const stillCalibrating = ready && orientation.hasFix && !orientation.hasSettled;
   const wind = useWindSound();
   // Kamerabaserad himmel/inomhus-heuristik (se `useSkyDetection`s jsdoc för
   // begränsningar) — styr både AR-verkens synlighet (via `isPointSky`,
@@ -717,11 +696,6 @@ export default function Home() {
                 {!camera.stream && "Startar kameran…"}
                 {camera.stream && geo.lat === null && "Väntar på GPS-signal…"}
                 {camera.stream && geo.lat !== null && !orientation.hasFix && "Kompassen behöver kalibreras."}
-                {camera.stream &&
-                  geo.lat !== null &&
-                  orientation.hasFix &&
-                  !orientation.hasSettled &&
-                  "Kalibrerar kompass — håll telefonen stilla…"}
               </p>
 
               {/* Statuspanel: visar GPS/kompass/kamera/AR-status var för sig
@@ -740,13 +714,13 @@ export default function Home() {
                 <li className="flex items-center justify-between">
                   <span>🧭 Kompass</span>
                   <span>
-                    {orientation.hasSettled
-                      ? "✅ Stabil"
-                      : orientation.hasFix
-                        ? "⏳ Stabiliserar…"
-                        : orientation.error
-                          ? "❌ Fel"
-                          : "⏳ Söker…"}
+                    {orientation.hasFix
+                      ? orientation.hasSettled
+                        ? "✅ Stabil"
+                        : "✅ Hittad"
+                      : orientation.error
+                        ? "❌ Fel"
+                        : "⏳ Söker…"}
                   </span>
                 </li>
                 <li className="flex items-center justify-between">
@@ -795,9 +769,6 @@ export default function Home() {
               )}
               {camera.stream && geo.lat !== null && !orientation.hasFix && (
                 <p className="text-xs text-white/50">Vrid telefonen enligt instruktionen ovan (liggande, sedan stående).</p>
-              )}
-              {camera.stream && geo.lat !== null && orientation.hasFix && !orientation.hasSettled && (
-                <p className="text-[11px] text-white/40">{compassSettleSeconds > 0 ? `${compassSettleSeconds}s` : "Nästan klart…"}</p>
               )}
               {camera.stream && geo.lat === null && !geo.error && (
                 <p className="text-[11px] text-white/40">
@@ -876,10 +847,10 @@ export default function Home() {
             </div>
           )}
 
-          {ready && forceSettled && (
+          {ready && stillCalibrating && (
             <div className="pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center px-6">
               <span className="max-w-xs rounded-full bg-yellow-500/90 px-4 py-1.5 text-center text-xs font-medium text-[#090909] shadow-lg">
-                Precisionen kan förbättras – fortsätt röra telefonen långsamt.
+                Kalibrerar kompass i bakgrunden – fortsätt röra telefonen långsamt för bättre precision.
               </span>
             </div>
           )}

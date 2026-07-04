@@ -49,7 +49,7 @@ export interface ArTrackingStabilityResult {
   debug: ArTrackingDebugInfo;
 }
 
-export const WEAK_SIGNAL_MESSAGE = "Svag positionering – håller kvar senaste stabila läge";
+export const WEAK_SIGNAL_MESSAGE = "Svag positionering – använder senaste stabila läge";
 
 // GPS-precision (meter): <= GOOD ger full kvalitet (1), >= FREEZE ger 0
 // (fryser positionen). Betydligt strängare än `useOutdoorConfidenceIndex`s
