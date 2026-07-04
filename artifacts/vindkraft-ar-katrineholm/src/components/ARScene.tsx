@@ -142,6 +142,28 @@ const ASSUMED_USER_GROUND_M = 60;
 // felkontrollen i `layoutObjects`.
 const MAX_PLAUSIBLE_ELEVATION_DEG = 10;
 
+// "Närläge" (produktkrav 5, juli 2026): den vanliga renderingen komprimerar
+// ALLA verk mot ett närliggande render-plan (`planeDist`, se `layoutObjects`)
+// och kompenserar med en skal-korrektion (`physicalScale`) för att ändå
+// återge rätt VINKELSTORLEK — en teknik som fungerar bra på håll, men som vid
+// korta verkliga avstånd (candidate: ~100m) ger en skal-korrektion som växer
+// mycket snabbt (nästan 1/avstånd) och känns "konstig"/instabil. Under
+// `CLOSE_RANGE_FAR_M` tonas komprimeringen därför gradvis bort till förmån
+// för en OKOMPRIMERAD, fysikaliskt verklig placering (planeDist = det
+// verkliga avståndet), där skal-korrektionen naturligt går mot 1 — verket
+// visas i sin riktiga storlek utan konstgjord förstärkning, vilket också gör
+// markkontakten (som redan beräknas trigonometriskt, se `baseElevationRad`)
+// kännas fastare/mer stabil på nära håll.
+const CLOSE_RANGE_FAR_M = 300;
+const CLOSE_RANGE_NEAR_M = 60;
+
+/** 0 vid/över `CLOSE_RANGE_FAR_M`, 1 vid/under `CLOSE_RANGE_NEAR_M`, linjär mellan. */
+function closeRangeFactor(realDist: number): number {
+  if (realDist >= CLOSE_RANGE_FAR_M) return 0;
+  if (realDist <= CLOSE_RANGE_NEAR_M) return 1;
+  return (CLOSE_RANGE_FAR_M - realDist) / (CLOSE_RANGE_FAR_M - CLOSE_RANGE_NEAR_M);
+}
+
 const TOTAL_HEIGHT_M = 250;
 const LOW_SUN_ALTITUDE_DEG = 5;
 const LOW_SUN_AZIMUTH_DEG = 245; // sydväst/väster
@@ -612,7 +634,14 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         const bearingRad = (bearing * Math.PI) / 180;
 
         const renderDist = Math.min(realDist, MAX_RENDER_DISTANCE_M);
-        const planeDist = 400 + renderDist * 0.12;
+        const compressedPlaneDist = 400 + renderDist * 0.12;
+        // Närläge (<`CLOSE_RANGE_FAR_M`): blanda mot en OKOMPRIMERAD
+        // render-position (planeDist == verkligt avstånd) så att
+        // `physicalScale` nedan går mot 1 istället för att växa okontrollerat
+        // vid korta avstånd — se kommentaren vid `closeRangeFactor`.
+        const closeFactor = closeRangeFactor(realDist);
+        const uncompressedPlaneDist = realDist * METERS_TO_UNITS;
+        const planeDist = compressedPlaneDist + (uncompressedPlaneDist - compressedPlaneDist) * closeFactor;
 
         // Höjdskillnad mot användaren: verkets egen markhöjd över havet
         // (`groundHeightMeters`, från lantmäteridata) minus en antagen
@@ -654,7 +683,12 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         // markförankrade baspunkten (se `buildTurbineMesh`, som bygger
         // tornet från lokal origo/y=0 och uppåt), så fundamentet lämnar
         // aldrig marken av detta.
-        const boost = useRealScale ? 1 : 1 + Math.min(renderDist / MAX_RENDER_DISTANCE_M, 1) * 2.2;
+        const farBoost = useRealScale ? 1 : 1 + Math.min(renderDist / MAX_RENDER_DISTANCE_M, 1) * 2.2;
+        // I närläge ska verket visas i sin riktiga storlek (inget konstgjort
+        // "förstärkt visning"-påslag) — tona bort `farBoost` mot 1 med samma
+        // `closeFactor` som `planeDist` ovan, så storleken blir stabil och
+        // verklighetstrogen precis nära verket (produktkrav 5).
+        const boost = farBoost + (1 - farBoost) * closeFactor;
         const scaleDamp = physicalScale * boost;
 
         const x = Math.sin(bearingRad) * planeDist;

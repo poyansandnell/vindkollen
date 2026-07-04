@@ -46,6 +46,16 @@ export interface ArTrackingStabilityResult {
    * frysningen varar ovanligt länge tonas de bort).
    */
   fadeFactor: number;
+  /**
+   * 0..100, live-uppdaterad varje `REEVALUATE_INTERVAL_MS` (oavsett tier) —
+   * `headingStabilityRef` omvandlad till samma 0..1-kvalitetsskala som
+   * `combinedQuality` använder, avrundad till en procentsats. Driver
+   * "Kompass: X% stabil"-indikatorn i `Home.tsx` (produktkrav 2). Separat
+   * state (inte bara härledd i render) eftersom `headingStabilityRef` är en
+   * ren ref — utan detta skulle indikatorn bara uppdateras när något ANNAT
+   * råkar trigga en re-render, inte kontinuerligt/"live" som kravet är.
+   */
+  compassQualityPercent: number;
   debug: ArTrackingDebugInfo;
 }
 
@@ -134,6 +144,7 @@ export function useArTrackingStability(params: {
   const [tier, setTier] = useState<ArTrackingTier>("initializing");
   const [fadeFactor, setFadeFactor] = useState(1);
   const [frozenForMs, setFrozenForMs] = useState(0);
+  const [compassQualityPercent, setCompassQualityPercent] = useState(0);
   const degradedSinceRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -141,11 +152,18 @@ export function useArTrackingStability(params: {
       setTier("initializing");
       setFadeFactor(1);
       setFrozenForMs(0);
+      setCompassQualityPercent(0);
       degradedSinceRef.current = null;
       return;
     }
 
     const id = window.setInterval(() => {
+      // Uppdateras OVILLKORLIGT varje tick (innan alla tidiga returer nedan)
+      // så indikatorn känns "live" — headingStabilityRef muteras kontinuerligt
+      // av sensoravläsningar och ändras därför nästan alltid en aning mellan
+      // varje 250ms-tick.
+      setCompassQualityPercent(Math.round(headingStabilityToQuality(headingStabilityRef.current) * 100));
+
       if (gpsAccuracy === null || !orientationHasFix) {
         setTier((prev) => (prev === "initializing" ? prev : "initializing"));
         // Ingen fix alls än — inget att frysa/tona (produktkrav 3-4
@@ -209,6 +227,7 @@ export function useArTrackingStability(params: {
     freeze,
     weakSignalMessage: freeze ? WEAK_SIGNAL_MESSAGE : null,
     fadeFactor,
+    compassQualityPercent,
     debug: {
       gpsAccuracyM: gpsAccuracy,
       headingStability: headingStabilityRef.current,

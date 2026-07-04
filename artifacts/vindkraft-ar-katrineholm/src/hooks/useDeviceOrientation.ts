@@ -110,10 +110,25 @@ const DEADZONE_DEG = 0.06;
 // stor skillnad tolkas som en avsiktlig vridning och släpps igenom snabbt
 // (kort tidskonstant) så att AR-vyn ändå känns responsiv när man faktiskt
 // vrider på telefonen.
-const HEADING_NOISE_DELTA_DEG = 3;
-const HEADING_TURN_DELTA_DEG = 12;
-const HEADING_STILL_TAU = 0.9;
-const HEADING_TURN_TAU = 0.12;
+// Produktkrav (juli 2026): verken "hoppade" fortfarande för mycket i sidled
+// vid minsta mobilrörelse trots ovanstående adaptiva filter — brusfönstret
+// var för smalt (3°) för att fånga den typiska ofrivilliga handskakningen,
+// och en enda avläsning över tröskeln räckte för att växla till snabbt
+// (0.12s) läge. Två ändringar: (1) bredare brusfönster (5°) och högre
+// still-tidskonstant (1.3s) så ofrivillig skakning dämpas kraftigare, (2)
+// `HEADING_TURN_CONFIRM_SAMPLES` nedan kräver att flera avläsningar i rad
+// pekar åt samma håll innan det räknas som en avsiktlig vridning — en enskild
+// spik (t.ex. att man vinklar handleden en aning) faller annars igenom som
+// "turn" och ger precis den där sidledshoppet.
+const HEADING_NOISE_DELTA_DEG = 5;
+const HEADING_TURN_DELTA_DEG = 14;
+const HEADING_STILL_TAU = 1.3;
+const HEADING_TURN_TAU = 0.15;
+// Hur många på varandra följande avläsningar med samma vridningsriktning
+// (och delta över bruströskeln) som krävs innan vi litar på att det är en
+// verklig, avsiktlig vridning och släpper igenom den snabba tidskonstanten —
+// en enstaka avläsning över tröskeln behandlas fortfarande som brus.
+const HEADING_TURN_CONFIRM_SAMPLES = 2;
 // Om en enskild avläsning antyder en orimligt snabb vridning (fler grader/
 // sekund än en människa rimligen kan vrida en telefon) beror det nästan
 // alltid på en tillfällig magnetisk störning/sensorglitch, inte en verklig
@@ -217,6 +232,11 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
 
   const headingRef = useRef<number | null>(null);
   const headingDegRef = useRef<number | null>(null);
+  // Räknar hur många på varandra följande avläsningar som pekat åt SAMMA håll
+  // med ett delta över bruströskeln — se `HEADING_TURN_CONFIRM_SAMPLES`.
+  // `null` riktning betyder "ingen pågående kandidat".
+  const turnConfirmCountRef = useRef(0);
+  const turnConfirmDirRef = useRef<1 | -1 | null>(null);
   const betaRef = useRef<number | null>(null);
   const gammaRef = useRef<number | null>(null);
   const betaOffsetRef = useRef(0);
@@ -365,15 +385,35 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     // Adaptiv tidskonstant för giren: liten skillnad mot föregående råa
     // avläsning => sannolikt bara magnetometerbrus => dämpa kraftigt (lång
     // tidskonstant); stor skillnad => sannolikt en avsiktlig vridning =>
-    // släpp igenom snabbt (kort tidskonstant).
+    // släpp igenom snabbt (kort tidskonstant) — MEN bara efter att flera
+    // avläsningar i rad bekräftat samma riktning (se `HEADING_TURN_CONFIRM_SAMPLES`
+    // och dess kommentar ovan), annars behandlas även en delta över
+    // bruströskeln som brus fram tills den bekräftats.
     let headingTau = HEADING_STILL_TAU;
     if (prevHeadingRaw !== null) {
-      const rawDelta = Math.abs(circularDiffDeg(heading, prevHeadingRaw));
-      const t = Math.min(
-        1,
-        Math.max(0, (rawDelta - HEADING_NOISE_DELTA_DEG) / (HEADING_TURN_DELTA_DEG - HEADING_NOISE_DELTA_DEG)),
-      );
-      headingTau = HEADING_STILL_TAU + (HEADING_TURN_TAU - HEADING_STILL_TAU) * t;
+      const signedDelta = circularDiffDeg(heading, prevHeadingRaw);
+      const rawDelta = Math.abs(signedDelta);
+
+      if (rawDelta >= HEADING_NOISE_DELTA_DEG) {
+        const direction: 1 | -1 = signedDelta >= 0 ? 1 : -1;
+        if (turnConfirmDirRef.current === direction) {
+          turnConfirmCountRef.current += 1;
+        } else {
+          turnConfirmDirRef.current = direction;
+          turnConfirmCountRef.current = 1;
+        }
+      } else {
+        turnConfirmDirRef.current = null;
+        turnConfirmCountRef.current = 0;
+      }
+
+      if (turnConfirmCountRef.current >= HEADING_TURN_CONFIRM_SAMPLES) {
+        const t = Math.min(
+          1,
+          Math.max(0, (rawDelta - HEADING_NOISE_DELTA_DEG) / (HEADING_TURN_DELTA_DEG - HEADING_NOISE_DELTA_DEG)),
+        );
+        headingTau = HEADING_STILL_TAU + (HEADING_TURN_TAU - HEADING_STILL_TAU) * t;
+      }
     }
 
     const headingFactor = timeSmoothingFactor(headingTau, dt);

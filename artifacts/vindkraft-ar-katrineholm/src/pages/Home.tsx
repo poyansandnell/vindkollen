@@ -22,6 +22,7 @@ import { SensorDebugPanel } from "@/components/SensorDebugPanel";
 import { SoundLevelPanel, SoundLevelBadge } from "@/components/SoundLevelPanel";
 import { NoiseImpactBadge, NoiseImpactPanel } from "@/components/NoiseImpactMonitor";
 import { LineOfSightStatus } from "@/components/LineOfSightStatus";
+import { CompassStabilityBadge } from "@/components/CompassStabilityBadge";
 import { NearestTurbineArrow } from "@/components/NearestTurbineArrow";
 import { PhotoMontageModal } from "@/components/PhotoMontageModal";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
@@ -855,8 +856,11 @@ export default function Home() {
             </div>
           )}
 
-          {/* Top bar */}
-          <div className="absolute inset-x-0 top-0 z-20 flex flex-col gap-2 bg-gradient-to-b from-black/70 to-transparent px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
+          {/* Top bar — z-45: MÅSTE ligga ovanför inomhus-/fri sikt-overlayen
+              (z-40, se nedan) annars visas den "framför" (ovanpå, döljande)
+              statusbadgarna precis som produktkravet beskriver för
+              knapparna. Ligger fortfarande under pilen/målbekräftelsen (z-50). */}
+          <div className="absolute inset-x-0 top-0 z-[45] flex flex-col gap-2 bg-gradient-to-b from-black/70 to-transparent px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKRAFT AR</p>
@@ -865,6 +869,7 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
                 <LineOfSightStatus status={lineOfSightStatus} />
                 <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
                 <NoiseImpactBadge
@@ -938,8 +943,12 @@ export default function Home() {
             </div>
           )}
 
-          {/* Bottom controls */}
-          <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-10">
+          {/* Bottom controls — z-[45] av samma anledning som topp-baren ovan:
+              får ALDRIG hamna bakom (visuellt dolda av) inomhus-overlayen
+              (z-40). Dessa knappar ("Jag vill skriva på", "Fotomontage",
+              "Visa karta", "Om projektet", "Placera vindkraftverken själv")
+              måste alltid synas och gå att trycka på. */}
+          <div className="absolute inset-x-0 bottom-0 z-[45] flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-10">
             {ready && showSoundLevel && (
               <SoundLevelPanel
                 estimate={soundLevelEstimate}

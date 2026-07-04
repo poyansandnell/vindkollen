@@ -9,7 +9,13 @@ import { distanceMeters } from "@/lib/geo";
  * Den faktiska, effektiva tidskonstanten skalas upp ytterligare när
  * GPS-precisionen (`accuracy`) är dålig — se `effectiveTau`.
  */
-const BASE_TAU_SEC = 2.5;
+// Höjd (juli 2026, produktkrav "stabilisera placeringen") från 2.5 -> 3.2 —
+// verken kändes fortfarande vandra/hoppa sidled vid små GPS-brusspikar,
+// särskilt kombinerat med den nu striktare gir-utjämningen i
+// `useDeviceOrientation.ts`. En något längre bas-tidskonstant prioriterar
+// stabilitet framför omedelbar respons på riktiga förflyttningar (som ändå
+// sker mycket långsammare än sensorbruset denna konstant dämpar).
+const BASE_TAU_SEC = 3.2;
 
 /**
  * Om GPS-precisionen är sämre än det här (meter) körs utjämningen med en

@@ -5,11 +5,19 @@ import { formatDistance } from "@/lib/geo";
 // pilen kunna gömma sig (eller visas i onödan) fel jämfört med vad som
 // faktiskt syns i AR-vyn just nu.
 const FOV_DEGREES = 65;
-// Hur ofta pilens riktning uppdateras. Kompassen ändras för långsamt
-// (mänsklig handrörelse) för att kräva en full requestAnimationFrame-loop
-// — ett enkelt intervall håller UI:t responsivt utan att re-rendera
+// Hur ofta pilens riktning uppdateras. Sänkt (juli 2026, produktkrav "pilen
+// ska tydligt rotera åt rätt håll") från 150ms till 80ms — 150ms kändes
+// märkbart hackigt/eftersläpande när man vred mobilen snabbt, trots att
+// kompassen i sig hinner ändras betydligt oftare. Fortfarande ett enkelt
+// intervall (inte requestAnimationFrame) eftersom mänsklig handrörelse ändå
+// inte kräver bildruteexakt uppdatering, och undviker att re-rendera
 // `Home.tsx`s stora komponentträd i onödan.
-const POLL_INTERVAL_MS = 150;
+const POLL_INTERVAL_MS = 80;
+// Vinkeln pilen roterar per grad avvikelse utanför synfältet — ger en
+// proportionell (inte bara binär vänster/höger) rotation, så pilen tydligt
+// "följer med" när man vrider mobilen mot målet istället för att bara peka
+// i en fast ±90°-vinkel oavsett hur nära man redan pekar rätt.
+const MAX_ARROW_ROTATION_DEG = 80;
 
 function circularDiffDeg(target: number, current: number): number {
   return ((target - current + 540) % 360) - 180;
@@ -64,6 +72,12 @@ export function NearestTurbineArrow({ headingDegRef, bearingDeg, distanceM, indo
   // text, inte hoppa till att helt sakna feedback).
   const onTarget = !indoors && Math.abs(diffDeg) <= FOV_DEGREES / 2;
   const pointsRight = diffDeg > 0;
+  // Proportionell rotation: nära 0° avvikelse (nästan i mål) ger en liten
+  // vinkel, nära/över 180° (målet nästan bakom en) ger den maximala
+  // vinkeln — så pilen synligt "svänger med" i realtid istället för att
+  // hoppa mellan två fasta lägen (produktkrav: "tydligt rotera åt rätt håll").
+  const rotationDeg =
+    (pointsRight ? 1 : -1) * (10 + (MAX_ARROW_ROTATION_DEG - 10) * Math.min(1, Math.abs(diffDeg) / 180));
 
   return (
     <>
@@ -73,8 +87,8 @@ export function NearestTurbineArrow({ headingDegRef, bearingDeg, distanceM, indo
         } ${onTarget ? "opacity-0" : "opacity-100"}`}
       >
         <div
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FF8B01]/90 text-xl text-[#090909] shadow-lg shadow-[#FF8B01]/30"
-          style={{ transform: `rotate(${pointsRight ? 90 : -90}deg)` }}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FF8B01]/90 text-xl text-[#090909] shadow-lg shadow-[#FF8B01]/30 transition-transform duration-150 ease-out"
+          style={{ transform: `rotate(${rotationDeg}deg)` }}
         >
           ➜
         </div>
