@@ -41,6 +41,8 @@ function loadSaved(): SavedPlacement[] {
   }
 }
 
+let nextTurbineSeq = 1;
+
 export default function PlaceTurbines() {
   const [, navigate] = useLocation();
   const [turbines, setTurbines] = useState<PlacedTurbine[]>(DEFAULT_TURBINES);
@@ -48,6 +50,7 @@ export default function PlaceTurbines() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [showEstateBoundary, setShowEstateBoundary] = useState(false);
 
   useEffect(() => {
     setSaved(loadSaved());
@@ -58,6 +61,14 @@ export default function PlaceTurbines() {
 
   const handleMove = useCallback((id: string, lat: number, lon: number) => {
     setTurbines((prev) => prev.map((t) => (t.id === id ? { ...t, lat, lon } : t)));
+  }, []);
+
+  const handleAdd = useCallback((lat: number, lon: number) => {
+    setTurbines((prev) => [...prev, { id: `custom-${Date.now()}-${nextTurbineSeq++}`, lat, lon }]);
+  }, []);
+
+  const handleRemove = useCallback((id: string) => {
+    setTurbines((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   function handleReset() {
@@ -100,7 +111,7 @@ export default function PlaceTurbines() {
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <div>
           <p className="text-xs font-semibold tracking-wide text-[#FFB347]">PLACERA VINDKRAFTVERKEN SJÄLV</p>
-          <p className="text-sm text-white/70">Ericsbergs marker · dra verken för att omplacera</p>
+          <p className="text-sm text-white/70">Ericsbergs marker · klicka för att placera, dra för att flytta</p>
         </div>
         <button
           onClick={() => navigate("/")}
@@ -110,8 +121,27 @@ export default function PlaceTurbines() {
         </button>
       </div>
 
+      <div className="flex items-center gap-2 border-b border-white/10 bg-[#0d0d0d] px-4 py-2">
+        <button
+          onClick={() => setShowEstateBoundary((v) => !v)}
+          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+            showEstateBoundary ? "bg-[#FFB347] text-[#090909]" : "border border-white/20 bg-white/5 text-white hover:bg-white/10"
+          }`}
+        >
+          🗺️ Visa Ericsbergs mark
+        </button>
+        <p className="text-[11px] text-white/40">{turbines.length} verk placerade</p>
+      </div>
+
       <div className="relative flex-1 overflow-hidden p-3">
-        <PlacementMap turbines={turbines} onMove={handleMove} outsideBoundaryIds={result.outsideBoundaryIds} />
+        <PlacementMap
+          turbines={turbines}
+          onMove={handleMove}
+          onAdd={handleAdd}
+          onRemove={handleRemove}
+          outsideBoundaryIds={result.outsideBoundaryIds}
+          showEstateBoundary={showEstateBoundary}
+        />
       </div>
 
       {result.playfulWarning && (

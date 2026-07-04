@@ -42,6 +42,30 @@ export const ERICSBERG_BOUNDARY: LatLon[] = [
   { lat: 58.888, lon: 16.018 },
 ];
 
+/**
+ * "Ericsbergs mark" — en betydligt STÖRRE, illustrativ markering av
+ * Ericsbergs samlade godsmark (inte bara placeringsområdet ovan), grovt
+ * dragen så den sträcker sig mellan de omgivande orterna/platserna Forssjö,
+ * Stora Malm, Ericsberg, Djulöfors och Strångsjö/Norrlunda, per användarens
+ * referensbild. Precis som `ERICSBERG_BOUNDARY` är detta EN GROV
+ * UPPSKATTNING — se `ERICSBERG_AREA_DISCLAIMER` — inte en exakt
+ * fastighets- eller lantmäterigräns. Visas som ett separat, valbart lager
+ * ("Visa Ericsbergs mark") skilt från placeringsområdet.
+ */
+export const ERICSBERG_ESTATE_AREA: LatLon[] = [
+  { lat: 58.936, lon: 16.02 },
+  { lat: 58.932, lon: 16.11 },
+  { lat: 58.915, lon: 16.155 },
+  { lat: 58.88, lon: 16.16 },
+  { lat: 58.845, lon: 16.14 },
+  { lat: 58.815, lon: 16.1 },
+  { lat: 58.802, lon: 16.03 },
+  { lat: 58.815, lon: 15.96 },
+  { lat: 58.85, lon: 15.94 },
+  { lat: 58.89, lon: 15.95 },
+  { lat: 58.92, lon: 15.975 },
+];
+
 /** Ray-casting punkt-i-polygon-test. */
 export function isInsideBoundary(point: LatLon, boundary: LatLon[] = ERICSBERG_BOUNDARY): boolean {
   let inside = false;

@@ -1,0 +1,104 @@
+Absolut. Skicka detta till Replit:
+
+⸻
+
+Appen går fortfarande inte vidare efter startflödet. När GPS, kompass och checklistan är klara måste appen automatiskt starta AR/kartläget. Den får inte fastna på laddskärmen.
+
+Fix 1: Startskärmen fastnar
+
+När följande är klart:
+
+* GPS-position hittad
+* Kompass kalibrerad
+* Vindkraftverk placerade
+* Solposition beräknad
+* Skuggor beräknade
+* Ljudnivå beräknad
+* AR-objekt laddade
+
+ska appen automatiskt köra:
+
+setLoadingComplete(true)
+startARScene()
+
+eller motsvarande funktion som öppnar AR/kartvyn.
+
+Lägg också in en fallback:
+
+Om appen står kvar längre än 10 sekunder efter att alla steg är klara ska den ändå gå vidare till AR/kartläget och visa en liten varning:
+
+Precisionen kan förbättras – fortsätt röra telefonen långsamt.
+
+⸻
+
+Fix 2: Ny kartfunktion för fri placering av vindkraftverk
+
+Vi behöver bygga vidare på kartfunktionen där användaren kan placera ut vindkraftverk själv och direkt se hur många hushåll som påverkas.
+
+Funktionen ska:
+
+1. Visa Google Maps som bakgrundskarta.
+2. Användaren ska kunna zooma in och ut fritt.
+3. Användaren ska kunna panorera kartan.
+4. Användaren ska kunna klicka/tappa på kartan för att placera ut vindkraftverk.
+5. Varje placerat vindkraftverk ska räknas mot:
+    * avstånd till bostäder
+    * antal berörda hushåll
+    * ljudpåverkan
+    * skuggpåverkan
+    * visuell påverkan
+    * närhet till tätort/centrum
+    * natur- och kulturmiljö
+6. Kartan ska färgmarkera påverkan:
+    * grönt = mindre påverkan
+    * gult = viss påverkan
+    * orange = hög påverkan
+    * rött = mycket olämplig placering
+
+⸻
+
+Fix 3: Markera Caroline Bondes / Ericsbergs mark
+
+Lägg in ett stort polygonlager på kartan som markerar hela Ericsbergs/Caroline Bondes mark enligt bifogad karta.
+
+Marken ska visas som:
+
+* mörk transparent yta
+* tydlig svart kantlinje
+* ovanpå Google Maps
+* möjlig att slå av/på med knapp:
+    “Visa Ericsbergs mark”
+
+Använd den bifogade kartbilden som referens för formen. Polygonen behöver inte vara millimeterexakt i första versionen, men ska täcka samma område ungefär: Forssjö, Stora Malm, Ericsberg, Djulöfors, Strångsjö/Norlunda-området.
+
+⸻
+
+Fix 4: Logga vid Caroline Bondes slott
+
+Lägg till en marker på platsen för Ericsbergs slott.
+
+Markern ska visa Caroline Bondes/Ericsbergs logga på kartan.
+
+Om loggan inte finns uppladdad ännu, använd tillfälligt en placeholder:
+
+Ericsbergs slott
+
+När man klickar på markern ska popup visa:
+
+Ericsbergs slott
+Markägare: Caroline Bonde
+Härifrån visas den markerade marken runt området.
+
+⸻
+
+Viktigt
+
+Kartfunktionen ska inte ersätta AR-läget, utan vara ett separat läge:
+
+* AR-läge = se vindkraftverken i mobilkameran
+* Kartläge = placera ut vindkraftverk och se påverkan på hushåll/karta
+
+Lägg därför till två tydliga knappar efter start:
+
+Starta AR
+Öppna kartverktyg

@@ -4,12 +4,13 @@ import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 
 interface PermissionGateProps {
   onStart: () => void;
+  onOpenMapTool: () => void;
   starting: boolean;
   errors: string[];
   turbineCount: number;
 }
 
-export function PermissionGate({ onStart, starting, errors, turbineCount }: PermissionGateProps) {
+export function PermissionGate({ onStart, onOpenMapTool, starting, errors, turbineCount }: PermissionGateProps) {
   const [inApp] = useState(() => (typeof navigator !== "undefined" ? isInAppBrowser() : false));
   const [appName] = useState(() => (typeof navigator !== "undefined" ? inAppBrowserName() : ""));
 
@@ -116,8 +117,18 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
               disabled={starting}
               className="w-full rounded-full bg-[#FF8B01] py-4 text-base font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] disabled:opacity-60"
             >
-              {starting ? "Startar…" : "Starta visualisering"}
+              {starting ? "Startar…" : "📷 Starta AR"}
             </button>
+            <button
+              onClick={onOpenMapTool}
+              disabled={starting}
+              className="w-full rounded-full border border-white/20 bg-white/5 py-3.5 text-sm font-medium text-white transition hover:bg-white/10 disabled:opacity-60"
+            >
+              🗺️ Öppna kartverktyg
+            </button>
+            <p className="text-center text-[11px] text-white/40">
+              Kartverktyget kräver ingen kamera, GPS eller kompass — du kan testa placeringar direkt.
+            </p>
             <p className="text-center text-[11px] leading-relaxed text-white/40">
               Se begärd kopia från Ericsbergs Säteri/Renewable Sweden AB:s begäran om samrådsyttrande till
               Försvarsmakten. Underlaget avser Ericsbergs Vind 1–5 i Katrineholms kommun och omfattar totalt

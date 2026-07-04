@@ -157,8 +157,31 @@ export default function Home() {
     }, 1000);
     return () => window.clearInterval(id);
   }, [started]);
+  // Nödbroms: om GPS, kompassfix och kamera ALLA redan är på plats men
+  // kompassen ändå inte hinner rapportera `hasSettled` inom 10s (borde
+  // normalt redan lösas av `useDeviceOrientation`s egna 5s-fallback, men
+  // vissa enheter/webbläsare kan ändå fastna), tvingar vi igenom AR-vyn med
+  // en synlig varning istället för att låta väntar-overlayen hänga för
+  // evigt. GPS/kamera tvingas ALDRIG igenom på samma sätt — utan dem finns
+  // inget vettigt att rendera.
+  const [forceSettled, setForceSettled] = useState(false);
+  useEffect(() => {
+    const softBlocked = geo.lat !== null && geo.lon !== null && orientation.hasFix && camera.stream && !orientation.hasSettled;
+    if (!softBlocked) {
+      setForceSettled(false);
+      return;
+    }
+    const id = window.setTimeout(() => setForceSettled(true), 10_000);
+    return () => window.clearTimeout(id);
+  }, [geo.lat, geo.lon, orientation.hasFix, orientation.hasSettled, camera.stream]);
+
   const ready =
-    started && geo.lat !== null && geo.lon !== null && orientation.hasFix && orientation.hasSettled && camera.stream;
+    started &&
+    geo.lat !== null &&
+    geo.lon !== null &&
+    orientation.hasFix &&
+    (orientation.hasSettled || forceSettled) &&
+    camera.stream;
 
   // Enkel nedräkning (upp till 5s) som visas medan kompassen "räter in sig"
   // (`hasFix` men inte `hasSettled` än) — samma princip som en användare
@@ -442,6 +465,15 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orientation]);
 
+  // VIKTIGT: måste ha stabil identitet. `LoadingSequence`s checklista
+  // beror på denna callback i sitt completion-effekt — om vi (som tidigare)
+  // skickar en ny inline-funktion vid varje render här (Home.tsx
+  // renderas om flera gånger per sekund p.g.a. GPS/kompass/himmel-
+  // detektering), nollställs den effektens 500ms-timer om och om igen så
+  // den ALDRIG hinner köra. Det gav exakt buggen där checklistan visuellt
+  // blir klar ("Startar AR…") men appen fastnar där för evigt.
+  const handleLoadingSequenceComplete = useCallback(() => setShowLoadingSequence(false), []);
+
   const handleCalibrate = useCallback(() => {
     orientation.calibrateHorizon();
     setCalibrated(true);
@@ -539,14 +571,20 @@ export default function Home() {
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#090909] text-white">
       {!started && (
-        <PermissionGate onStart={handleStart} starting={starting} errors={errors} turbineCount={activeTurbines.length} />
+        <PermissionGate
+          onStart={handleStart}
+          onOpenMapTool={() => navigate("/placera")}
+          starting={starting}
+          errors={errors}
+          turbineCount={activeTurbines.length}
+        />
       )}
 
       {started && (
         <>
           {showLoadingSequence && (
             <LoadingSequence
-              onComplete={() => setShowLoadingSequence(false)}
+              onComplete={handleLoadingSequenceComplete}
               calibrationPhase={orientation.calibrationPhase}
               calibrationProgress={orientation.calibrationProgress}
               skipCalibration={!orientation.supported || Boolean(orientation.error)}
@@ -704,6 +742,14 @@ export default function Home() {
             <div className="pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center">
               <span className="rounded-full bg-[#FF8B01]/90 px-4 py-1.5 text-xs font-medium text-[#090909] shadow-lg">
                 Horisont kalibrerad!
+              </span>
+            </div>
+          )}
+
+          {ready && forceSettled && (
+            <div className="pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center px-6">
+              <span className="max-w-xs rounded-full bg-yellow-500/90 px-4 py-1.5 text-center text-xs font-medium text-[#090909] shadow-lg">
+                Precisionen kan förbättras – fortsätt röra telefonen långsamt.
               </span>
             </div>
           )}
