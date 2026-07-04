@@ -60,6 +60,81 @@ export const ERICSBERG_BOUNDARY: LatLon[] = geoJsonPolygonToLatLon(ERICSBERG_PLA
  */
 export const ERICSBERG_ESTATE_AREA: LatLon[] = geoJsonPolygonToLatLon(ERICSBERG_ESTATE_AREA_BOUNDARY);
 
+const CUSTOM_BOUNDARY_STORAGE_KEY = "vindkraft-ar-katrineholm:customBoundary";
+
+function isValidLatLonArray(value: unknown): value is LatLon[] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 3 &&
+    value.every((p) => p && typeof p.lat === "number" && typeof p.lon === "number")
+  );
+}
+
+function loadCustomBoundaryFromStorage(): LatLon[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_BOUNDARY_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isValidLatLonArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+let customBoundaryOverride: LatLon[] | null = loadCustomBoundaryFromStorage();
+
+/**
+ * Den placeringsgräns som FAKTISKT ska användas — en användarredigerad
+ * gräns (sparad via `setCustomBoundary`, persisterad i localStorage under
+ * `CUSTOM_BOUNDARY_STORAGE_KEY`) om en sådan finns, annars den inbyggda
+ * `ERICSBERG_BOUNDARY`. `placementScoring.ts` och `PlacementMap.tsx` ska
+ * använda den här funktionen (inte den statiska konstanten direkt) så att
+ * gränsredigeraren i `PlaceTurbines.tsx` faktiskt påverkar poängsättning och
+ * ritning.
+ */
+export function getActiveBoundary(): LatLon[] {
+  return customBoundaryOverride ?? ERICSBERG_BOUNDARY;
+}
+
+export function hasCustomBoundary(): boolean {
+  return customBoundaryOverride !== null;
+}
+
+export function setCustomBoundary(points: LatLon[]): void {
+  if (!isValidLatLonArray(points)) return;
+  customBoundaryOverride = points;
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(CUSTOM_BOUNDARY_STORAGE_KEY, JSON.stringify(points));
+  }
+}
+
+export function resetCustomBoundary(): void {
+  customBoundaryOverride = null;
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(CUSTOM_BOUNDARY_STORAGE_KEY);
+  }
+}
+
+/** Exporterar en gräns som en GeoJSON `Polygon`-feature ([lon,lat]-par, sluten ring). */
+export function boundaryToGeoJson(boundary: LatLon[]): {
+  type: "Feature";
+  properties: { name: string };
+  geometry: { type: "Polygon"; coordinates: number[][][] };
+} {
+  const ring = boundary.map((p) => [p.lon, p.lat]);
+  if (ring.length > 0) {
+    const [firstLon, firstLat] = ring[0];
+    const [lastLon, lastLat] = ring[ring.length - 1];
+    if (firstLon !== lastLon || firstLat !== lastLat) ring.push([firstLon, firstLat]);
+  }
+  return {
+    type: "Feature",
+    properties: { name: "Ericsbergs placeringsområde (redigerad)" },
+    geometry: { type: "Polygon", coordinates: [ring] },
+  };
+}
+
 /** Ray-casting punkt-i-polygon-test. */
 export function isInsideBoundary(point: LatLon, boundary: LatLon[] = ERICSBERG_BOUNDARY): boolean {
   let inside = false;
@@ -86,15 +161,65 @@ export interface HouseholdCluster {
 }
 
 /**
- * Illustrativa bebyggelsekluster kring Ericsberg. Namnen är grundade i
- * verkliga orter/platser i trakten (Björkvik, Marmorbruket) men
- * hushållsantalen är uppskattningar för spelets/simuleringens skull.
+ * Kommunfaktan simuleringen bygger på (av användaren angivna, avrundade
+ * siffror — inte SCB-data hämtad i appen): Katrineholms kommun har totalt
+ * ca 35 000 invånare, varav ca 25 000 bor i inre Katrineholm (tätorten) och
+ * resterande ca 10 000 är fördelade på kransorterna/byarna runtom. Omräknat
+ * med en grov schablon på ~2,1 personer/hushåll ger det ca 11 900 hushåll i
+ * inre Katrineholm och ca 4 800 hushåll i kransorterna — de tal
+ * `HOUSEHOLD_CLUSTERS` nedan summerar till (approximativt, se
+ * per-kluster-kommentarerna).
+ */
+export const KOMMUN_POPULATION = {
+  totalInhabitants: 35000,
+  innerKatrineholmInhabitants: 25000,
+  kransorterInhabitants: 10000,
+  personsPerHousehold: 2.1,
+};
+
+/**
+ * BUGGFIX: tidigare innehöll denna lista bara fyra små kluster kring
+ * Ericsberg (Björkvik/Marmorbruket/Forssjö/Ericsbergs gård), vilket gjorde
+ * att "Antal berörda hushåll", "Avstånd till bostäder" och (eftersom bullret
+ * i `placementScoring.ts` räknas mot just dessa kluster) "Bullerpåverkan"
+ * alla blev 0 så fort verk placerades nära Katrineholm/Forssjö-området
+ * längre bort från Ericsberg — precis de platser användaren faktiskt testar
+ * eftersom de 8 verkliga närmaste verken (`DEFAULT_TURBINES` i
+ * PlaceTurbines.tsx) står 3–8 km NORDOST om Ericsberg, inte i eller nära
+ * det. Listan är nu utökad med inre Katrineholms tätortsbebyggelse (uppdelad
+ * i några stadsdelspunkter så avstånds-/räkneberäkningar blir meningsfulla,
+ * inte en enda punkt) och de verkliga kransorterna/byarna i kommunen, så att
+ * en placering NÄRA VILKEN AV DESSA ORTER SOM HELST ger utslag — inte bara
+ * Ericsberg. Koordinaterna för kransorterna är, liksom övriga geodata i den
+ * här filen, grovt uppskattade lägen för respektive ort, inte exakt
+ * lantmäteridata. Hushållssiffrorna är fördelade proportionellt mot
+ * `KOMMUN_POPULATION` ovan.
  */
 export const HOUSEHOLD_CLUSTERS: HouseholdCluster[] = [
+  // --- Inre Katrineholm (~25 000 invånare ≈ ~11 900 hushåll), uppdelat på
+  // några stadsdelspunkter kring centrum så avståndsberäkningar mot olika
+  // delar av tätorten blir rimliga. ---
+  { id: "katrineholm-centrum", name: "Katrineholm centrum", lat: 58.9959, lon: 16.2072, households: 4600 },
+  { id: "katrineholm-norr", name: "Katrineholm, Nyhem/Norr", lat: 58.9995, lon: 16.202, households: 2400 },
+  { id: "katrineholm-vaster", name: "Katrineholm, Sandbäcken/Väster", lat: 58.994, lon: 16.188, households: 2000 },
+  { id: "katrineholm-oster", name: "Katrineholm, Ängsholmen/Öster", lat: 58.9925, lon: 16.223, households: 1500 },
+  { id: "katrineholm-soder", name: "Katrineholm, Näringen/Söder", lat: 58.9865, lon: 16.204, households: 1400 },
+  // --- Kransorter/byar (~10 000 invånare ≈ ~4 800 hushåll totalt). ---
+  { id: "bjorkvik", name: "Björkvik", lat: 58.869, lon: 16.145, households: 900 },
+  { id: "skoldinge", name: "Sköldinge", lat: 59.021, lon: 16.083, households: 700 },
+  { id: "julita", name: "Julita", lat: 59.128, lon: 16.213, households: 600 },
+  { id: "strangsjo", name: "Strångsjö", lat: 58.93, lon: 16.021, households: 500 },
+  { id: "bie", name: "Bie", lat: 58.832, lon: 16.281, households: 400 },
+  { id: "askoping", name: "Äsköping", lat: 58.989, lon: 16.352, households: 300 },
+  { id: "forssjo", name: "Forssjö", lat: 58.93, lon: 16.145, households: 150 },
   { id: "ericsberg-gard", name: "Ericsbergs gård & skola", lat: 58.883, lon: 16.058, households: 25 },
-  { id: "bjorkvik", name: "Björkvik", lat: 58.869, lon: 16.145, households: 220 },
-  { id: "marmorbruket", name: "Marmorbruket", lat: 58.86, lon: 16.01, households: 15 },
-  { id: "forssjo", name: "Forssjö", lat: 58.93, lon: 16.145, households: 90 },
+  {
+    id: "landsbygd-ovrigt",
+    name: "Övrig landsbygd/kransbygd",
+    lat: 58.955,
+    lon: 16.14,
+    households: 225,
+  },
 ];
 
 export type SensitiveZoneType = "nature" | "cultural" | "water";
@@ -109,7 +234,18 @@ export interface SensitiveZone {
   description: string;
 }
 
-/** Zoner som ökar konsekvenspoängen om ett verk placeras inom dem. */
+/**
+ * Zoner som ökar konsekvenspoängen om ett verk placeras inom dem.
+ *
+ * BUGGFIX (samma som för `HOUSEHOLD_CLUSTERS` ovan): de ursprungliga tre
+ * zonerna låg alla vid sjön Yngaren/Ericsberg, så natur-/kultur-/
+ * vattenskyddspoängen blev alltid 0 för placeringar nära Katrineholm/
+ * Forssjö. Tillagt: några verkliga, kända sjöar/naturområden/kulturmiljöer
+ * i och strax söder om Katrineholms tätort (Näsnaren, Duveholmssjön, Djulö
+ * naturreservat, Duveholms slott) — namnen och ungefärliga lägena är
+ * verkliga, men gränserna/radierna är grova illustrationer precis som
+ * övriga zoner i den här filen.
+ */
 export const SENSITIVE_ZONES: SensitiveZone[] = [
   {
     id: "yngaren-natur",
@@ -137,6 +273,42 @@ export const SENSITIVE_ZONES: SensitiveZone[] = [
     lon: 16.09,
     radiusM: 700,
     description: "Uppskattat vattenskyddsområde kring sjön Yngaren.",
+  },
+  {
+    id: "djulo-naturreservat",
+    name: "Djulö naturreservat",
+    type: "nature",
+    lat: 59.003,
+    lon: 16.238,
+    radiusM: 900,
+    description: "Naturreservat/friluftsområde strax nordöst om Katrineholms centrum.",
+  },
+  {
+    id: "duveholms-slott",
+    name: "Duveholms slott och park",
+    type: "cultural",
+    lat: 58.99,
+    lon: 16.185,
+    radiusM: 500,
+    description: "Kulturmiljö kring Duveholms slott, sjö och park i Katrineholm.",
+  },
+  {
+    id: "duveholmssjon",
+    name: "Duveholmssjön",
+    type: "water",
+    lat: 58.988,
+    lon: 16.182,
+    radiusM: 500,
+    description: "Sjö/vattenområde i västra Katrineholm.",
+  },
+  {
+    id: "nasnaren-vatten",
+    name: "Näsnaren",
+    type: "water",
+    lat: 58.951,
+    lon: 16.192,
+    radiusM: 1200,
+    description: "Sjön Näsnaren, söder om Katrineholms tätort.",
   },
 ];
 

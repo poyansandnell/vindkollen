@@ -9,15 +9,16 @@
 import { distanceMeters } from "./geo";
 import { attenuatedLevelDba, combineLevelsDba } from "./soundLevel";
 import {
-  ERICSBERG_BOUNDARY,
   HOUSEHOLD_CLUSTERS,
   KATRINEHOLM_CENTER,
   KATRINEHOLM_URBAN_RADIUS_M,
   POSITIVE_ZONES,
   SENSITIVE_ZONES,
   distanceToZoneEdgeM,
+  getActiveBoundary,
   isInsideBoundary,
   type HouseholdCluster,
+  type SensitiveZoneType,
 } from "./ericsbergArea";
 
 export interface PlacedTurbine {
@@ -54,6 +55,42 @@ export interface PlacementScoreResult {
    * enskilda verk som bidrar mest till den totala poängen.
    */
   turbineContributions: { id: string; score: number }[];
+  /** Fullständig per-verk felsökningsdata — se `TurbineDebugInfo`. */
+  turbineDebug: TurbineDebugInfo[];
+  /** Hur många datapunkter/zoner som faktiskt är laddade i respektive lager. */
+  layerCounts: LayerCounts;
+}
+
+export interface TurbineDebugInfo {
+  id: string;
+  lat: number;
+  lon: number;
+  insideBoundary: boolean;
+  nearestHouseholdDistanceM: number | null;
+  nearestHouseholdName: string | null;
+  householdsWithin1kmCount: number;
+  householdsWithin2kmCount: number;
+  householdsWithin3kmCount: number;
+  distanceToKatrineholmCenterM: number;
+  nearestNatureDistanceM: number | null;
+  nearestNatureName: string | null;
+  nearestCulturalDistanceM: number | null;
+  nearestCulturalName: string | null;
+  nearestWaterDistanceM: number | null;
+  nearestWaterName: string | null;
+  noiseDba: number | null;
+  shadowFlickerScore: number;
+  visualScore: number;
+  /** Verkets EGEN totalpoäng om det stod ensamt (samma tal som i `turbineContributions`). */
+  totalScore: number;
+}
+
+export interface LayerCounts {
+  householdClusters: number;
+  natureZones: number;
+  culturalZones: number;
+  waterZones: number;
+  positiveZones: number;
 }
 
 const HOUSEHOLD_IMPACT_RADIUS_M = 2500;
@@ -114,6 +151,39 @@ function nearestHousehold(point: { lat: number; lon: number }): { cluster: House
   return best;
 }
 
+function nearestZoneOfType(
+  point: { lat: number; lon: number },
+  type: SensitiveZoneType,
+): { name: string; distanceM: number } | null {
+  let best: { name: string; distanceM: number } | null = null;
+  for (const zone of SENSITIVE_ZONES) {
+    if (zone.type !== type) continue;
+    // Avstånd till kanten (negativt = innanför zonen), klippt till 0 så
+    // "inom zonen" konsekvent visas som 0 m i felsökningspanelen.
+    const distanceM = Math.max(0, distanceToZoneEdgeM(point, zone));
+    if (!best || distanceM < best.distanceM) best = { name: zone.name, distanceM };
+  }
+  return best;
+}
+
+function householdsWithinRadius(point: { lat: number; lon: number }, radiusM: number): number {
+  let count = 0;
+  for (const cluster of HOUSEHOLD_CLUSTERS) {
+    if (distanceMeters(point.lat, point.lon, cluster.lat, cluster.lon) <= radiusM) {
+      count += cluster.households;
+    }
+  }
+  return count;
+}
+
+const LAYER_COUNTS: LayerCounts = {
+  householdClusters: HOUSEHOLD_CLUSTERS.length,
+  natureZones: SENSITIVE_ZONES.filter((z) => z.type === "nature").length,
+  culturalZones: SENSITIVE_ZONES.filter((z) => z.type === "cultural").length,
+  waterZones: SENSITIVE_ZONES.filter((z) => z.type === "water").length,
+  positiveZones: POSITIVE_ZONES.length,
+};
+
 /**
  * Beräknar en konsekvenspoäng för en placering av (upp till) 8 verk. Tomma
  * eller ofullständiga placeringar (färre än 8 verk) poängsätts ändå utifrån
@@ -135,6 +205,8 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
       factors: [],
       playfulWarning: null,
       turbineContributions: [],
+      turbineDebug: [],
+      layerCounts: LAYER_COUNTS,
     };
   }
 
@@ -343,7 +415,7 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
   });
 
   // --- Verk utanför Ericsbergs marker ---
-  const outsideBoundaryIds = turbines.filter((t) => !isInsideBoundary(t, ERICSBERG_BOUNDARY)).map((t) => t.id);
+  const outsideBoundaryIds = turbines.filter((t) => !isInsideBoundary(t, getActiveBoundary())).map((t) => t.id);
   if (outsideBoundaryIds.length > 0) {
     factors.push({
       key: "outsideBoundary",
@@ -372,12 +444,66 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
     playfulWarning = "Ganska tuff placering! Flytta gärna ett par verk längre från bebyggelse och skyddade områden.";
   }
 
-  const turbineContributions =
-    turbines.length > 1
-      ? turbines
-          .map((t) => ({ id: t.id, score: scorePlacement([t]).totalScore }))
-          .sort((a, b) => b.score - a.score)
-      : turbines.map((t) => ({ id: t.id, score: totalScore }));
+  const soloScores = new Map<string, number>();
+  if (turbines.length > 1) {
+    for (const t of turbines) soloScores.set(t.id, scorePlacement([t]).totalScore);
+  } else {
+    for (const t of turbines) soloScores.set(t.id, totalScore);
+  }
+
+  const turbineContributions = turbines
+    .map((t) => ({ id: t.id, score: soloScores.get(t.id) ?? totalScore }))
+    .sort((a, b) => b.score - a.score);
+
+  // --- Fullständig per-verk felsökningsdata (se `TurbineDebugInfo`) — svar
+  // på buggrapportens krav på en fördjupad felsökningspanel: koordinat,
+  // inne/ute-status, hushåll inom 1/2/3 km, avstånd till varje enskilt
+  // lager (centrum, natur, kultur, vatten), buller/skugg/visuell
+  // delpoäng, samt totalpoängen om verket stått ensamt. ---
+  const turbineDebug: TurbineDebugInfo[] = turbines.map((t) => {
+    const nearest = nearestHousehold(t);
+    const nature = nearestZoneOfType(t, "nature");
+    const cultural = nearestZoneOfType(t, "cultural");
+    const water = nearestZoneOfType(t, "water");
+    let worstDba = -Infinity;
+    for (const cluster of HOUSEHOLD_CLUSTERS) {
+      const level = attenuatedLevelDba(distanceMeters(t.lat, t.lon, cluster.lat, cluster.lon));
+      if (level > worstDba) worstDba = level;
+    }
+    const nearestForVisualSolo = Math.min(
+      nearest?.distanceM ?? Infinity,
+      distanceMeters(t.lat, t.lon, KATRINEHOLM_CENTER.lat, KATRINEHOLM_CENTER.lon),
+    );
+    const soloVisualScore = Number.isFinite(nearestForVisualSolo)
+      ? clamp01(1 - (nearestForVisualSolo - VISUAL_CLOSE_M) / (VISUAL_FAR_M - VISUAL_CLOSE_M)) * VISUAL_WEIGHT
+      : 0;
+    const soloShadowScore = Number.isFinite(nearestForVisualSolo)
+      ? clamp01(1 - (nearestForVisualSolo - SHADOW_FLICKER_CLOSE_M) / (SHADOW_FLICKER_FAR_M - SHADOW_FLICKER_CLOSE_M)) *
+        SHADOW_FLICKER_WEIGHT
+      : 0;
+    return {
+      id: t.id,
+      lat: t.lat,
+      lon: t.lon,
+      insideBoundary: isInsideBoundary(t, getActiveBoundary()),
+      nearestHouseholdDistanceM: nearest?.distanceM ?? null,
+      nearestHouseholdName: nearest?.cluster.name ?? null,
+      householdsWithin1kmCount: householdsWithinRadius(t, 1000),
+      householdsWithin2kmCount: householdsWithinRadius(t, 2000),
+      householdsWithin3kmCount: householdsWithinRadius(t, 3000),
+      distanceToKatrineholmCenterM: distanceMeters(t.lat, t.lon, KATRINEHOLM_CENTER.lat, KATRINEHOLM_CENTER.lon),
+      nearestNatureDistanceM: nature?.distanceM ?? null,
+      nearestNatureName: nature?.name ?? null,
+      nearestCulturalDistanceM: cultural?.distanceM ?? null,
+      nearestCulturalName: cultural?.name ?? null,
+      nearestWaterDistanceM: water?.distanceM ?? null,
+      nearestWaterName: water?.name ?? null,
+      noiseDba: Number.isFinite(worstDba) ? worstDba : null,
+      shadowFlickerScore: soloShadowScore,
+      visualScore: soloVisualScore,
+      totalScore: soloScores.get(t.id) ?? totalScore,
+    };
+  });
 
   return {
     totalScore,
@@ -390,6 +516,8 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
     factors,
     playfulWarning,
     turbineContributions,
+    turbineDebug,
+    layerCounts: LAYER_COUNTS,
   };
 }
 

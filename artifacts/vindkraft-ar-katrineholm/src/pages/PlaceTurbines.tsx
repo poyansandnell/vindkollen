@@ -8,7 +8,15 @@ import {
   scorePlacement,
   type PlacedTurbine,
 } from "@/lib/placementScoring";
-import { ERICSBERG_AREA_DISCLAIMER } from "@/lib/ericsbergArea";
+import {
+  ERICSBERG_AREA_DISCLAIMER,
+  boundaryToGeoJson,
+  getActiveBoundary,
+  hasCustomBoundary,
+  resetCustomBoundary,
+  setCustomBoundary,
+  type LatLon,
+} from "@/lib/ericsbergArea";
 
 const SAVED_KEY = "vindkraft-ar-katrineholm:savedPlacements";
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
@@ -70,6 +78,10 @@ export default function PlaceTurbines() {
   const [showEstateBoundary, setShowEstateBoundary] = useState(false);
   const [boundaryDebugMode, setBoundaryDebugMode] = useState(false);
   const [debugPanelOpen, setDebugPanelOpen] = useState(false);
+  const [boundaryEditMode, setBoundaryEditMode] = useState(false);
+  const [editableBoundary, setEditableBoundary] = useState<LatLon[]>(() => getActiveBoundary());
+  const [boundaryVersion, setBoundaryVersion] = useState(0);
+  const [boundarySavedFlash, setBoundarySavedFlash] = useState(false);
 
   const turbinesRef = useRef(turbines);
   turbinesRef.current = turbines;
@@ -98,7 +110,11 @@ export default function PlaceTurbines() {
   // påverkan…"-känslan istället för att allt smäller om direkt vid varje
   // flytt. Verkens faktiska position på kartan (`turbines`) uppdateras dock
   // omedelbart så flytt-animationen känns direkt och responsiv.
-  const result = useMemo(() => scorePlacement(committedTurbines), [committedTurbines]);
+  // `boundaryVersion` bärs bara med som ett extra beroende: `scorePlacement()`
+  // läser den aktiva gränsen via `getActiveBoundary()` (modulnivå-state, inte
+  // ett argument), så en sparad/återställd gräns måste explicit trigga om den
+  // annars memoiserade omräkningen.
+  const result = useMemo(() => scorePlacement(committedTurbines), [committedTurbines, boundaryVersion]);
   const colors = PLACEMENT_LEVEL_COLORS[result.level];
 
   const handleMove = useCallback(
@@ -163,6 +179,74 @@ export default function PlaceTurbines() {
     navigate("/");
   }
 
+  function handleToggleBoundaryEdit() {
+    setBoundaryEditMode((v) => {
+      const next = !v;
+      if (next) setEditableBoundary(getActiveBoundary());
+      return next;
+    });
+  }
+
+  const handleVertexDrag = useCallback((index: number, lat: number, lon: number) => {
+    setEditableBoundary((prev) => prev.map((p, i) => (i === index ? { lat, lon } : p)));
+  }, []);
+
+  const handleVertexRemove = useCallback((index: number) => {
+    setEditableBoundary((prev) => (prev.length > 3 ? prev.filter((_, i) => i !== index) : prev));
+  }, []);
+
+  const handleVertexAdd = useCallback((lat: number, lon: number) => {
+    setEditableBoundary((prev) => {
+      if (prev.length < 3) return [...prev, { lat, lon }];
+      // Sätt in den nya punkten på den kant (segment) den ligger närmast,
+      // så polygonen inte blir självkorsande av ett godtyckligt tillägg.
+      let bestIndex = prev.length;
+      let bestDist = Infinity;
+      for (let i = 0; i < prev.length; i++) {
+        const a = prev[i];
+        const b = prev[(i + 1) % prev.length];
+        const dx = b.lon - a.lon;
+        const dy = b.lat - a.lat;
+        const lenSq = dx * dx + dy * dy || 1;
+        const t = Math.max(0, Math.min(1, ((lon - a.lon) * dx + (lat - a.lat) * dy) / lenSq));
+        const projLon = a.lon + t * dx;
+        const projLat = a.lat + t * dy;
+        const dist = Math.hypot(lon - projLon, lat - projLat);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIndex = i + 1;
+        }
+      }
+      const next = [...prev];
+      next.splice(bestIndex, 0, { lat, lon });
+      return next;
+    });
+  }, []);
+
+  function handleSaveBoundary() {
+    setCustomBoundary(editableBoundary);
+    setBoundaryVersion((v) => v + 1);
+    setBoundarySavedFlash(true);
+    window.setTimeout(() => setBoundarySavedFlash(false), 1800);
+  }
+
+  function handleResetBoundary() {
+    resetCustomBoundary();
+    setEditableBoundary(getActiveBoundary());
+    setBoundaryVersion((v) => v + 1);
+  }
+
+  function handleExportBoundaryGeoJson() {
+    const geoJson = boundaryToGeoJson(boundaryEditMode ? editableBoundary : getActiveBoundary());
+    const blob = new Blob([JSON.stringify(geoJson, null, 2)], { type: "application/geo+json" });
+    const url = URL.createObjectURL(blob);
+    // <a download> nollställs tyst i iOS Safari/installerad PWA-standalone-läge
+    // (se .agents/memory/pdf-download-attribute-ios-pwa.md) — öppna i en ny
+    // flik istället så OS:ets dela/spara-blad tar över på alla plattformar.
+    window.open(url, "_blank");
+    window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
   return (
     <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
@@ -195,7 +279,15 @@ export default function PlaceTurbines() {
             boundaryDebugMode ? "bg-sky-400 text-[#090909]" : "border border-white/20 bg-white/5 text-white hover:bg-white/10"
           }`}
         >
-          🛠️ Redigeringsläge (gräns)
+          🔢 Visa gränspunkter
+        </button>
+        <button
+          onClick={handleToggleBoundaryEdit}
+          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+            boundaryEditMode ? "bg-purple-400 text-[#090909]" : "border border-white/20 bg-white/5 text-white hover:bg-white/10"
+          }`}
+        >
+          ✏️ Redigera gräns
         </button>
         <button
           onClick={() => setDebugPanelOpen((v) => !v)}
@@ -208,6 +300,35 @@ export default function PlaceTurbines() {
         <p className="text-[11px] text-white/40">{turbines.length} verk placerade</p>
       </div>
 
+      {boundaryEditMode && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-purple-400/30 bg-purple-950/30 px-4 py-2">
+          <p className="text-[11px] text-purple-200">
+            Dra en punkt för att flytta den · klicka ✕ för att ta bort · klicka på kartan för att lägga till en ny punkt
+            {hasCustomBoundary() ? " · anpassad gräns aktiv" : ""}
+          </p>
+          <div className="ml-auto flex gap-2">
+            <button
+              onClick={handleResetBoundary}
+              className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[11px] font-medium text-white hover:bg-white/10"
+            >
+              🔄 Återställ gräns
+            </button>
+            <button
+              onClick={handleExportBoundaryGeoJson}
+              className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[11px] font-medium text-white hover:bg-white/10"
+            >
+              📤 Exportera GeoJSON
+            </button>
+            <button
+              onClick={handleSaveBoundary}
+              className="rounded-full bg-purple-400 px-3 py-1 text-[11px] font-semibold text-[#090909] hover:bg-purple-300"
+            >
+              {boundarySavedFlash ? "✅ Sparad!" : "💾 Spara gräns"}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="relative flex-1 overflow-hidden p-3">
         <PlacementMap
           turbines={turbines}
@@ -218,10 +339,15 @@ export default function PlaceTurbines() {
           outsideBoundaryIds={result.outsideBoundaryIds}
           showEstateBoundary={showEstateBoundary}
           boundaryDebugMode={boundaryDebugMode}
+          boundaryEditMode={boundaryEditMode}
+          editableBoundary={editableBoundary}
+          onVertexDrag={handleVertexDrag}
+          onVertexRemove={handleVertexRemove}
+          onVertexAdd={handleVertexAdd}
         />
 
         {debugPanelOpen && (
-          <div className="pointer-events-auto absolute right-3 top-3 max-h-[70%] w-64 overflow-y-auto rounded-xl border border-emerald-400/30 bg-black/85 p-3 text-xs text-white shadow-xl">
+          <div className="pointer-events-auto absolute right-3 top-3 max-h-[80%] w-80 overflow-y-auto rounded-xl border border-emerald-400/30 bg-black/85 p-3 text-xs text-white shadow-xl">
             <p className="mb-2 font-semibold text-emerald-300">🐞 Felsökning — poängbidrag</p>
             <p className="mb-1 text-white/70">
               Total poäng: <span className="font-semibold text-white">{Math.round(result.totalScore)}</span>/100
@@ -233,15 +359,31 @@ export default function PlaceTurbines() {
                 {result.nearestHouseholdDistanceM !== null ? ` (${Math.round(result.nearestHouseholdDistanceM)} m)` : ""}
               </span>
             </p>
-            <p className="mb-1 text-white/70">
+            <p className="mb-2 text-white/70">
               Avstånd till tätort:{" "}
               <span className="font-semibold text-white">
                 {result.nearestUrbanDistanceM !== null ? `${Math.round(result.nearestUrbanDistanceM)} m` : "—"}
               </span>
             </p>
-            <p className="mb-2 text-[10px] text-white/40">
-              Baserat på senast beräknade placering (committedTurbines).
-            </p>
+
+            <p className="mb-1 font-medium text-white/80">Laddade datalager:</p>
+            <ul className="mb-2 grid grid-cols-2 gap-x-2 gap-y-0.5 text-white/70">
+              <li>
+                Hushållskluster: <span className="text-white/90">{result.layerCounts.householdClusters}</span>
+              </li>
+              <li>
+                Naturzoner: <span className="text-white/90">{result.layerCounts.natureZones}</span>
+              </li>
+              <li>
+                Kulturzoner: <span className="text-white/90">{result.layerCounts.culturalZones}</span>
+              </li>
+              <li>
+                Vattenzoner: <span className="text-white/90">{result.layerCounts.waterZones}</span>
+              </li>
+            </ul>
+
+            <p className="mb-2 text-[10px] text-white/40">Baserat på senast beräknade placering (committedTurbines).</p>
+
             <p className="mb-1 font-medium text-white/80">Faktorer (bidrag till total poäng):</p>
             <ul className="mb-2 space-y-0.5">
               {result.factors.map((f) => (
@@ -254,14 +396,48 @@ export default function PlaceTurbines() {
                 </li>
               ))}
             </ul>
-            <p className="mb-1 font-medium text-white/80">Verk som bidrar mest (enskild poäng):</p>
-            <ul className="space-y-0.5">
-              {result.turbineContributions.map((tc) => (
-                <li key={tc.id} className="flex items-center justify-between">
-                  <span className="text-white/70">{tc.id}</span>
-                  <span className="text-white/90">{Math.round(tc.score)}</span>
-                </li>
-              ))}
+
+            <p className="mb-1 font-medium text-white/80">Per verk — full felsökningsdata:</p>
+            <ul className="space-y-2">
+              {result.turbineDebug
+                .slice()
+                .sort((a, b) => b.totalScore - a.totalScore)
+                .map((td) => (
+                  <li key={td.id} className="rounded-md border border-white/10 bg-white/5 p-1.5">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="font-semibold text-white/90">{td.id}</span>
+                      <span className="text-white/90">{Math.round(td.totalScore)} p</span>
+                    </div>
+                    {!td.insideBoundary && (
+                      <p className="mb-1 text-[10px] font-medium text-red-300">⚠ Utanför markerat markområde</p>
+                    )}
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-white/60">
+                      <span>
+                        Hushåll: {td.nearestHouseholdName ?? "—"}
+                        {td.nearestHouseholdDistanceM !== null ? ` (${Math.round(td.nearestHouseholdDistanceM)} m)` : ""}
+                      </span>
+                      <span>Ctrm Katrineholm: {Math.round(td.distanceToKatrineholmCenterM)} m</span>
+                      <span>Hushåll &lt;1 km: {td.householdsWithin1kmCount}</span>
+                      <span>Hushåll &lt;2 km: {td.householdsWithin2kmCount}</span>
+                      <span>Hushåll &lt;3 km: {td.householdsWithin3kmCount}</span>
+                      <span>Buller: {td.noiseDba !== null ? `${td.noiseDba.toFixed(1)} dBA` : "—"}</span>
+                      <span>
+                        Natur: {td.nearestNatureName ?? "—"}
+                        {td.nearestNatureDistanceM !== null ? ` (${Math.round(td.nearestNatureDistanceM)} m)` : ""}
+                      </span>
+                      <span>
+                        Kultur: {td.nearestCulturalName ?? "—"}
+                        {td.nearestCulturalDistanceM !== null ? ` (${Math.round(td.nearestCulturalDistanceM)} m)` : ""}
+                      </span>
+                      <span>
+                        Vatten: {td.nearestWaterName ?? "—"}
+                        {td.nearestWaterDistanceM !== null ? ` (${Math.round(td.nearestWaterDistanceM)} m)` : ""}
+                      </span>
+                      <span>Skuggflimmer: {td.shadowFlickerScore.toFixed(1)}</span>
+                      <span>Visuellt: {td.visualScore.toFixed(1)}</span>
+                    </div>
+                  </li>
+                ))}
             </ul>
           </div>
         )}

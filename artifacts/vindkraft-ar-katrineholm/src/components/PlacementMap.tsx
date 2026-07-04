@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ERICSBERG_BOUNDARY,
   ERICSBERG_CENTER,
   ERICSBERG_ESTATE_AREA,
   HOUSEHOLD_CLUSTERS,
   KATRINEHOLM_CENTER,
   POSITIVE_ZONES,
   SENSITIVE_ZONES,
+  getActiveBoundary,
   type LatLon,
 } from "@/lib/ericsbergArea";
 import {
@@ -42,6 +42,17 @@ interface PlacementMapProps {
    * Redigeringsläge (gräns)"-knapp.
    */
   boundaryDebugMode?: boolean;
+  /**
+   * Interaktivt gränsredigeringsläge: visar `editableBoundary`s hörnpunkter
+   * som dragbara markörer, låter användaren klicka på tomt utrymme för att
+   * lägga till en ny punkt (infogas vid närmsta kant) och ta bort en punkt
+   * via dess ✕-knapp. Se `PlaceTurbines.tsx`s "✏️ Redigera gräns"-knapp.
+   */
+  boundaryEditMode?: boolean;
+  editableBoundary?: LatLon[];
+  onVertexDrag?: (index: number, lat: number, lon: number) => void;
+  onVertexRemove?: (index: number) => void;
+  onVertexAdd?: (lat: number, lon: number) => void;
 }
 
 const MAX_TILES = 48;
@@ -103,8 +114,9 @@ interface MoveAnimState {
  * Ericsbergs egen markgräns.
  */
 function computeDefaultView(turbines: PlacedTurbine[]): ViewState {
-  const lats = ERICSBERG_BOUNDARY.map((p) => p.lat);
-  const lons = ERICSBERG_BOUNDARY.map((p) => p.lon);
+  const activeBoundary = getActiveBoundary();
+  const lats = activeBoundary.map((p) => p.lat);
+  const lons = activeBoundary.map((p) => p.lon);
   for (const z of [...SENSITIVE_ZONES, ...POSITIVE_ZONES]) {
     lats.push(z.lat);
     lons.push(z.lon);
@@ -154,6 +166,11 @@ export function PlacementMap({
   outsideBoundaryIds,
   showEstateBoundary,
   boundaryDebugMode = false,
+  boundaryEditMode = false,
+  editableBoundary,
+  onVertexDrag,
+  onVertexRemove,
+  onVertexAdd,
 }: PlacementMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 1, height: 1 });
@@ -178,6 +195,7 @@ export function PlacementMap({
   const pendingTapRef = useRef<{ clientX: number; clientY: number; timer: number } | null>(null);
   const lastTapRef = useRef<{ time: number; clientX: number; clientY: number } | null>(null);
   const moveAnimTimerRef = useRef<number | null>(null);
+  const vertexDragRef = useRef<{ pointerId: number; index: number } | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -236,9 +254,11 @@ export function PlacementMap({
     [bounds, project],
   );
 
+  const resolvedBoundary = boundaryEditMode && editableBoundary ? editableBoundary : getActiveBoundary();
+
   const boundaryPoints = useMemo(
-    () => ERICSBERG_BOUNDARY.map((p) => project(p.lat, p.lon)).map((p) => `${p.x},${p.y}`).join(" "),
-    [project],
+    () => resolvedBoundary.map((p) => project(p.lat, p.lon)).map((p) => `${p.x},${p.y}`).join(" "),
+    [project, resolvedBoundary],
   );
 
   const estateAreaPoints = useMemo(
@@ -338,7 +358,20 @@ export function PlacementMap({
     };
   }
 
+  function handleVertexPointerDown(e: React.PointerEvent, index: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    vertexDragRef.current = { pointerId: e.pointerId, index };
+  }
+
   function handlePointerMove(e: React.PointerEvent) {
+    const vertexDrag = vertexDragRef.current;
+    if (vertexDrag && vertexDrag.pointerId === e.pointerId) {
+      const point = clientToLatLon(e.clientX, e.clientY);
+      if (point) onVertexDrag?.(vertexDrag.index, point.lat, point.lon);
+      return;
+    }
     const pan = panRef.current;
     if (!pan || pan.pointerId !== e.pointerId) return;
     const dxPx = e.clientX - pan.startClientX;
@@ -358,6 +391,11 @@ export function PlacementMap({
   }
 
   function endDrag(e: React.PointerEvent) {
+    const vertexDrag = vertexDragRef.current;
+    if (vertexDrag && vertexDrag.pointerId === e.pointerId) {
+      vertexDragRef.current = null;
+      return;
+    }
     const pan = panRef.current;
     panRef.current = null;
     if (!pan || pan.pointerId !== e.pointerId) return;
@@ -400,7 +438,12 @@ export function PlacementMap({
     const timer = window.setTimeout(() => {
       pendingTapRef.current = null;
       const point = clientToLatLon(clientX, clientY);
-      if (point) onAdd(point.lat, point.lon);
+      if (!point) return;
+      if (boundaryEditMode) {
+        onVertexAdd?.(point.lat, point.lon);
+      } else {
+        onAdd(point.lat, point.lon);
+      }
     }, DOUBLE_TAP_WINDOW_MS);
     pendingTapRef.current = { clientX, clientY, timer };
   }
@@ -474,8 +517,44 @@ export function PlacementMap({
 
         <polygon points={boundaryPoints} fill="rgba(255,139,1,0.08)" stroke="#FF8B01" strokeWidth="0.4" strokeDasharray="1.2,0.8" />
 
+        {boundaryEditMode &&
+          resolvedBoundary.map((v, i) => {
+            const p = project(v.lat, v.lon);
+            return (
+              <g key={`edit-v-${i}`} className="pointer-events-auto">
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r="1.6"
+                  fill="#FF8B01"
+                  stroke="#ffffff"
+                  strokeWidth="0.3"
+                  style={{ cursor: "grab", touchAction: "none" }}
+                  onPointerDown={(e) => handleVertexPointerDown(e, i)}
+                />
+                {resolvedBoundary.length > 3 && (
+                  <text
+                    x={p.x + 2.2}
+                    y={p.y - 2.2}
+                    fontSize="2.6"
+                    fill="#ffffff"
+                    style={{ cursor: "pointer", paintOrder: "stroke", stroke: "#000", strokeWidth: 0.4 }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onVertexRemove?.(i);
+                    }}
+                  >
+                    ✕
+                  </text>
+                )}
+              </g>
+            );
+          })}
+
         {boundaryDebugMode &&
-          ERICSBERG_BOUNDARY.map((v, i) => {
+          !boundaryEditMode &&
+          resolvedBoundary.map((v, i) => {
             const p = project(v.lat, v.lon);
             return (
               <g key={`boundary-v-${i}`}>

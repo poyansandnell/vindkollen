@@ -1,0 +1,126 @@
+Ja. Kopiera in detta i Replit:
+
+⸻
+
+Vi behöver fixa kartfunktionen för “Placera vindkraftverken själv”. Just nu ser UI:t bra ut, men beräkningen verkar inte fungera korrekt.
+
+Problem 1: Beräkningen ger fel resultat
+
+Trots att vindkraftverk placeras mycket nära Katrineholm/Forssjö/centrum visar appen:
+
+* 0 berörda hushåll
+* 0 i avstånd till bostäder
+* 0 bullerpåverkan
+* 0 natur/friluftsvärden
+* 0 kulturmiljövärden
+* 0 vattenskydd
+* 0 skuggpåverkan
+
+Det enda som verkar ge utslag är:
+
+* Avstånd till tätort
+* Nära Katrineholms centrum
+* Visuell påverkan
+* Utanför Ericsbergs marker
+
+Det betyder att poängsystemet finns, men att flera datalager antingen saknas, inte laddas eller inte används i beräkningen.
+
+Det som behöver göras
+
+Bygg om beräkningen så att varje placerat verk analyseras mot faktiska eller simulerade GIS-lager.
+
+Varje verk ska kontrollera:
+
+1. Avstånd till närmaste bostad
+    * Om närmaste bostad är under 1 km: mycket hög påverkan.
+    * 1–2 km: hög påverkan.
+    * 2–3 km: medel påverkan.
+    * över 3 km: låg påverkan.
+2. Antal berörda hushåll
+    * Räkna hushåll/bebyggelsepunkter inom exempelvis 2 km, 3 km och 5 km från varje verk.
+    * Om riktiga bostadsdata saknas, skapa tillfälliga bostadspunkter kring Katrineholm, Forssjö, Stora Malm, Valla, Strångsjö och övriga byar så att beräkningen inte blir 0.
+3. Bullerpåverkan
+    * Beräkna förenklat utifrån avstånd till bostäder.
+    * Ju fler bostäder nära verken, desto högre bullerpoäng.
+    * Bullerpåverkan får inte vara 0 om verk står nära tätort eller bostadsområden.
+4. Skuggpåverkan vid låg sol
+    * Om verk står väster/öster/söder om tätort och inom flera kilometer ska skuggpåverkan kunna ge utslag.
+    * Speciellt nära Katrineholm centrum ska detta ge tydlig påverkan.
+5. Natur- och friluftsvärden
+    * Lägg in förenklade polygoner/zoner för sjöar, skogsområden, friluftsområden och känsliga naturzoner.
+    * Om verk placeras nära eller i dessa områden ska poäng ges.
+6. Kulturmiljövärden
+    * Ericsbergs slott, Forssjö, äldre gårdsmiljöer och kulturmiljöer ska kunna ge utslag.
+    * Ju närmare kulturmiljö, desto högre påverkan.
+7. Vattenskydd och sjöar
+    * Lägg in sjöar/vattenområden som känsliga zoner.
+    * Verk nära sjöar, våtmarker eller vattenskydd ska ge påverkan.
+8. Avstånd till tätort
+    * Katrineholm, Forssjö, Stora Malm, Valla, Strångsjö och andra tätorter/byar ska användas.
+    * Om verk placeras nära tätort ska påverkan öka.
+9. Ericsbergs markgräns
+    * Kontrollera att alla 8 verk ligger inom korrekt markerad Ericsbergs/Carolines mark.
+    * Om ett verk hamnar utanför ska appen visa varning och ge hög poäng.
+
+Problem 2: Carolines/Ericsbergs markgräns stämmer inte
+
+Markområdet ska justeras efter bilden jag skickat. Området ska ligga mer korrekt över Ericsbergs marker enligt kartbilden. Det verkar som att gränsen i appen är förenklad/felplacerad.
+
+Lägg in ett redigeringsläge där man kan justera polygonen punkt för punkt:
+
+* Visa markgränsen med tydliga punkter.
+* Man ska kunna dra i punkterna.
+* Man ska kunna lägga till punkt.
+* Man ska kunna ta bort punkt.
+* Man ska kunna spara ny markgräns.
+* Exportera gärna polygonen som GeoJSON.
+
+Problem 3: Felsökning behövs
+
+Lägg till en tydlig felsökningspanel som visar varför poängen blir som den blir.
+
+För varje verk ska man kunna se:
+
+* Koordinat
+* Om verket är inom/utanför Ericsbergs mark
+* Avstånd till närmaste bostad
+* Antal bostäder inom 1 km
+* Antal bostäder inom 2 km
+* Antal bostäder inom 3 km
+* Avstånd till Katrineholm centrum
+* Avstånd till närmaste tätort
+* Avstånd till närmaste kulturmiljö
+* Avstånd till närmaste natur/friluftsområde
+* Avstånd till närmaste vatten/sjö
+* Bullerpoäng
+* Skuggpoäng
+* Visuell påverkan
+* Total påverkan
+
+Visa även:
+
+* Hur många bostadspunkter som är laddade.
+* Hur många naturpolygoner som är laddade.
+* Hur många kulturmiljöer som är laddade.
+* Hur många vattenområden som är laddade.
+* Om något lager saknas.
+
+Viktigt
+
+Om riktig GIS-data saknas ska appen inte visa 0 överallt. Då ska den använda simulerade men rimliga datapunkter runt tätorter och bebyggelse, så att användaren kan förstå hur påverkan förändras när verken flyttas.
+
+Exempel på logik
+
+Om två verk flyttas in mot Katrineholm centrum ska påverkan absolut inte vara 0. Då ska appen visa mycket hög påverkan, fler berörda hushåll, högre buller, högre skuggpåverkan och högre visuell påverkan.
+
+Målet
+
+Appen ska bli pedagogisk och trovärdig:
+
+* Flyttar man verken nära människor ska påverkan öka.
+* Flyttar man dem längre bort ska påverkan minska.
+* Ligger verk utanför Ericsbergs marker ska det varnas.
+* Alla delpoäng ska uppdateras direkt när man flyttar ett verk.
+* Inga viktiga kategorier ska ligga kvar på 0 om verk faktiskt ligger nära bostäder/tätorter/känsliga områden.
+
+⸻
