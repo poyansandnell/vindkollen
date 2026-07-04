@@ -19,6 +19,19 @@ const POLL_INTERVAL_MS = 80;
 // i en fast ±90°-vinkel oavsett hur nära man redan pekar rätt.
 const MAX_ARROW_ROTATION_DEG = 80;
 
+// Juli 2026-fix: precis vid start (innan kompassen hunnit "sätta sig", se
+// `useDeviceOrientation.ts`s adaptiva utjämning) kan den råa/ännu inte
+// utjämnade riktningen råka ligga innanför kamerans synfält av ren slump,
+// vilket fick "✓ Du tittar mot närmaste verk"-bekräftelsen (och pilen) att
+// dyka upp direkt vid appstart — förvirrande, den ska komma senare, när
+// riktningen faktiskt går att lita på. Döljs därför helt tills antingen
+// kompassens kvalitet (`compassQualityPercent`, se `useArTrackingStability`)
+// når en rimlig nivå, ELLER en maxgräns hunnit gå ut (om kompassen aldrig
+// stabiliseras helt ska pilen ändå till slut dyka upp, inte vara dold för
+// evigt).
+const MIN_SETTLE_COMPASS_QUALITY_PERCENT = 45;
+const MAX_SETTLE_WAIT_MS = 4000;
+
 function circularDiffDeg(target: number, current: number): number {
   return ((target - current + 540) % 360) - 180;
 }
@@ -32,6 +45,16 @@ interface NearestTurbineArrowProps {
   distanceM: number | null;
   /** True när kameran bedöms sakna fri sikt (inomhus/vägg) — byter till en förklarande instruktionstext istället för "Vrid mobilen". */
   indoors: boolean;
+  /**
+   * 0-100, se `useArTrackingStability`s `compassQualityPercent` — används
+   * bara för att fördröja den FÖRSTA visningen (se `MIN_SETTLE_COMPASS_QUALITY_PERCENT`
+   * ovan) så indikatorn inte hinner visa en falsk "rätt riktning" innan
+   * kompassen satt sig. Saknas prop (`undefined`) tolkas som "vänta på
+   * timeout" (aldrig redo via kvalitet), inte som 0% — annars skulle en
+   * konsument som glömmer skicka prop:en aldrig kunna se pilen förrän
+   * `MAX_SETTLE_WAIT_MS`.
+   */
+  compassQualityPercent?: number;
 }
 
 /**
@@ -47,8 +70,15 @@ interface NearestTurbineArrowProps {
  * ett öga, inte vara bildrutexakt — och undviker att trigga en re-render av
  * hela `Home.tsx` för varje kompassavläsning.
  */
-export function NearestTurbineArrow({ headingDegRef, bearingDeg, distanceM, indoors }: NearestTurbineArrowProps) {
+export function NearestTurbineArrow({
+  headingDegRef,
+  bearingDeg,
+  distanceM,
+  indoors,
+  compassQualityPercent,
+}: NearestTurbineArrowProps) {
   const [diffDeg, setDiffDeg] = useState<number | null>(null);
+  const [settled, setSettled] = useState(false);
 
   useEffect(() => {
     if (bearingDeg === null) {
@@ -64,7 +94,23 @@ export function NearestTurbineArrow({ headingDegRef, bearingDeg, distanceM, indo
     return () => window.clearInterval(id);
   }, [bearingDeg, headingDegRef]);
 
-  if (diffDeg === null || distanceM === null) return null;
+  // Se `MAX_SETTLE_WAIT_MS`-kommentaren ovan: en enkel timeout-fallback så
+  // indikatorn garanterat dyker upp även om kompasskvaliteten aldrig når
+  // tröskeln (t.ex. enhet utan bra magnetometer).
+  useEffect(() => {
+    if (settled) return;
+    const timeoutId = window.setTimeout(() => setSettled(true), MAX_SETTLE_WAIT_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [settled]);
+
+  useEffect(() => {
+    if (settled) return;
+    if (compassQualityPercent !== undefined && compassQualityPercent >= MIN_SETTLE_COMPASS_QUALITY_PERCENT) {
+      setSettled(true);
+    }
+  }, [settled, compassQualityPercent]);
+
+  if (!settled || diffDeg === null || distanceM === null) return null;
 
   // Verket syns redan i AR-vyn (inom synfältet, och inte inomhus/utan fri
   // sikt) — då tonas pilen ner och byts mot en bekräftelsetext istället för
@@ -105,9 +151,15 @@ export function NearestTurbineArrow({ headingDegRef, bearingDeg, distanceM, indo
 
       {/* Bekräftelsetext när mobilen redan pekar rätt — tonas in/ut med
           samma övergång som pilen ovan så växlingen känns mjuk, inte som
-          att indikatorn plötsligt bara är där eller borta. */}
+          att indikatorn plötsligt bara är där eller borta.
+          Juli 2026-fix: flyttad längre ner (från `top-24`/6rem) eftersom
+          `Home.tsx`s topp-bar med statusmärken (kompass/sikt/dBA/infraljud)
+          plus en eventuell radbrytning ("Vindljud aktivt"/"Nattläge"-taggar)
+          ofta blir högre än 6rem, vilket gjorde att bekräftelsen hamnade
+          FRAMFÖR (ovanpå) de märkena. Placeras nu tydligt under hela den
+          zonen istället. */}
       <div
-        className={`pointer-events-none absolute left-1/2 top-24 z-50 -translate-x-1/2 transition-opacity duration-500 ${
+        className={`pointer-events-none absolute left-1/2 top-[calc(env(safe-area-inset-top)+9.5rem)] z-50 -translate-x-1/2 transition-opacity duration-500 ${
           onTarget ? "opacity-100" : "opacity-0"
         }`}
       >

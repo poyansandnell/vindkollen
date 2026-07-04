@@ -680,6 +680,7 @@ export default function Home() {
               bearingDeg={nearestTurbineInfo?.bearingDeg ?? null}
               distanceM={nearestTurbineInfo?.distanceM ?? null}
               indoors={indoorsOrNoSight}
+              compassQualityPercent={arTracking.compassQualityPercent}
             />
           )}
 
