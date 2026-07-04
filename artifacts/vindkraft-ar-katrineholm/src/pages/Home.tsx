@@ -89,12 +89,15 @@ export default function Home() {
 
   const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
-  // Visar en 5-sekunders nedräkning med statusmeddelanden/checklista direkt
-  // efter "Starta visualisering" — en produktkrävd, alltid likadan
-  // laddningssekvens. Körs parallellt med (inte i väntan på) den riktiga
-  // GPS/kompass/kamera-behörighetsflödet nedan; om det äkta `ready`-läget
-  // inte hunnit bli klart när sekvensen tar slut visas det befintliga
-  // väntar-overlayet (se `!ready`-blocket längre ner) precis som innan.
+  // Visar den produktkrävda laddningssekvensen direkt efter
+  // "Starta visualisering": (1) kompasskalibrering i två steg (liggande,
+  // sedan stående — sensorstyrd, se `useDeviceOrientation.ts`s
+  // `calibrationPhase`), (2) en 3-2-1-nedräkning med statusmeddelanden,
+  // (3) en checklista som bockas av i tur och ordning. Körs parallellt med
+  // (inte i väntan på) den riktiga GPS/kompass/kamera-behörighetsflödet
+  // nedan; om det äkta `ready`-läget inte hunnit bli klart när sekvensen tar
+  // slut visas det befintliga väntar-overlayet (se `!ready`-blocket längre
+  // ner) precis som innan.
   const [showLoadingSequence, setShowLoadingSequence] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [showPetition, setShowPetition] = useState(false);
@@ -544,8 +547,9 @@ export default function Home() {
           {showLoadingSequence && (
             <LoadingSequence
               onComplete={() => setShowLoadingSequence(false)}
+              calibrationPhase={orientation.calibrationPhase}
               calibrationProgress={orientation.calibrationProgress}
-              calibrationComplete={orientation.calibrationComplete}
+              skipCalibration={!orientation.supported || Boolean(orientation.error)}
             />
           )}
 
@@ -587,14 +591,23 @@ export default function Home() {
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#FF8B01] border-t-transparent" />
               <p className="text-sm text-white/90">
                 {!camera.stream && "Startar kameran…"}
-                {camera.stream && geo.lat === null && "Hämtar GPS-position…"}
-                {camera.stream && geo.lat !== null && !orientation.hasFix && "Läser av kompass — rör telefonen i en åtta-rörelse."}
+                {camera.stream && geo.lat === null && "Väntar på GPS-signal…"}
+                {camera.stream && geo.lat !== null && !orientation.hasFix && "Kompassen behöver kalibreras."}
                 {camera.stream &&
                   geo.lat !== null &&
                   orientation.hasFix &&
                   !orientation.hasSettled &&
                   "Kalibrerar kompass — håll telefonen stilla…"}
               </p>
+              {/* Samma hjälptexter som produktkravet specificerar för de två
+                  vanligaste fastnandena, så användaren aldrig bara ser en
+                  snurrande spinner utan förklaring. */}
+              {camera.stream && geo.lat === null && (
+                <p className="text-xs text-white/50">Gå gärna ut på en öppen plats och rikta telefonen mot himlen.</p>
+              )}
+              {camera.stream && geo.lat !== null && !orientation.hasFix && (
+                <p className="text-xs text-white/50">Vrid telefonen enligt instruktionen ovan (liggande, sedan stående).</p>
+              )}
               {camera.stream && geo.lat !== null && orientation.hasFix && !orientation.hasSettled && (
                 <p className="text-[11px] text-white/40">{compassSettleSeconds > 0 ? `${compassSettleSeconds}s` : "Nästan klart…"}</p>
               )}

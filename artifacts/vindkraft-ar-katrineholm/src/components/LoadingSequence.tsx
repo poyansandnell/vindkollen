@@ -1,191 +1,267 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FeatureTicker } from "@/components/FeatureTicker";
 
 interface LoadingSequenceProps {
   onComplete: () => void;
-  /** 0..1 — hur stor del av åtta-rörelsens riktningssektorer som redan svepts. */
+  /** Vilket kalibreringssteg som just nu pågår (se `useDeviceOrientation.ts`). */
+  calibrationPhase: "flat" | "vertical" | "done";
+  /** 0..1 — hur stor del av det AKTUELLA stegets riktningssektorer som redan svepts. */
   calibrationProgress: number;
-  /** Sant när tillräckligt många sektorer svepts (se `useDeviceOrientation.ts`). */
-  calibrationComplete: boolean;
+  /**
+   * Sant om kompasskalibrering inte kan genomföras alls (t.ex.
+   * `DeviceOrientationEvent` saknas, eller behörigheten nekades) — då hoppar
+   * sekvensen förbi kalibreringssteget helt och går direkt till
+   * nedräkningen, istället för att fastna på ett steg som aldrig kan bli
+   * klart. Det faktiska felet (behörighet nekad etc.) visas ändå av
+   * `Home.tsx`s befintliga felhantering efter att den här sekvensen stängts.
+   */
+  skipCalibration: boolean;
 }
 
-// Varje steg visas i ~1 sekund (sista steget, "0 sekunder", visas något
-// kortare eftersom det bara är en avslutande bekräftelse innan AR-vyn tar
-// över) — förutom kompass-steget (index `COMPASS_STAGE_INDEX`), som INTE
-// avancerar på en blind timer: användaren måste faktiskt utföra
-// åtta-rörelsen (se `useDeviceOrientation.ts`s sektorspårning) innan appen
-// går vidare, annars skulle "kalibrera kompassen" bara vara en instruktion
-// ingen är tvingad att följa. `durationMs` för det steget fungerar istället
-// som en MINSTA visningstid (så meddelandet hinner läsas även om
-// kalibreringen råkar bli klar direkt) — se `CALIBRATION_MAX_WAIT_MS` för
-// den övre gränsen om sensorn aldrig ger tillräckligt varierande avläsningar
-// (t.ex. saknad kompass/testmiljö utan sensorer).
-// `checkedUpTo` anger hur många punkter i checklistan (se `CHECKLIST_ITEMS`
-// nedan) som ska vara avbockade MEDAN detta steg visas, dvs. resultatet av
-// föregående steg.
-const COMPASS_STAGE_INDEX = 1;
-// Sänkt från tidigare 10s: en telefon som verkligen vrids runt når nu oftast
-// `calibrationComplete` på ett par sekunder (se `CALIBRATION_REQUIRED_SECTORS`
-// i `useDeviceOrientation.ts`), och en kortare maxgräns gör att fall som
-// verkligen saknar fungerande sensor inte känns som ett långt "hänge sig"
-// innan appen kickar igång.
-const CALIBRATION_MAX_WAIT_MS = 6000;
+// Om en enskild kalibreringsdelfas (liggande/stående) tar ovanligt lång tid
+// visas en hjälptext (utan att avbryta väntan) — och som yttersta säkerhet
+// (t.ex. en sensor som fastnar helt) går sekvensen ändå vidare efter
+// `CALIBRATION_PHASE_MAX_WAIT_MS`, precis som appens övriga sensor-
+// watchdogs (se `useCameraStream.ts`/`useGeolocation.ts`).
+const CALIBRATION_PHASE_HINT_MS = 7000;
+const CALIBRATION_PHASE_MAX_WAIT_MS = 18000;
+// Kort paus så "Kompass kalibrerad ✓" hinner synas innan nedräkningen tar vid.
+const CALIBRATION_DONE_PAUSE_MS = 900;
 
-const STAGES = [
-  { secondsLeft: 5, message: "📍 Hämtar din GPS-position…", checkedUpTo: 0, durationMs: 1000 },
-  {
-    secondsLeft: 4,
-    message: "🧭 Kalibrera kompassen — vrid telefonen sakta ett halvt varv runt dig",
-    checkedUpTo: 1,
-    durationMs: 1800,
-  },
-  {
-    secondsLeft: 3,
-    message: "🌍 Placerar ut 29 vindkraftverk på sina verkliga koordinater…",
-    checkedUpTo: 2,
-    durationMs: 1000,
-  },
-  { secondsLeft: 2, message: "☀️ Beräknar sol, skuggor, ljudnivå och perspektiv…", checkedUpTo: 3, durationMs: 1000 },
-  {
-    secondsLeft: 1,
-    message: "🎧 Laddar AR-visualisering, rotoranimationer och hinderljus…",
-    checkedUpTo: 6,
-    durationMs: 1000,
-  },
-  { secondsLeft: 0, message: "✅ Visualiseringen är redo. Startar AR…", checkedUpTo: 7, durationMs: 600 },
+const COUNTDOWN_STAGES = [
+  { secondsLeft: 3, message: "📍 Hämtar GPS-position…" },
+  { secondsLeft: 2, message: "🛰️ Beräknar din position…" },
+  { secondsLeft: 1, message: "🌍 Placerar vindkraftverk och beräknar AR-scenen…" },
 ] as const;
+const COUNTDOWN_STEP_MS = 1000;
 
 const CHECKLIST_ITEMS = [
   "GPS-position hittad",
   "Kompass kalibrerad",
   "Vindkraftverk placerade",
   "Solposition beräknad",
-  "Skuggor och skuggflimmer skapade",
+  "Skuggor skapade",
   "Ljudnivå beräknad",
   "AR-objekt laddade",
 ];
+// 150–300ms per punkt, enligt produktkravet — 220ms ligger mitt i intervallet.
+const CHECKLIST_STEP_MS = 220;
+const CHECKLIST_DONE_PAUSE_MS = 500;
 
-export function LoadingSequence({ onComplete, calibrationProgress, calibrationComplete }: LoadingSequenceProps) {
-  const [stageIndex, setStageIndex] = useState(0);
-  const stageEnteredAtRef = useRef(Date.now());
+function CalibrationStep({
+  active,
+  done,
+  rotateClass,
+  label,
+  instruction,
+  progress,
+}: {
+  active: boolean;
+  done: boolean;
+  rotateClass: string;
+  label: string;
+  instruction: string;
+  progress: number;
+}) {
+  return (
+    <div
+      className={`rounded-xl border p-3 text-left transition-colors ${
+        active ? "border-[#4DA6FF]/40 bg-[#4DA6FF]/5" : done ? "border-white/10 bg-white/5" : "border-white/5 opacity-40"
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center text-2xl ${rotateClass} ${
+            active ? "animate-spin [animation-duration:2.2s]" : ""
+          }`}
+          aria-hidden="true"
+        >
+          📱
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-white">{label}</p>
+          <p className="text-xs text-white/60">{instruction}</p>
+        </div>
+        <span className={done ? "text-lg text-[#4DA6FF]" : "text-lg text-white/20"} aria-hidden="true">
+          {done ? "✅" : "⬜️"}
+        </span>
+      </div>
+      {active && (
+        <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-[#4DA6FF] transition-all duration-200 ease-linear"
+            style={{ width: `${Math.round(progress * 100)}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
-  const advance = useCallback(() => {
-    setStageIndex((i) => {
-      if (i >= STAGES.length - 1) {
-        onComplete();
-        return i;
-      }
-      return i + 1;
-    });
-  }, [onComplete]);
+export function LoadingSequence({ onComplete, calibrationPhase, calibrationProgress, skipCalibration }: LoadingSequenceProps) {
+  const [uiPhase, setUiPhase] = useState<"calibration" | "countdown" | "checklist">(
+    skipCalibration ? "countdown" : "calibration",
+  );
+  const [countdownIndex, setCountdownIndex] = useState(0);
+  const [checkedCount, setCheckedCount] = useState(0);
+  const [showCalibrationHint, setShowCalibrationHint] = useState(false);
+  const calibrationPhaseEnteredAtRef = useRef(Date.now());
 
+  // Nollställ hjälptexten och tidsstämpeln varje gång kalibreringen går in
+  // i ett nytt delsteg (liggande -> stående), så maxväntetiden räknas per
+  // steg och inte ackumulerat över hela kalibreringen.
   useEffect(() => {
-    stageEnteredAtRef.current = Date.now();
-  }, [stageIndex]);
+    calibrationPhaseEnteredAtRef.current = Date.now();
+    setShowCalibrationHint(false);
+  }, [calibrationPhase]);
 
+  // Kalibreringsfasen: gå vidare till nedräkningen så fort BÅDA delstegen är
+  // klara (`calibrationPhase === "done"`), efter en kort paus så "Kompass
+  // kalibrerad ✓" hinner synas. Annars (fortfarande "flat"/"vertical")
+  // bevakas en hjälptext + en yttersta maxväntetid per delsteg, så en enhet
+  // utan fungerande/tillgänglig kompass ändå tar sig vidare.
   useEffect(() => {
-    if (stageIndex !== COMPASS_STAGE_INDEX) {
-      const stage = STAGES[stageIndex];
-      const id = window.setTimeout(advance, stage.durationMs);
+    if (uiPhase !== "calibration") return;
+
+    if (calibrationPhase === "done") {
+      const id = window.setTimeout(() => setUiPhase("countdown"), CALIBRATION_DONE_PAUSE_MS);
       return () => window.clearTimeout(id);
     }
 
-    // Kompass-steget: kontrollera periodiskt om BÅDE minsta visningstiden
-    // gått OCH kalibreringen faktiskt är klar (`calibrationComplete`),
-    // annars fortsätt vänta — dock aldrig längre än `CALIBRATION_MAX_WAIT_MS`,
-    // så en telefon utan fungerande kompasssensor (eller en testmiljö helt
-    // utan sensorer) inte fastnar här för alltid.
-    const minDisplayMs = STAGES[COMPASS_STAGE_INDEX].durationMs;
     const id = window.setInterval(() => {
-      const elapsed = Date.now() - stageEnteredAtRef.current;
-      const minTimeReached = elapsed >= minDisplayMs;
-      if ((calibrationComplete && minTimeReached) || elapsed >= CALIBRATION_MAX_WAIT_MS) {
+      const elapsed = Date.now() - calibrationPhaseEnteredAtRef.current;
+      if (elapsed >= CALIBRATION_PHASE_HINT_MS) setShowCalibrationHint(true);
+      if (elapsed >= CALIBRATION_PHASE_MAX_WAIT_MS) {
         window.clearInterval(id);
-        advance();
+        setUiPhase("countdown");
       }
-    }, 150);
+    }, 300);
     return () => window.clearInterval(id);
-  }, [stageIndex, calibrationComplete, advance]);
+  }, [uiPhase, calibrationPhase]);
 
-  const stage = STAGES[stageIndex];
-  const isCalibrating = stageIndex === COMPASS_STAGE_INDEX;
+  // Nedräkningsfasen: fast 3-2-1, ~1s per steg, sedan vidare till checklistan.
+  useEffect(() => {
+    if (uiPhase !== "countdown") return;
+    if (countdownIndex >= COUNTDOWN_STAGES.length) {
+      setUiPhase("checklist");
+      return;
+    }
+    const id = window.setTimeout(() => setCountdownIndex((i) => i + 1), COUNTDOWN_STEP_MS);
+    return () => window.clearTimeout(id);
+  }, [uiPhase, countdownIndex]);
+
+  // Checklistefasen: bocka av punkter var 150–300ms, avsluta hela sekvensen
+  // (onComplete) sist av allt — Home.tsx:s befintliga `ready`-baserade
+  // väntar-overlay tar därefter vid om den riktiga GPS/kompass/kamera-
+  // statusen inte redan hunnit bli klar, exakt som innan.
+  useEffect(() => {
+    if (uiPhase !== "checklist") return;
+    if (checkedCount >= CHECKLIST_ITEMS.length) {
+      const id = window.setTimeout(onComplete, CHECKLIST_DONE_PAUSE_MS);
+      return () => window.clearTimeout(id);
+    }
+    const id = window.setTimeout(() => setCheckedCount((c) => c + 1), CHECKLIST_STEP_MS);
+    return () => window.clearTimeout(id);
+  }, [uiPhase, checkedCount, onComplete]);
+
+  const countdownStage = COUNTDOWN_STAGES[Math.min(countdownIndex, COUNTDOWN_STAGES.length - 1)];
 
   return (
     <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-[#090909] px-6 text-center text-white">
-      <div className="mx-auto w-full max-w-md">
-        <p className="text-xs font-medium uppercase tracking-wide text-[#FFB347]">Katrineholm FRAMÅT</p>
-        <h1 className="mt-1 text-2xl font-bold leading-tight text-white">Vindkraftsparken</h1>
+      {uiPhase === "calibration" && (
+        <div className="mx-auto w-full max-w-md">
+          <p className="text-xs font-medium uppercase tracking-wide text-[#FFB347]">Katrineholm FRAMÅT</p>
+          <h1 className="mt-1 text-2xl font-bold leading-tight text-white">Kalibrera kompassen</h1>
+          <p className="mt-3 text-sm text-white/70">
+            För bästa precision behöver telefonens kompass kalibreras innan AR startar.
+          </p>
 
-        <div className="mx-auto mt-6 flex h-20 w-20 items-center justify-center rounded-full border-4 border-[#FF8B01]/25">
-          <span className="text-3xl font-black text-[#FF8B01]" aria-live="polite">
-            {stage.secondsLeft}
-          </span>
-        </div>
-
-        <p className="mt-5 min-h-[3rem] text-sm font-medium leading-relaxed text-white/90" aria-live="polite">
-          {stage.message}
-        </p>
-
-        {/*
-          Under kompass-steget visas en enkel roterande kompass-ikon (visar
-          fysiskt VAD man ska göra — vrida telefonen runt sig, inte gissa
-          utifrån texten ensam) plus ett levande kalibreringsförlopp, så
-          användaren ser att appen faktiskt väntar på en riktig rörelse —
-          inte bara en godtycklig paus.
-        */}
-        {isCalibrating && (
-          <div className="mt-3">
-            <div
-              className={`mx-auto flex h-14 w-14 items-center justify-center text-3xl ${
-                calibrationComplete ? "" : "animate-spin [animation-duration:2.4s]"
-              }`}
-              aria-hidden="true"
-            >
-              🧭
-            </div>
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-[#4DA6FF] transition-all duration-200 ease-linear"
-                style={{ width: `${Math.round(calibrationProgress * 100)}%` }}
-              />
-            </div>
-            <p className="mt-1.5 text-[11px] text-white/40" aria-live="polite">
-              {calibrationComplete
-                ? "Kompassen kalibrerad ✓"
-                : `Kalibrering: ${Math.round(calibrationProgress * 100)}%`}
-            </p>
+          <div className="mt-6 space-y-3">
+            <CalibrationStep
+              active={calibrationPhase === "flat"}
+              done={calibrationPhase !== "flat"}
+              rotateClass="rotate-90"
+              label="1. Liggande telefon"
+              instruction="Vrid telefonen långsamt liggande."
+              progress={calibrationPhase === "flat" ? calibrationProgress : 1}
+            />
+            <CalibrationStep
+              active={calibrationPhase === "vertical"}
+              done={calibrationPhase === "done"}
+              rotateClass=""
+              label="2. Stående telefon"
+              instruction="Vrid nu telefonen stående."
+              progress={calibrationPhase === "vertical" ? calibrationProgress : calibrationPhase === "done" ? 1 : 0}
+            />
           </div>
-        )}
 
-        <div className="mt-6 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-          <div
-            className="h-full rounded-full bg-[#FF8B01] transition-all duration-500 ease-linear"
-            style={{ width: `${((5 - stage.secondsLeft) / 5) * 100}%` }}
-          />
+          <p className="mt-5 min-h-[1.25rem] text-sm font-semibold text-[#4DA6FF]" aria-live="polite">
+            {calibrationPhase === "done" ? "Kompass kalibrerad ✓" : "\u00a0"}
+          </p>
+
+          {showCalibrationHint && calibrationPhase !== "done" && (
+            <p className="mt-1 text-[11px] text-white/40" aria-live="polite">
+              Tar det lång tid? Se till att telefonen inte ligger nära metall eller elektronik, och fortsätt vrida den.
+            </p>
+          )}
         </div>
+      )}
 
-        <ul className="mt-6 space-y-2 text-left">
-          {CHECKLIST_ITEMS.map((item, i) => {
-            const checked = i < stage.checkedUpTo || (i === 1 && calibrationComplete);
-            return (
-              <li
-                key={item}
-                className={`flex items-center gap-2 text-sm transition-colors duration-300 ${
-                  checked ? "text-white" : "text-white/30"
-                }`}
-              >
-                <span className={checked ? "text-[#FF8B01]" : "text-white/20"}>{checked ? "✅" : "⬜️"}</span>
-                <span>{item}</span>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+      {uiPhase === "countdown" && (
+        <div className="mx-auto w-full max-w-md">
+          <p className="text-xs font-medium uppercase tracking-wide text-[#FFB347]">Katrineholm FRAMÅT</p>
+          <h1 className="mt-1 text-2xl font-bold leading-tight text-white">Vindkraftsparken</h1>
+
+          <div className="mx-auto mt-6 flex h-20 w-20 items-center justify-center rounded-full border-4 border-[#FF8B01]/25">
+            <span className="text-3xl font-black text-[#FF8B01]" aria-live="polite">
+              {countdownStage.secondsLeft}
+            </span>
+          </div>
+
+          <p className="mt-5 min-h-[3rem] text-sm font-medium leading-relaxed text-white/90" aria-live="polite">
+            {countdownStage.message}
+          </p>
+
+          <div className="mt-6 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-[#FF8B01] transition-all duration-500 ease-linear"
+              style={{ width: `${(countdownIndex / COUNTDOWN_STAGES.length) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {uiPhase === "checklist" && (
+        <div className="mx-auto w-full max-w-md">
+          <p className="text-xs font-medium uppercase tracking-wide text-[#FFB347]">Katrineholm FRAMÅT</p>
+          <h1 className="mt-1 text-2xl font-bold leading-tight text-white">Vindkraftsparken</h1>
+          <p className="mt-5 text-sm font-medium text-white/90" aria-live="polite">
+            {checkedCount >= CHECKLIST_ITEMS.length ? "✅ Visualiseringen är redo. Startar AR…" : "Färdigställer visualiseringen…"}
+          </p>
+
+          <ul className="mt-6 space-y-2 text-left">
+            {CHECKLIST_ITEMS.map((item, i) => {
+              const checked = i < checkedCount;
+              return (
+                <li
+                  key={item}
+                  className={`flex items-center gap-2 text-sm transition-colors duration-300 ${
+                    checked ? "text-white" : "text-white/30"
+                  }`}
+                >
+                  <span className={checked ? "text-[#FF8B01]" : "text-white/20"}>{checked ? "✅" : "⬜️"}</span>
+                  <span>{item}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {/*
-        Snabbt rullande funktionslista över hela startsekvensen (inte bara
-        kompass-steget), så väntetiden fylls med information om vad appen
-        faktiskt kan istället för att kännas overksam.
+        Snabbt rullande funktionslista över hela startsekvensen, så
+        väntetiden fylls med information om vad appen faktiskt kan istället
+        för att kännas overksam.
       */}
       <FeatureTicker />
     </div>

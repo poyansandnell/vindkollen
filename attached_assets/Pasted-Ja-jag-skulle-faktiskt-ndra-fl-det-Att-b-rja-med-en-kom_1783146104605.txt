@@ -1,0 +1,137 @@
+Ja, jag skulle faktiskt ändra flödet. Att börja med en kompasskalibrering gör att användaren förstår varför appen behöver tillgång till sensorerna, och det minskar risken att vindkraftverken hamnar fel direkt när AR-läget startar.
+
+Jag skulle ge Replit följande instruktion:
+
+⸻
+
+Ändra startflödet för AR-laddningen
+
+Den nuvarande laddskärmen fastnar ofta på första steget (“Hämtar din GPS-position”). Ändra därför hela uppstartsflödet enligt nedan.
+
+Ny ordning
+
+Steg 1 – Kompasskalibrering (innan nedräkning)
+
+Ta bort den stora siffran 5.
+
+Visa istället en tydlig instruktion:
+
+Kalibrera kompassen
+
+För bästa precision behöver telefonens kompass kalibreras innan AR startar.
+
+Visa därefter en enkel animation:
+
+1. Liggande telefon
+
+* Telefonen roterar ett varv.
+* Text:
+    Vrid telefonen långsamt liggande.
+
+När telefonens kompass uppnått tillräcklig noggrannhet:
+
+✅ Grön bock
+
+Sedan automatiskt:
+
+2. Stående telefon
+
+* Telefonen visas stående.
+* Animation där den vrids ett varv.
+
+Text:
+
+Vrid nu telefonen stående.
+
+När även detta är klart:
+
+✅ Grön bock
+
+Därefter:
+
+Kompass kalibrerad
+
+Automatiskt vidare till nästa steg.
+
+⸻
+
+Steg 2 – Nedräkning
+
+Nu visas nedräkning från
+
+3
+
+inte 5.
+
+Varje sekund visas vilket steg som laddas.
+
+Exempel:
+
+3
+
+📍 Hämtar GPS-position…
+
+⸻
+
+2
+
+🛰 Beräknar din position…
+
+⸻
+
+1
+
+🌍 Placerar vindkraftverk och beräknar AR-scenen…
+
+⸻
+
+När nedräkningen är klar:
+
+Visa checklista
+
+Låt varje punkt bockas av med cirka 150–300 ms mellanrum.
+
+✅ GPS-position hittad
+
+✅ Kompass kalibrerad
+
+✅ Vindkraftverk placerade
+
+✅ Solposition beräknad
+
+✅ Skuggor skapade
+
+✅ Ljudnivå beräknad
+
+✅ AR-objekt laddade
+
+⸻
+
+Starta AR först när allt är klart
+
+AR-vyn får inte visas förrän:
+
+* GPS har fix
+* Kompassen är kalibrerad
+* Heading är stabil
+* Alla modeller är laddade
+* Solposition är beräknad
+* Vindkraftverken har placerats
+
+Om någon del inte blir klar ska appen inte fastna, utan visa ett tydligt felmeddelande, exempelvis:
+
+Väntar på GPS-signal…
+
+Gå gärna ut på en öppen plats och rikta telefonen mot himlen.
+
+eller
+
+Kompassen behöver kalibreras.
+
+Vrid telefonen enligt instruktionen ovan.
+
+Appen ska fortsätta försöka automatiskt och gå vidare direkt när kraven är uppfyllda.
+
+⸻
+
+Det här flödet blir betydligt mer professionellt. Användaren förstår varför appen väntar, kompassen hinner kalibreras innan AR startar och de tre sekunderna upplevs som en naturlig “förberedelse” i stället för en laddningsskärm som riskerar att kännas trasig.

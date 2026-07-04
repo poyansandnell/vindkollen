@@ -33,16 +33,25 @@ export interface DeviceOrientationApi {
    */
   headingStabilityRef: React.MutableRefObject<number>;
   /**
-   * 0..1 mått på hur stor del av kompassens riktningsomfång (uppdelat i
-   * `CALIBRATION_TOTAL_SECTORS` sektorer) användaren faktiskt svept
-   * telefonen genom sedan `startCalibrationTracking()` senast anropades.
-   * Används av `LoadingSequence.tsx` för att visa ett levande
-   * kalibreringsförlopp under åtta-rörelsen, istället för en blind timer.
+   * Kalibreringen sker i två steg, precis som en riktig kompasskalibrering:
+   * "flat" — telefonen ska vridas runt liggande (skärmen ± horisontell),
+   * "vertical" — telefonen ska vridas runt stående (skärmen ± vertikal,
+   * som när man normalt håller den för AR), "done" — båda klara (eller
+   * spårning inte startad). `LoadingSequence.tsx` visar en egen instruktion
+   * och grön bock per steg utifrån detta fält.
+   */
+  calibrationPhase: "flat" | "vertical" | "done";
+  /**
+   * 0..1 mått på hur stor del av det AKTUELLA kalibreringssteget (se
+   * `calibrationPhase`) — uppdelat i `CALIBRATION_TOTAL_SECTORS`
+   * riktningssektorer — som användaren faktiskt svept telefonen genom
+   * sedan steget startade. Används av `LoadingSequence.tsx` för att visa
+   * ett levande kalibreringsförlopp, istället för en blind timer.
    */
   calibrationProgress: number;
-  /** Sant när tillräckligt många sektorer (se ovan) har svepts. */
+  /** Sant när båda kalibreringsstegen (se `calibrationPhase`) är klara. */
   calibrationComplete: boolean;
-  /** Börjar (om)räkna vilka riktningssektorer telefonen sveps genom. */
+  /** Börjar (om)räkna kalibreringen från steg 1 ("flat"). */
   startCalibrationTracking: () => void;
 }
 
@@ -91,7 +100,25 @@ const SETTLE_MAX_WAIT_MS = 5000;
 // faktiskt kännas klar, vilket upplevdes som att appen "hänger sig" innan
 // den plötsligt kickar igång.
 const CALIBRATION_TOTAL_SECTORS = 12;
-const CALIBRATION_REQUIRED_SECTORS = 6;
+// Kalibreringen görs nu i två separata steg (liggande, sedan stående) precis
+// som instruerat i UI:t — varje steg behöver bara svepa halva sektorantalet
+// (5/12, ~150°) eftersom den totala ansträngningen annars blir dubbelt så
+// stor jämfört med den tidigare enfasiga kalibreringen (6/12).
+const CALIBRATION_REQUIRED_SECTORS_PER_PHASE = 5;
+// Hur nära "plant" (skärmen ± horisontell, dvs. beta nära 0° eller 180°)
+// respektive "stående" (skärmen ± vertikal, beta nära 90°) telefonens pitch
+// måste vara för att en avläsning ska räknas till respektive fas — rundligt
+// tilltaget så en normal, inte perfekt, handhållning godtas.
+const CALIBRATION_FLAT_BETA_TOLERANCE_DEG = 45;
+const CALIBRATION_VERTICAL_BETA_TOLERANCE_DEG = 45;
+
+function isFlatBeta(betaDeg: number): boolean {
+  return Math.abs(betaDeg) < CALIBRATION_FLAT_BETA_TOLERANCE_DEG || Math.abs(Math.abs(betaDeg) - 180) < CALIBRATION_FLAT_BETA_TOLERANCE_DEG;
+}
+
+function isVerticalBeta(betaDeg: number): boolean {
+  return Math.abs(Math.abs(betaDeg) - 90) < CALIBRATION_VERTICAL_BETA_TOLERANCE_DEG;
+}
 
 function circularDiffDeg(a: number, b: number): number {
   let diff = a - b;
@@ -179,20 +206,23 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   // fortsätter fungera precis som förut.
   const hasAbsoluteFixRef = useRef(false);
 
-  // Åtta-rörelsens kalibrering (se konstanterna ovan): vilka sektorer som
-  // svepts sedan `startCalibrationTracking()` senast anropades, samt om
-  // tillräckligt många redan svepts (så vi inte skickar onödiga state-
-  // uppdateringar efter att målet redan uppnåtts).
-  const calibrationActiveRef = useRef(false);
-  const calibrationSectorsRef = useRef<Set<number>>(new Set());
-  const calibrationCompleteRef = useRef(false);
+  // Tvåstegskalibreringen (se konstanterna ovan): vilka sektorer som svepts
+  // i vardera fasen sedan `startCalibrationTracking()` senast anropades.
+  // `calibrationPhaseRef` styr vilken fas som just nu räknar avläsningar —
+  // "done" betyder att spårning inte är aktiv (antingen inte startad, eller
+  // båda faserna redan klara).
+  const calibrationPhaseRef = useRef<"flat" | "vertical" | "done">("done");
+  const calibrationFlatSectorsRef = useRef<Set<number>>(new Set());
+  const calibrationVerticalSectorsRef = useRef<Set<number>>(new Set());
+  const [calibrationPhase, setCalibrationPhase] = useState<"flat" | "vertical" | "done">("done");
   const [calibrationProgress, setCalibrationProgress] = useState(0);
   const [calibrationComplete, setCalibrationComplete] = useState(false);
 
   const startCalibrationTracking = useCallback(() => {
-    calibrationSectorsRef.current = new Set();
-    calibrationCompleteRef.current = false;
-    calibrationActiveRef.current = true;
+    calibrationFlatSectorsRef.current = new Set();
+    calibrationVerticalSectorsRef.current = new Set();
+    calibrationPhaseRef.current = "flat";
+    setCalibrationPhase("flat");
     setCalibrationProgress(0);
     setCalibrationComplete(false);
   }, []);
@@ -230,23 +260,35 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
 
     if (heading === null || event.beta === null || event.gamma === null || Number.isNaN(heading)) return;
 
-    // Åtta-rörelsens kalibrering: markera vilken sektor den RÅA (ej
-    // utjämnade) girriktningen ligger i just nu. Vi använder rådata här
-    // (inte den nedan utjämnade `smoothedHeading`) eftersom utjämningen med
-    // avsikt dämpar snabba rörelser kraftigt — exakt det en riktig
-    // åtta-rörelse producerar — vilket annars skulle göra kalibreringen
-    // konstgjort långsam.
-    if (calibrationActiveRef.current && !calibrationCompleteRef.current) {
-      const sector = Math.floor((heading / 360) * CALIBRATION_TOTAL_SECTORS) % CALIBRATION_TOTAL_SECTORS;
-      const sectors = calibrationSectorsRef.current;
-      if (!sectors.has(sector)) {
-        sectors.add(sector);
-        const progress = Math.min(1, sectors.size / CALIBRATION_REQUIRED_SECTORS);
-        setCalibrationProgress(progress);
-        if (sectors.size >= CALIBRATION_REQUIRED_SECTORS) {
-          calibrationCompleteRef.current = true;
-          calibrationActiveRef.current = false;
-          setCalibrationComplete(true);
+    // Tvåstegskalibrering: markera vilken sektor den RÅA (ej utjämnade)
+    // girriktningen ligger i just nu, men bara medan telefonens pitch (beta)
+    // matchar den fas som pågår — "flat" kräver att telefonen faktiskt hålls
+    // ± liggande, "vertical" att den hålls ± stående, exakt som texten som
+    // visas för användaren instruerar. Vi använder rådata här (inte den
+    // nedan utjämnade `smoothedHeading`) eftersom utjämningen med avsikt
+    // dämpar snabba rörelser kraftigt — exakt det en riktig vridning
+    // producerar — vilket annars skulle göra kalibreringen konstgjort långsam.
+    const activePhase = calibrationPhaseRef.current;
+    if (activePhase !== "done") {
+      const betaMatchesPhase = activePhase === "flat" ? isFlatBeta(event.beta) : isVerticalBeta(event.beta);
+      if (betaMatchesPhase) {
+        const sector = Math.floor((heading / 360) * CALIBRATION_TOTAL_SECTORS) % CALIBRATION_TOTAL_SECTORS;
+        const sectors = activePhase === "flat" ? calibrationFlatSectorsRef.current : calibrationVerticalSectorsRef.current;
+        if (!sectors.has(sector)) {
+          sectors.add(sector);
+          const progress = Math.min(1, sectors.size / CALIBRATION_REQUIRED_SECTORS_PER_PHASE);
+          setCalibrationProgress(progress);
+          if (sectors.size >= CALIBRATION_REQUIRED_SECTORS_PER_PHASE) {
+            if (activePhase === "flat") {
+              calibrationPhaseRef.current = "vertical";
+              setCalibrationPhase("vertical");
+              setCalibrationProgress(0);
+            } else {
+              calibrationPhaseRef.current = "done";
+              setCalibrationPhase("done");
+              setCalibrationComplete(true);
+            }
+          }
         }
       }
     }
@@ -398,6 +440,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     calibrateHorizon,
     quaternionRef,
     headingStabilityRef,
+    calibrationPhase,
     calibrationProgress,
     calibrationComplete,
     startCalibrationTracking,
