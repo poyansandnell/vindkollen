@@ -418,3 +418,19 @@
     inset: -1px;
   }
 }
+
+/*
+ * Kontinuerlig horisontell "ticker"-rullning för funktionslistan i
+ * LoadingSequence.tsx — visar appens funktioner medan användaren väntar,
+ * så väntetiden (särskilt kompass-kalibreringen) inte känns overksam.
+ * Innehållet dubbleras i komponenten och rullas exakt -50%, vilket ger en
+ * sömlös loop utan hopp.
+ */
+@keyframes feature-ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}

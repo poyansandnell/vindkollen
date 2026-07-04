@@ -81,15 +81,17 @@ const SETTLE_STABLE_DURATION_MS = 1200;
 // aldrig komma förbi väntningen.
 const SETTLE_MAX_WAIT_MS = 5000;
 
-// Åtta-rörelsens kalibrering: girriktningens 360° delas i sektorer, och
-// användaren måste faktiskt svepa telefonen genom en majoritet av dem
-// (inte bara skaka den lite fram och tillbaka) innan kalibreringen räknas
-// som klar. 8 av 12 sektorer (240°) kräver en genuin, nästan hel varvning
-// — mer robust mot att bara vagga telefonen en aning i en riktning, vilket
-// annars skulle räknas som "klart" utan att faktiskt ha korsat telefonens
-// magnetometer genom tillräckligt olika riktningar.
+// Rotationskalibrering: girriktningens 360° delas i sektorer, och
+// användaren måste faktiskt vrida telefonen runt sig genom en majoritet av
+// dem (inte bara vagga den lite fram och tillbaka) innan kalibreringen
+// räknas som klar. 6 av 12 sektorer (180°, ett halvt varv) kräver en
+// genuin vridning utan att kräva ett nästan helt varv — en tidigare högre
+// tröskel (8/12) gjorde att kalibreringen ofta tog väldigt lång tid och
+// oftast avslutades via `LoadingSequence.tsx`s maxväntetid istället för att
+// faktiskt kännas klar, vilket upplevdes som att appen "hänger sig" innan
+// den plötsligt kickar igång.
 const CALIBRATION_TOTAL_SECTORS = 12;
-const CALIBRATION_REQUIRED_SECTORS = 8;
+const CALIBRATION_REQUIRED_SECTORS = 6;
 
 function circularDiffDeg(a: number, b: number): number {
   let diff = a - b;

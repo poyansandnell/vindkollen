@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FeatureTicker } from "@/components/FeatureTicker";
 
 interface LoadingSequenceProps {
   onComplete: () => void;
@@ -23,13 +24,18 @@ interface LoadingSequenceProps {
 // nedan) som ska vara avbockade MEDAN detta steg visas, dvs. resultatet av
 // föregående steg.
 const COMPASS_STAGE_INDEX = 1;
-const CALIBRATION_MAX_WAIT_MS = 10000;
+// Sänkt från tidigare 10s: en telefon som verkligen vrids runt når nu oftast
+// `calibrationComplete` på ett par sekunder (se `CALIBRATION_REQUIRED_SECTORS`
+// i `useDeviceOrientation.ts`), och en kortare maxgräns gör att fall som
+// verkligen saknar fungerande sensor inte känns som ett långt "hänge sig"
+// innan appen kickar igång.
+const CALIBRATION_MAX_WAIT_MS = 6000;
 
 const STAGES = [
   { secondsLeft: 5, message: "📍 Hämtar din GPS-position…", checkedUpTo: 0, durationMs: 1000 },
   {
     secondsLeft: 4,
-    message: "🧭 Kalibrera kompassen — rör telefonen i en åtta-rörelse några gånger",
+    message: "🧭 Kalibrera kompassen — vrid telefonen sakta ett halvt varv runt dig",
     checkedUpTo: 1,
     durationMs: 1800,
   },
@@ -121,14 +127,23 @@ export function LoadingSequence({ onComplete, calibrationProgress, calibrationCo
         </p>
 
         {/*
-          Under kompass-steget visas ett levande kalibreringsförlopp (hur
-          stor del av åtta-rörelsen som registrerats) istället för/utöver
-          den vanliga sekundräkningen, så användaren ser att appen faktiskt
-          väntar på en riktig rörelse — inte bara en godtycklig paus.
+          Under kompass-steget visas en enkel roterande kompass-ikon (visar
+          fysiskt VAD man ska göra — vrida telefonen runt sig, inte gissa
+          utifrån texten ensam) plus ett levande kalibreringsförlopp, så
+          användaren ser att appen faktiskt väntar på en riktig rörelse —
+          inte bara en godtycklig paus.
         */}
         {isCalibrating && (
           <div className="mt-3">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className={`mx-auto flex h-14 w-14 items-center justify-center text-3xl ${
+                calibrationComplete ? "" : "animate-spin [animation-duration:2.4s]"
+              }`}
+              aria-hidden="true"
+            >
+              🧭
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
               <div
                 className="h-full rounded-full bg-[#4DA6FF] transition-all duration-200 ease-linear"
                 style={{ width: `${Math.round(calibrationProgress * 100)}%` }}
@@ -166,6 +181,13 @@ export function LoadingSequence({ onComplete, calibrationProgress, calibrationCo
           })}
         </ul>
       </div>
+
+      {/*
+        Snabbt rullande funktionslista över hela startsekvensen (inte bara
+        kompass-steget), så väntetiden fylls med information om vad appen
+        faktiskt kan istället för att kännas overksam.
+      */}
+      <FeatureTicker />
     </div>
   );
 }
