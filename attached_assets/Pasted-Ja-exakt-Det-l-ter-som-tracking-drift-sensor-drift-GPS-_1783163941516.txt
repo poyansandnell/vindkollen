@@ -1,0 +1,51 @@
+Ja, exakt. Det låter som tracking drift / sensor drift: GPS, kompass, gyro och kamerans AR-position glider isär efter en stund. Då hamnar verken för långt ner, flyttar sig eller försvinner.
+
+Skicka detta till Replit:
+
+AR-placeringen är nära nu, men vindkraftverken kan ibland hamna för långt ner i bilden eller försvinna efter en stund. Förbättra stabiliseringen.
+1. Använd löpande sensorfusion
+Appen ska inte bara placera verken en gång vid start. Den ska under hela AR-sessionen kontinuerligt väga ihop:
+- GPS-position
+- GPS-accuracy
+- kompass/heading
+- gyro/device orientation
+- kamerans AR-tracking
+- horisontkalibrering
+- användarens manuella kalibrering
+Målet är att placeringen ska bli bättre över tid, inte sämre.
+2. Stabil horisont
+Vindkraftverkens höjd i bilden ska låsas mot en beräknad horisontlinje.
+De får inte sakta glida neråt eller uppåt när användaren står stilla.
+Använd smoothing/low-pass-filter för pitch och höjdplacering.
+3. Skydda mot dålig sensordata
+Om GPS accuracy, heading accuracy eller AR tracking blir dålig ska appen inte direkt flytta verken.
+Frys istället senaste stabila placering och visa:
+"Svag positionering – håller kvar senaste stabila läge"
+När sensordatan blir bättre igen kan placeringen uppdateras mjukt.
+4. Förhindra att verk försvinner
+Vindkraftverk ska inte försvinna plötsligt om de nyss var synliga.
+Om appen tappar tracking ska de ligga kvar i senaste rimliga position i några sekunder och sedan tona ut först om positionen fortfarande är osäker.
+5. Mjuk korrigering
+Om ny sensorberäkning säger att verket ska flyttas ska det inte hoppa direkt.
+Interpolera långsamt till ny position över 1–3 sekunder.
+6. Re-kalibrering under körning
+Appen ska automatiskt förbättra placeringen under sessionen:
+- samla stabila sensorvärden över tid
+- ignorera extrema hopp
+- uppdatera baseline för kompass och pitch
+- använda användarens "Kalibrera horisont" som stark referens
+7. Debug-information
+Lägg till ett dolt/debug-läge som visar:
+- GPS accuracy
+- heading accuracy
+- pitch
+- yaw/heading
+- AR tracking state
+- horizon offset
+- antal synliga verk
+- varför verk eventuellt döljs
+8. Viktigt
+Prioritera stabilitet framför exakt millimeterprecision.
+Det är bättre att verken ligger lite stabilt än att de hoppar, glider ner eller försvinner.
+
+Kort sagt: ja, den borde lära/stabilisera under tiden man använder den, men med filter så den inte “jagar” dålig GPS/kompassdata.

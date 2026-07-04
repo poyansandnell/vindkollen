@@ -124,7 +124,7 @@ interface CanvasLabel {
 }
 
 const FOV_DEGREES = 65;
-const MAX_RENDER_DISTANCE_M = 9000;
+export const MAX_RENDER_DISTANCE_M = 9000;
 // Meter -> scenens enheter. Vald så att den visuella storleken/avstånden
 // matchar kamerans FOV/klippplan (samma skala som tidigare, enklare modell).
 const METERS_TO_UNITS = 0.9;

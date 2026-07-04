@@ -43,6 +43,35 @@ export interface DeviceOrientationApi {
    */
   headingStabilityRef: React.MutableRefObject<number>;
   /**
+   * Kompassens egen felmarginal i grader, om webbläsaren rapporterar den
+   * (iOS Safaris `webkitCompassAccuracy` — Android/andra webbläsare saknar
+   * en motsvarande standard-API, då förblir denna `null`). Ett litet värde
+   * betyder att enheten själv anser sig kalibrerad; ett stort värde
+   * (>~15°) eller `-1` (okänt) betyder att kompassen bör kalibreras om
+   * (t.ex. genom att röra telefonen i en åtta), oavsett hur stabil
+   * `headingStabilityRef` ser ut för stunden — stabilitet mäter bara att
+   * riktningen INTE svänger just nu, inte att den pekar rätt. Muterad varje
+   * sensoravläsning, säker att läsa i en poll-loop utan re-render. Används
+   * av `useArTrackingStability` och sensordebug-panelen.
+   */
+  headingAccuracyDegRef: React.MutableRefObject<number | null>;
+  /**
+   * Utjämnad pitch (beta) EFTER horisont-kalibreringsoffseten
+   * (`calibrateHorizon`) applicerats — dvs. samma vinkel som faktiskt
+   * driver kamerans tilt. Muterad varje sensoravläsning. Rent
+   * diagnostiskt/debug-syfte (visar "verklig" pitch i sensordebug-panelen);
+   * påverkar inget beteende i sig.
+   */
+  pitchDegRef: React.MutableRefObject<number | null>;
+  /**
+   * Den aktuella horisont-kalibreringsoffseten (grader) som
+   * `calibrateHorizon` senast satte — 0 om aldrig kalibrerad manuellt.
+   * Read-only ur konsumentens perspektiv (skrivs bara internt av
+   * `calibrateHorizon`); exponerad för sensordebug-panelen så en testare
+   * kan se om/hur mycket horisonten justerats.
+   */
+  horizonOffsetDegRef: React.MutableRefObject<number>;
+  /**
    * Kalibreringen sker i två steg, precis som en riktig kompasskalibrering:
    * "flat" — telefonen ska vridas runt liggande (skärmen ± horisontell),
    * "vertical" — telefonen ska vridas runt stående (skärmen ± vertikal,
@@ -199,6 +228,8 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   const stableSinceRef = useRef<number | null>(null);
   const lastEventTimeRef = useRef<number | null>(null);
   const headingStabilityRef = useRef(1);
+  const headingAccuracyDegRef = useRef<number | null>(null);
+  const pitchDegRef = useRef<number | null>(null);
   // Litet rullande fönster av senaste |Δgir|/tidssteg-samples (grader/s) —
   // används bara för att räkna fram `headingStabilityRef`, ingen render.
   const headingDeltaSamplesRef = useRef<number[]>([]);
@@ -259,6 +290,14 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
       // förvränger den utjämnade riktningen.
       return;
     }
+
+    // iOS Safaris egen felmarginal för kompassavläsningen (grader), om den
+    // finns — `-1` betyder "okänt" enligt Apples dokumentation och behandlas
+    // här som `null` (samma "vi vet inte"-läge som Android, som saknar
+    // fältet helt).
+    const webkitCompassAccuracy = (event as unknown as { webkitCompassAccuracy?: number }).webkitCompassAccuracy;
+    headingAccuracyDegRef.current =
+      typeof webkitCompassAccuracy === "number" && webkitCompassAccuracy >= 0 ? webkitCompassAccuracy : null;
 
     let heading: number | null = null;
     if (typeof webkitCompassHeading === "number") {
@@ -366,6 +405,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
 
     computeDeviceQuaternion(alphaForQuaternion, adjustedBeta, smoothedGamma, screenAngleRef.current, quaternionRef.current);
     headingDegRef.current = smoothedHeading;
+    pitchDegRef.current = adjustedBeta;
 
     setError(null);
     if (!hasFixRef.current) {
@@ -436,10 +476,16 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     }
   }, []);
 
+  const horizonOffsetDegRef = useRef(0);
+
   const calibrateHorizon = useCallback(() => {
     // Lås aktuell pitch (beta) som "rak horisont" — kompenserar för
     // sensordrift/bias mellan olika enheter och minskar vertikal drift.
+    // Behandlas av `useArTrackingStability` som en "stark referens": den
+    // nollställer eventuell ackumulerad drift-osäkerhet direkt, istället för
+    // att bara gradvis bygga upp förtroende igen.
     betaOffsetRef.current = (betaRef.current ?? 90) - 90;
+    horizonOffsetDegRef.current = betaOffsetRef.current;
   }, []);
 
   return {
@@ -453,6 +499,9 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     quaternionRef,
     headingDegRef,
     headingStabilityRef,
+    headingAccuracyDegRef,
+    pitchDegRef,
+    horizonOffsetDegRef,
     calibrationPhase,
     calibrationProgress,
     calibrationComplete,

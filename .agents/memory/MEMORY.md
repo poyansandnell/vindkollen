@@ -43,3 +43,4 @@
 - [Tap-menu vs drag-move gesture conflict](tap-menu-vs-drag-move-gesture-conflict.md) — drag-to-move markers fights pan/pinch/double-tap map gestures; replace with tap→menu→explicit move-mode→commit-on-next-tap instead.
 - [Boundary polygon live-edit indirection](boundary-polygon-live-edit-indirection.md) — keep live-edit/persisted/debug-overlay polygon state separate; a getter-based scorer needs an explicit version-counter dependency to invalidate memoized results.
 - [Overlay z-index vs persistent indicator](overlay-zindex-vs-persistent-indicator.md) — a full-screen status overlay can silently hide an always-should-be-visible arrow/badge unless its z-index is explicitly higher than the overlay's.
+- [AR tracking freeze-vs-fade tiering](ar-tracking-freeze-vs-fade-tiering.md) — freeze position instantly on degraded fused-sensor tier, but only fade visibility after a sustained grace period; don't reuse one timer for both.

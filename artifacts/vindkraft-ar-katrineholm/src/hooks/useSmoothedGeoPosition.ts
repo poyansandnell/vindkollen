@@ -57,6 +57,16 @@ function effectiveTau(accuracy: number | null): number {
  *    15m-hoppsfrysning) — svarar mjukt och successivt på verklig rörelse
  *    men dämpar bort det meterskaliga GPS-bruset som annars fick verken att
  *    "fladdra"/hoppa i AR-vyn.
+ * 4. Ett explicit `freeze`-läge (se `useArTrackingStability`): när
+ *    positioneringen som helhet (GPS OCH/ELLER kompass) bedöms opålitlig
+ *    fryses den utjämnade positionen HELT — varken nya råvärden eller
+ *    tidens gång tillåts påverka den (se `lastTimeRef` nedan) — istället
+ *    för att bara låta `accuracy`-skalningen dra ut tidskonstanten. Detta
+ *    är den bokstavliga "håll kvar senaste stabila läge"-frysningen i
+ *    produktkravet. När frysningen släpper räknas `dt` från tidpunkten
+ *    INNAN frysningen (fortfarande takad till 5s), så korrigeringen mot den
+ *    nya positionen ändå sker mjukt över ~1-3s snarare än att hoppa direkt
+ *    — samma EMA som redan användes för vanlig GPS-brusdämpning.
  *
  * Ren ref-baserad state (ingen egen re-render).
  */
@@ -64,6 +74,7 @@ export function useSmoothedGeoPosition(
   lat: number | null,
   lon: number | null,
   accuracy: number | null = null,
+  freeze: boolean = false,
 ): { lat: number | null; lon: number | null } {
   const smoothedRef = useRef<{ lat: number | null; lon: number | null }>({ lat: null, lon: null });
   const lastTimeRef = useRef<number | null>(null);
@@ -77,6 +88,13 @@ export function useSmoothedGeoPosition(
   if (smoothedRef.current.lat === null || smoothedRef.current.lon === null) {
     smoothedRef.current = { lat, lon };
     lastTimeRef.current = performance.now();
+    return smoothedRef.current;
+  }
+
+  // Frusen: returnera senaste utjämnade läget oförändrat, och rör inte
+  // `lastTimeRef` — se jsdoc-punkt 4 ovan för varför detta ger en mjuk,
+  // inte omedelbar, korrigering när frysningen släpper.
+  if (freeze) {
     return smoothedRef.current;
   }
 

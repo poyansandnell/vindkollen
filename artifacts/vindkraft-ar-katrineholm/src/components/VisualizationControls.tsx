@@ -21,6 +21,8 @@ interface VisualizationControlsProps {
   onToggleShadowFlicker: () => void;
   showHiddenTurbines: boolean;
   onToggleShowHiddenTurbines: () => void;
+  showSensorDebug: boolean;
+  onToggleSensorDebug: () => void;
   onClose: () => void;
 }
 
@@ -78,6 +80,8 @@ export function VisualizationControls({
   onToggleShadowFlicker,
   showHiddenTurbines,
   onToggleShowHiddenTurbines,
+  showSensorDebug,
+  onToggleSensorDebug,
   onClose,
 }: VisualizationControlsProps) {
   const [shadowFlickerInfoOpen, setShadowFlickerInfoOpen] = useState(false);
@@ -194,6 +198,20 @@ export function VisualizationControls({
         </div>
         <p className="-mt-2 mb-4 text-[11px] text-white/50">
           Styr blinkande flyghinderljus och mörkläggning manuellt — ändras inte automatiskt med klockan.
+        </p>
+
+        <h2 className="mb-3 text-base font-semibold text-[#FFB347]">🐞 Sensordebug</h2>
+        <div className="mb-1 grid grid-cols-2 gap-2">
+          <SegButton active={showSensorDebug} onClick={() => !showSensorDebug && onToggleSensorDebug()}>
+            🐞 Panel PÅ
+          </SegButton>
+          <SegButton active={!showSensorDebug} onClick={() => showSensorDebug && onToggleSensorDebug()}>
+            🚫 Panel AV
+          </SegButton>
+        </div>
+        <p className="-mt-2 mb-4 text-[11px] leading-relaxed text-white/50">
+          Visar GPS-/kompassprecision, AR-spårningsläge, horisontoffset och antal synliga verk — för felsökning, inte
+          för vanligt bruk.
         </p>
 
         <h2 className="mb-3 text-base font-semibold text-[#FFB347]">Ljud</h2>

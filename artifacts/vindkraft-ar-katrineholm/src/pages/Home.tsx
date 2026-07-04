@@ -8,15 +8,17 @@ import { useSkyDetection } from "@/hooks/useSkyDetection";
 import { useOutdoorConfidenceIndex } from "@/hooks/useOutdoorConfidenceIndex";
 import { useStableGeoPosition } from "@/hooks/useStableGeoPosition";
 import { useSmoothedGeoPosition } from "@/hooks/useSmoothedGeoPosition";
+import { useArTrackingStability, WEAK_SIGNAL_MESSAGE } from "@/hooks/useArTrackingStability";
 import { useSmoothedDba } from "@/hooks/useSmoothedDba";
 import { CameraBackground } from "@/components/CameraBackground";
-import { ARScene, type ARSceneHandle } from "@/components/ARScene";
+import { ARScene, type ARSceneHandle, MAX_RENDER_DISTANCE_M } from "@/components/ARScene";
 import { MapView } from "@/components/MapView";
 import { PetitionModal } from "@/components/PetitionModal";
 import { PermissionGate } from "@/components/PermissionGate";
 import { LoadingSequence } from "@/components/LoadingSequence";
 import { InfoPanel } from "@/components/InfoPanel";
 import { VisualizationControls } from "@/components/VisualizationControls";
+import { SensorDebugPanel } from "@/components/SensorDebugPanel";
 import { SoundLevelPanel, SoundLevelBadge } from "@/components/SoundLevelPanel";
 import { NoiseImpactBadge, NoiseImpactPanel } from "@/components/NoiseImpactMonitor";
 import { LineOfSightStatus } from "@/components/LineOfSightStatus";
@@ -105,6 +107,7 @@ export default function Home() {
   const [showPetition, setShowPetition] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [showSensorDebug, setShowSensorDebug] = useState(false);
   const [calibrated, setCalibrated] = useState(false);
   const [showSoundLevel, setShowSoundLevel] = useState(true);
   const [showNoiseImpact, setShowNoiseImpact] = useState(false);
@@ -243,6 +246,19 @@ export default function Home() {
     headingStabilityRef: orientation.headingStabilityRef,
   });
 
+  // AR-PLACERINGENS stabilitet (produktkrav: kontinuerlig sensorfusion,
+  // frysning på svag signal, mjuk uttoning, mjuk korrigering) — smalare och
+  // strängare än `confidence` ovan, som styr allmän synlighet/tonläge.
+  // Denna styr istället om `smoothedGeo` nedan fryses helt och om verken
+  // ska börja tona bort efter långvarigt dåligt läge.
+  const arTracking = useArTrackingStability({
+    enabled: started,
+    gpsAccuracy: geo.accuracy,
+    headingStabilityRef: orientation.headingStabilityRef,
+    headingAccuracyDegRef: orientation.headingAccuracyDegRef,
+    orientationHasFix: orientation.hasFix,
+  });
+
   // Minimikrav enligt produktkrav: minst 15-20% synlig himmel i bild innan
   // verk visas överhuvudtaget, oavsett vad de övriga signalerna i indexet
   // ovan säger — en enstaka ljus yta (t.ex. en vit vägg) ska inte räcka.
@@ -262,15 +278,16 @@ export default function Home() {
   // 0.6 = "cautious"-tonat, 0 = dölj helt ("aim"/"hide", eller otillräcklig
   // himmelsandel). `sky.ready` väntar in det allra första samplet så verken
   // inte blixtrar till fullt synliga under den första bildrutan.
-  const globalVisibilityFactor = !mlActive
-    ? 1
-    : !sky.ready || !hasEnoughSky
-      ? 0
-      : confidence.tier === "show"
-        ? 1
-        : confidence.tier === "cautious"
-          ? 0.6
-          : 0;
+  const globalVisibilityFactor =
+    (!mlActive
+      ? 1
+      : !sky.ready || !hasEnoughSky
+        ? 0
+        : confidence.tier === "show"
+          ? 1
+          : confidence.tier === "cautious"
+            ? 0.6
+            : 0) * arTracking.fadeFactor;
 
   // ---- Verklig inomhus-/fri sikt-bedömning ----
   // Till skillnad från `mlActive`-indexet ovan (permanent avstängt, se
@@ -327,7 +344,7 @@ export default function Home() {
   // placering) svarar den här mjukt på verklig rörelse men filtrerar bort
   // det meterskaliga GPS-bruset som annars fick verken att "fladdra" i
   // AR-vyn även när användaren stod still.
-  const smoothedGeo = useSmoothedGeoPosition(geo.lat, geo.lon, geo.accuracy);
+  const smoothedGeo = useSmoothedGeoPosition(geo.lat, geo.lon, geo.accuracy, arTracking.freeze);
 
   // Avstånd (stabiliserad GPS) till samtliga verk — delas av båda
   // uppskattningarna nedan.
@@ -338,6 +355,30 @@ export default function Home() {
       return distanceMeters(stableGeo.lat as number, stableGeo.lon as number, lat, lon);
     });
   }, [activeTurbines, stableGeo.lat, stableGeo.lon]);
+
+  // Grov (avstånds-/synlighetsbaserad, ej FOV-/ocklusionsmedveten) räkning
+  // av "synliga" verk för sensordebug-panelen — exakt FOV/per-pixel-
+  // ocklusion beräknas redan inne i `ARScene.tsx`s render-loop och är inte
+  // värt att duplicera här bara för ett diagnostiskt tal.
+  const visibleTurbineCount = useMemo(() => {
+    if (!turbineDistancesM) return 0;
+    if (globalVisibilityFactor <= 0.05 || indoorsOrNoSight) return 0;
+    return turbineDistancesM.filter((d) => d <= MAX_RENDER_DISTANCE_M).length;
+  }, [turbineDistancesM, globalVisibilityFactor, indoorsOrNoSight]);
+
+  // Anledningar till att verk kan vara dolda just nu, för sensordebug-
+  // panelen — samlar ihop de olika (annars separata) döljningsmekanismerna
+  // i ett läsbart facit.
+  const debugHideReasons = useMemo(() => {
+    const reasons: string[] = [];
+    if (indoorsOrNoSight) reasons.push("Inomhus/ingen fri sikt (kamera-heuristik)");
+    if (mlActive && !hasEnoughSky) reasons.push("För lite synlig himmel i bild");
+    if (mlActive && confidence.tier === "hide") reasons.push('Outdoor Confidence Index: "hide"');
+    if (mlActive && confidence.tier === "aim") reasons.push('Outdoor Confidence Index: "aim" (rikta mot himlen)');
+    if (arTracking.freeze) reasons.push(WEAK_SIGNAL_MESSAGE);
+    if (arTracking.fadeFactor < 1) reasons.push("Tonas ut — spårning saknad för länge");
+    return reasons;
+  }, [indoorsOrNoSight, mlActive, hasEnoughSky, confidence.tier, arTracking.freeze, arTracking.fadeFactor]);
 
   // Alltid beräknad med full "ute"-nivå (confidence=1) — den manuella
   // ute/inne-dämpningen appliceras separat, EFTER GPS-jitterutjämningen
@@ -869,6 +910,13 @@ export default function Home() {
                 </button>
               </div>
             </div>
+            {ready && arTracking.weakSignalMessage && (
+              <div className="flex justify-center">
+                <span className="max-w-xs rounded-full bg-yellow-500/90 px-4 py-1.5 text-center text-xs font-medium text-[#090909] shadow-lg">
+                  ⚠️ {arTracking.weakSignalMessage}
+                </span>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               {wind.playing && (
                 <span className="flex items-center gap-1.5 rounded-full bg-[#FF8B01]/20 px-2.5 py-1 text-[11px] text-[#FFB347]">
@@ -1010,7 +1058,25 @@ export default function Home() {
           onToggleShadowFlicker={() => setShadowFlicker((v) => !v)}
           showHiddenTurbines={showHiddenTurbines}
           onToggleShowHiddenTurbines={() => setShowHiddenTurbines((v) => !v)}
+          showSensorDebug={showSensorDebug}
+          onToggleSensorDebug={() => setShowSensorDebug((v) => !v)}
           onClose={() => setShowControls(false)}
+        />
+      )}
+      {showSensorDebug && (
+        <SensorDebugPanel
+          gpsAccuracyM={geo.accuracy}
+          headingDeg={orientation.headingDegRef.current}
+          headingStability={orientation.headingStabilityRef.current}
+          headingAccuracyDeg={orientation.headingAccuracyDegRef.current}
+          pitchDeg={orientation.pitchDegRef.current}
+          horizonOffsetDeg={orientation.horizonOffsetDegRef.current}
+          arTrackingTier={arTracking.tier}
+          frozenForMs={arTracking.debug.frozenForMs}
+          visibleTurbineCount={visibleTurbineCount}
+          totalTurbineCount={activeTurbines.length}
+          hideReasons={debugHideReasons}
+          onClose={() => setShowSensorDebug(false)}
         />
       )}
     </div>
