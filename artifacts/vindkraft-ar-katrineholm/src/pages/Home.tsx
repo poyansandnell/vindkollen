@@ -19,6 +19,8 @@ import { InfoPanel } from "@/components/InfoPanel";
 import { VisualizationControls } from "@/components/VisualizationControls";
 import { SoundLevelPanel, SoundLevelBadge } from "@/components/SoundLevelPanel";
 import { NoiseImpactBadge, NoiseImpactPanel } from "@/components/NoiseImpactMonitor";
+import { LineOfSightStatus } from "@/components/LineOfSightStatus";
+import { NearestTurbineArrow } from "@/components/NearestTurbineArrow";
 import { PhotoMontageModal } from "@/components/PhotoMontageModal";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
@@ -121,12 +123,13 @@ export default function Home() {
   // läget helt manuellt — ingen bakgrundstimer skriver över användarens val.
   const [nightMode, setNightMode] = useState(() => isNightTime());
   const [shadowFlicker, setShadowFlicker] = useState(false);
-  // Default AV: detta är ett Debug-läge (se VisualizationControls.tsx) som
-  // visar skymda verksdelar (t.ex. bakom träd) som röda, streckade konturer
-  // istället för att döljas helt. Normala användare ska mötas av en
-  // realistisk vy (vita torn, ljusgrå blad, rött hinderljus) — inte röda
-  // debug-konturer — så läget måste aktiveras manuellt.
-  const [showHiddenTurbines, setShowHiddenTurbines] = useState(false);
+  // Default PÅ enligt produktkravet: skymda verksdelar (t.ex. bakom träd/
+  // byggnader) ska visas som glesa, röda halvtransparenta konturer istället
+  // för att bara försvinna helt — annars ser det ut som om ett helt verk
+  // plötsligt förs bort en bit av vägen, utan förklaring. "Realistisk vy"
+  // (döljer skymda delar helt) finns kvar som en manuell fallback i
+  // VisualizationControls.tsx för den som ändå föredrar det.
+  const [showHiddenTurbines, setShowHiddenTurbines] = useState(true);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
@@ -269,26 +272,34 @@ export default function Home() {
           ? 0.6
           : 0;
 
-  // Dölj verk + visa "Gå utomhus" antingen vid indexets "hide"-nivå (<40%)
-  // eller om himmelsandelen i bild är för låg — samma stora, prominenta
-  // overlay som tidigare, men nu även styrd av det sammanvägda indexet.
+  // ---- Verklig inomhus-/fri sikt-bedömning ----
+  // Till skillnad från `mlActive`-indexet ovan (permanent avstängt, se
+  // `sky.method`s jsdoc — dess "hide"/"aim"-nivåer kan därför ALDRIG slå
+  // till) bygger detta direkt på `sky.indoors`: den riktiga, hysteresbaserade
+  // bedömningen från den lätta kamera-heuristiken (ljusstyrka/textur/
+  // mättnad) som alltid kör, oavsett ML-status. Styr både den stora
+  // inomhus-overlayen nedan och (via `hideAll` till ARScene) ett explicit
+  // skyddsnät utöver den befintliga per-pixel-ocklusionen, så verk aldrig
+  // kan synas som om de vore fritt synliga genom en vägg/tak.
   //
   // VIKTIGT: kräver `ready` (dvs. GPS + kompass + kamera har ALLA redan fått
-  // en fix). Overlayen visades tidigare oberoende av `ready`, vilket gjorde
-  // att den kunde täcka HELA skärmen — inklusive "Hämtar GPS-position…"-
-  // spinnern och ett eventuellt GPS-felmeddelande med "Försök igen"-knapp —
-  // så fort ML-modellen hann ladda och ge en låg himmelsandel (t.ex. om
-  // telefonen hålls nedåt/inomhus bara under uppstarten, innan GPS ens
-  // hunnit svara). Användaren upplevde detta som att "allt stängs av" efter
-  // några sekunder, som om GPS:en hade kraschat — i själva verket väntade
-  // GPS:en fortfarande i bakgrunden, dold bakom den svarta overlayen. Genom
-  // att kräva `ready` får loading-/felstaten för GPS/kompass/kamera alltid
-  // synas färdigt innan denna miljö-overlay ens kan aktiveras.
-  const shouldHide = ready && mlActive && sky.ready && (confidence.tier === "hide" || !hasEnoughSky);
-  // 40-70%: be användaren rikta kameran mot himlen istället för att bara
-  // dölja tyst — en mellanliggande, mindre alarmerande banner. Samma
-  // `ready`-krav som ovan, av samma anledning.
-  const shouldAskAimAtSky = ready && mlActive && sky.ready && !shouldHide && confidence.tier === "aim";
+  // en fix) av samma anledning den gamla `shouldHide` gjorde: overlayen får
+  // aldrig täcka "Hämtar GPS-position…"-spinnern eller ett GPS-felmeddelande
+  // bara för att kameran råkar peka mot ett bord/en vägg under uppstarten.
+  const indoorsOrNoSight = ready && sky.ready && sky.indoors;
+
+  // Liten alltid-synlig statusbadge: "Fri sikt" / "Delvis skymt" / "Ingen
+  // fri sikt" — samma underliggande `sky.indoors`/`sky.skyRatio`, men med en
+  // mjukare mellanläge (skymd av t.ex. några träd, men inte "inomhus") så
+  // signalen inte bara är på/av.
+  const PARTIAL_SKY_RATIO_THRESHOLD = 0.6;
+  const lineOfSightStatus: "clear" | "partial" | "indoors" = !sky.ready
+    ? "clear"
+    : sky.indoors
+      ? "indoors"
+      : sky.skyRatio < PARTIAL_SKY_RATIO_THRESHOLD
+        ? "partial"
+        : "clear";
 
   // Om Permissions API redan känner till att platsbehörigheten är nekad
   // (t.ex. från ett tidigare besök) visar vi det direkt på startskärmen,
@@ -384,28 +395,36 @@ export default function Home() {
     return () => window.clearInterval(interval);
   }, [geo.lat, geo.lon]);
 
-  const noiseImpact = useMemo(() => {
-    const nearest = activeTurbines.reduce<{ dist: number; bearing: number } | null>((closest, t) => {
-      if (geo.lat === null || geo.lon === null) return closest;
+  // Närmaste verk (raw GPS, ej stabiliserad/utjämnad — samma precision som
+  // infraljudmonitorn tidigare räknade fram inline) — delas nu av både den
+  // monitorn och den nya "peka mot närmaste verk"-pilen, så de aldrig kan
+  // råka peka/räkna mot olika verk.
+  const nearestTurbineInfo = useMemo(() => {
+    if (geo.lat === null || geo.lon === null) return null;
+    const lat0 = geo.lat;
+    const lon0 = geo.lon;
+    return activeTurbines.reduce<{ distanceM: number; bearingDeg: number } | null>((closest, t) => {
       const { lat, lon } = swerefToWgs84(t.easting, t.northing);
-      const dist = distanceMeters(geo.lat, geo.lon, lat, lon);
-      if (!closest || dist < closest.dist) {
-        return { dist, bearing: bearingDegrees(geo.lat, geo.lon, lat, lon) };
+      const distanceM = distanceMeters(lat0, lon0, lat, lon);
+      if (!closest || distanceM < closest.distanceM) {
+        return { distanceM, bearingDeg: bearingDegrees(lat0, lon0, lat, lon) };
       }
       return closest;
     }, null);
+  }, [activeTurbines, geo.lat, geo.lon]);
 
+  const noiseImpact = useMemo(() => {
     const exposureSeconds =
       exposureStartRef.current !== null ? (exposureNowTick - exposureStartRef.current) / 1000 : 0;
 
     return estimateNoiseImpact({
       estimate: soundLevelEstimate,
-      bearingToNearestDeg: nearest?.bearing ?? null,
+      bearingToNearestDeg: nearestTurbineInfo?.bearingDeg ?? null,
       windFromDeg: windDirection.windFromDeg,
       windSpeedMs: windDirection.windSpeedMs,
       exposureSeconds,
     });
-  }, [activeTurbines, soundLevelEstimate, geo.lat, geo.lon, windDirection.windFromDeg, windDirection.windSpeedMs, exposureNowTick]);
+  }, [nearestTurbineInfo, soundLevelEstimate, windDirection.windFromDeg, windDirection.windSpeedMs, exposureNowTick]);
 
   // Uppdatera vindljudets volym/svischtakt när GPS-position eller den
   // beräknade ljudnivån ändras. Utomhusgainen räknas fram från den
@@ -630,6 +649,16 @@ export default function Home() {
               getOcclusionGrid={sky.getOcclusionGrid}
               showHiddenTurbines={showHiddenTurbines}
               globalVisibilityFactor={globalVisibilityFactor}
+              hideAll={indoorsOrNoSight}
+            />
+          )}
+
+          {ready && (
+            <NearestTurbineArrow
+              headingDegRef={orientation.headingDegRef}
+              bearingDeg={nearestTurbineInfo?.bearingDeg ?? null}
+              distanceM={nearestTurbineInfo?.distanceM ?? null}
+              indoors={indoorsOrNoSight}
             />
           )}
 
@@ -640,12 +669,7 @@ export default function Home() {
             <div className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-b from-[#0a1030]/55 via-[#0a1030]/35 to-[#0a1030]/60" />
           )}
 
-          {/* Väntar-overlayen döljs om kameran istället bedöms visa en
-              inomhusmiljö (se "Gå utomhus"-overlayen nedan) — annars
-              skulle användaren se en evig snurrande laddningsindikator
-              istället för en tydlig förklaring till varför AR-vyn inte
-              startar. */}
-          {!ready && !shouldHide && (
+          {!ready && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/50 px-8 text-center">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#FF8B01] border-t-transparent" />
               <p className="text-sm text-white/90">
@@ -782,43 +806,23 @@ export default function Home() {
             </div>
           )}
 
-          {/* "Gå utomhus"-overlay: visas bara EFTER att `ready` är sant
-              (dvs. GPS/kompass/kamera har redan fått fix) — se `shouldHide`s
-              jsdoc ovan för varför. Så fort kamerabilden tolkas som en
-              inomhusmiljö tonas turbinerna ändå bort i AR-vyn (se
-              ARScene/`isPointSky`), så detta ger en tydlig, stor förklaring
-              istället för en till synes tom/livlös vy. Ljudet styrs numera
-              separat av den explicita ute/inne-väljaren, inte av detta
-              automatiska kameraläge. Ligger på ett högre z-index än både
-              topp- och bottenraden (z-20) så att meddelandet ALDRIG hamnar
-              bakom knappar/paneler. */}
-          {started && shouldHide && (
+          {/* Inomhus-/fri sikt-overlay: visas bara EFTER att `ready` är sant
+              (dvs. GPS/kompass/kamera har redan fått fix) — se
+              `indoorsOrNoSight`s jsdoc ovan för varför. Turbinerna är redan
+              garanterat osynliga (se `hideAll` till ARScene ovan), så detta
+              ger en tydlig, stor förklaring istället för en till synes tom/
+              livlös vy — och gör explicit att ljudet fortfarande fungerar.
+              Ligger på ett högre z-index än både topp- och bottenraden
+              (z-20) så att meddelandet ALDRIG hamnar bakom knappar/paneler. */}
+          {started && indoorsOrNoSight && (
             <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/85 px-8 text-center">
               <span className="animate-pulse text-6xl">🏠➡️🌤️</span>
-              <p className="text-xl font-bold text-white">Gå utomhus för att se vindkraftverken</p>
+              <p className="text-xl font-bold text-white">
+                Du verkar vara inomhus eller saknar fri sikt mot vindkraftverken
+              </p>
               <p className="max-w-xs text-sm text-white/80">
-                Kameran verkar just nu inte ha fri sikt mot himlen. AR-vyn visas bara utomhus, med fri sikt över
-                horisonten.
-              </p>
-            </div>
-          )}
-
-          {/* "Sikta mot himlen"-banner: index (40-69%) är för lågt för att
-              visa verk säkert, men inte så lågt att den stora "Gå
-              utomhus"-overlayen ovan behövs — mindre alarmerande, ber bara
-              användaren rikta kameran mot en öppnare del av himlen. Ligger
-              på samma z-index som "Gå utomhus" eftersom de aldrig visas
-              samtidigt (`shouldHide`/`shouldAskAimAtSky` är ömsesidigt
-              uteslutande). */}
-          {started && shouldAskAimAtSky && (
-            <div className="pointer-events-none absolute inset-x-0 top-1/3 z-40 flex flex-col items-center gap-3 px-8 text-center">
-              <span className="text-5xl">📱↗️☁️</span>
-              <p className="rounded-2xl bg-black/70 px-4 py-2 text-base font-semibold text-white">
-                Rikta kameran mot öppen himmel
-              </p>
-              <p className="max-w-xs text-xs text-white/70">
-                Osäker sikt just nu ({Math.round(confidence.score)}% tillförlitlighet) — vindkraftverken visas
-                igen så fort himlen syns tydligare.
+                Vindljudet visas fortfarande baserat på din position. Flytta dig till ett fönster eller gå
+                utomhus för att se dem i AR.
               </p>
             </div>
           )}
@@ -849,6 +853,7 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <LineOfSightStatus status={lineOfSightStatus} />
                 <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
                 <NoiseImpactBadge
                   result={noiseImpact}

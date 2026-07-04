@@ -25,6 +25,16 @@ export interface DeviceOrientationApi {
   /** Muteras varje sensoravläsning — kamerans quaternion kan kopieras direkt från denna ref utan re-render. */
   quaternionRef: React.MutableRefObject<THREE.Quaternion>;
   /**
+   * Utjämnad kompassriktning i grader (0 = norr, medurs), muterad varje
+   * sensoravläsning — samma tal som ligger till grund för `quaternionRef`.
+   * Exponerad separat (utöver quaternionen) så en konsument som bara
+   * behöver den horisontella girriktningen (t.ex. "peka mot närmaste verk"-
+   * pilen) slipper räkna ut den ur en full 3D-rotation. `null` innan första
+   * avläsningen. Stabil ref-identitet, säker att läsa i en poll-loop utan
+   * re-render.
+   */
+  headingDegRef: React.MutableRefObject<number | null>;
+  /**
    * 0..1 mått på hur stabil kompassriktningen (gir) varit över de senaste
    * dryga sekunden — 1 = i princip stillastående, 0 = kraftigt/oregelbundet
    * svängande. Används som en av flera svaga signaler i "Outdoor Confidence
@@ -177,6 +187,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   const [error, setError] = useState<string | null>(null);
 
   const headingRef = useRef<number | null>(null);
+  const headingDegRef = useRef<number | null>(null);
   const betaRef = useRef<number | null>(null);
   const gammaRef = useRef<number | null>(null);
   const betaOffsetRef = useRef(0);
@@ -354,6 +365,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     const adjustedBeta = smoothedBeta - betaOffsetRef.current;
 
     computeDeviceQuaternion(alphaForQuaternion, adjustedBeta, smoothedGamma, screenAngleRef.current, quaternionRef.current);
+    headingDegRef.current = smoothedHeading;
 
     setError(null);
     if (!hasFixRef.current) {
@@ -439,6 +451,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     requestPermission,
     calibrateHorizon,
     quaternionRef,
+    headingDegRef,
     headingStabilityRef,
     calibrationPhase,
     calibrationProgress,

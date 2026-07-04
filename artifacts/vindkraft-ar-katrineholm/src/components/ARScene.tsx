@@ -52,6 +52,17 @@ interface ARSceneProps {
    * himmelsandel i bild). Default 1 om utelämnad (bakåtkompatibelt).
    */
   globalVisibilityFactor?: number;
+  /**
+   * Tvingar ALLA verk (kropp, etiketter, ljus, glöd, skugga) helt osynliga,
+   * oavsett `globalVisibilityFactor`/ocklusionsrutnätet — används av
+   * `Home.tsx` när kamerabilden bedöms vara ett rent inomhus-/väggläge
+   * (`sky.indoors`), som ett explicit skyddsnät utöver den per-pixel-
+   * baserade ocklusionen (som ändå brukar döma nästan hela bilden som
+   * "ej himmel" inomhus, men aldrig ska kunna missa ett verk genom en
+   * dörröppning/fönster och rendera det som om det vore fritt synligt).
+   * Default `false` (bakåtkompatibelt).
+   */
+  hideAll?: boolean;
 }
 
 const DEFAULT_IS_POINT_SKY = () => true;
@@ -295,6 +306,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     getOcclusionGrid,
     showHiddenTurbines,
     globalVisibilityFactor,
+    hideAll,
   },
   forwardedRef,
 ) {
@@ -318,6 +330,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     shadowFlicker,
     showHiddenTurbines: showHiddenTurbines ?? false,
     globalVisibilityFactor: globalVisibilityFactor ?? 1,
+    hideAll: hideAll ?? false,
   });
   const skyRef = useRef({
     isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
@@ -342,6 +355,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     shadowFlicker,
     showHiddenTurbines: showHiddenTurbines ?? false,
     globalVisibilityFactor: globalVisibilityFactor ?? 1,
+    hideAll: hideAll ?? false,
   };
   skyRef.current = {
     isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
@@ -716,7 +730,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // `globalVisibilityFactor` (Outdoor Confidence Index-tröskeln) verkar
       // som en global gate — 0 döljer alla verk helt oavsett ocklusion,
       // ~0.6 tonar ned dem för "cautious"-läget.
-      const globalFactor = modeRef.current.globalVisibilityFactor;
+      const globalFactor = modeRef.current.hideAll ? 0 : modeRef.current.globalVisibilityFactor;
       const skyFactor = obj.skyFactor * globalFactor;
       const bodyOpacity = obj.baseOpacity * globalFactor;
       for (const mat of obj.materials) {
@@ -905,7 +919,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         obj.light.visible = blinkOn;
         obj.glow.visible = blinkOn;
 
-        const shadowSkyFactor = obj.skyFactor * modeRef.current.globalVisibilityFactor;
+        const shadowSkyFactor = obj.skyFactor * (modeRef.current.hideAll ? 0 : modeRef.current.globalVisibilityFactor);
         if (flickerActive && obj.shadow.visible) {
           const flicker = 0.55 + 0.45 * Math.cos(obj.bladesGroup.rotation.z * 3);
           obj.shadowMaterial.opacity = obj.shadowBaseOpacity * shadowSkyFactor * flicker;

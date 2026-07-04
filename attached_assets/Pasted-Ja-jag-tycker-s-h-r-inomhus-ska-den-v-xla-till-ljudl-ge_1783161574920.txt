@@ -1,0 +1,42 @@
+Ja, jag tycker så här: inomhus ska den växla till “ljudläge / riktläge”. Då hör man verken, men appen ska tydligt säga att de inte syns eftersom användaren saknar fri sikt.
+
+Här är text till Replit:
+
+Förbättra AR-läget för inomhus, moln och skymda objekt.
+1. Inomhus / ingen fri sikt
+Om kameran ser väggar, tak, dörrar, möbler eller annan inomhusmiljö ska vindkraftverken inte renderas framför dessa objekt som om de vore synliga.
+Visa istället ett tydligt meddelande:
+"Du verkar vara inomhus eller saknar fri sikt mot vindkraftverken.
+Vindljudet visas fortfarande, men verken syns först när du har fri sikt mot horisonten.
+Flytta dig till ett fönster eller gå utomhus."
+Ljud, dBA och infraljud ska fortfarande fungera baserat på användarens position.
+2. Moln ska inte skymma vindkraftverken
+Moln på himlen ska inte räknas som hinder.
+Vindkraftverken ska alltid renderas framför moln och himmel.
+Moln får alltså inte göra att verken försvinner eller kapas.
+3. Riktig skymning av föremål
+Om ett riktigt objekt framför användaren skymmer sikten, exempelvis byggnad, träd, vägg, tak, möbel eller dörrkarm, ska vindkraftverket döljas bakom detta objekt.
+Den del som är skymd ska inte visas som vanligt vindkraftverk.
+Om tekniskt möjligt:
+- Synlig del av verket visas i vanlig realistisk färg.
+- Skymd del visas som röd transparent siluett/kontur.
+- Om detta inte fungerar stabilt: dölj den skymda delen helt och visa bara en varning.
+4. AR-pil mot närmaste vindkraftverk
+Lägg till en AR-pil/indikator som alltid pekar mot närmaste vindkraftverk även när det inte syns i bild.
+Pilen ska ligga i skärmens kant om verket är utanför kameravyn.
+Text vid pilen:
+"Närmaste verk"
+"X km bort"
+"Vrid mobilen åt detta håll"
+Om användaren är inomhus ska pilen fortfarande visas, men med text:
+"Vindkraftverket ligger åt detta håll – gå utomhus eller mot fri sikt för att se det."
+5. Statusmeddelande för sikt
+Lägg till en liten statusruta:
+- "Fri sikt" när himmel/horisont är synlig.
+- "Delvis skymt" när träd/byggnader blockerar.
+- "Ingen fri sikt" när användaren är inomhus eller kameran bara ser vägg/tak/golv.
+6. Viktigt beteende
+Appen får aldrig visa vindkraftverk genom väggar inomhus som om de faktiskt vore synliga.
+Däremot ska ljud, riktning, avstånd och pil fortfarande fungera så användaren förstår var verken finns och hur de skulle påverka platsen.
+
+Det här känns som bästa lösningen: utomhus = visuell AR, inomhus = ljud + riktning + pedagogisk förklaring.

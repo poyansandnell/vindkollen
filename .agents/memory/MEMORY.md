@@ -42,3 +42,4 @@
 - [Per-render scoring crash + committed-snapshot debounce](per-render-scoring-crash-and-recompute-debounce.md) — expensive per-marker scoring on every pan/zoom re-render crashes; memoize on explicit inputs + debounce a "committed" snapshot the scorer reads.
 - [Tap-menu vs drag-move gesture conflict](tap-menu-vs-drag-move-gesture-conflict.md) — drag-to-move markers fights pan/pinch/double-tap map gestures; replace with tap→menu→explicit move-mode→commit-on-next-tap instead.
 - [Boundary polygon live-edit indirection](boundary-polygon-live-edit-indirection.md) — keep live-edit/persisted/debug-overlay polygon state separate; a getter-based scorer needs an explicit version-counter dependency to invalidate memoized results.
+- [Overlay z-index vs persistent indicator](overlay-zindex-vs-persistent-indicator.md) — a full-screen status overlay can silently hide an always-should-be-visible arrow/badge unless its z-index is explicitly higher than the overlay's.
