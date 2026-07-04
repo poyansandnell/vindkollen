@@ -168,19 +168,19 @@ export function VisualizationControls({
           </div>
         )}
 
-        <h2 className="mb-3 text-base font-semibold text-[#FFB347]">👻 Visa dolda verk</h2>
+        <h2 className="mb-3 text-base font-semibold text-[#FFB347]">🛠️ Debug-läge</h2>
         <div className="mb-1 grid grid-cols-2 gap-2">
-          <SegButton active={showHiddenTurbines} onClick={() => !showHiddenTurbines && onToggleShowHiddenTurbines()}>
-            👻 Visa dolda PÅ
-          </SegButton>
           <SegButton active={!showHiddenTurbines} onClick={() => showHiddenTurbines && onToggleShowHiddenTurbines()}>
             🎯 Realistisk vy
+          </SegButton>
+          <SegButton active={showHiddenTurbines} onClick={() => !showHiddenTurbines && onToggleShowHiddenTurbines()}>
+            👻 Debug PÅ
           </SegButton>
         </div>
         <p className="-mt-2 mb-4 text-[11px] leading-relaxed text-white/50">
           {showHiddenTurbines
-            ? "Standardläge: skymda delar av verken (t.ex. bakom träd) visas som glesa, röda streck istället för att döljas helt."
-            : "Verk döljs helt bakom det som faktiskt skymmer dem (träd, byggnader, väggar) — kan göra verk nära skog svåra att hitta."}
+            ? "Debug-läge: skymda delar av verken (t.ex. bakom träd) visas som glesa, röda streck istället för att döljas helt."
+            : "Standardläge: verk visas realistiskt (vita torn, ljusgrå blad, rött hinderljus). Skymda delar döljs helt bakom det som faktiskt skymmer dem."}
         </p>
 
         <h2 className="mb-3 text-base font-semibold text-[#FFB347]">Nattläge</h2>

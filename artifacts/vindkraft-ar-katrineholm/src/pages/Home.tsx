@@ -121,11 +121,12 @@ export default function Home() {
   // läget helt manuellt — ingen bakgrundstimer skriver över användarens val.
   const [nightMode, setNightMode] = useState(() => isNightTime());
   const [shadowFlicker, setShadowFlicker] = useState(false);
-  // Default PÅ: verk skymda av t.ex. träd visas som en svag röd, streckad
-  // kontur istället för att vara helt osynliga (se ARScene.tsx). Annars är
-  // det i praktiken omöjligt att hitta ett verk i skogsnära vyer eftersom
-  // ingenting alls syns där det är skymt.
-  const [showHiddenTurbines, setShowHiddenTurbines] = useState(true);
+  // Default AV: detta är ett Debug-läge (se VisualizationControls.tsx) som
+  // visar skymda verksdelar (t.ex. bakom träd) som röda, streckade konturer
+  // istället för att döljas helt. Normala användare ska mötas av en
+  // realistisk vy (vita torn, ljusgrå blad, rött hinderljus) — inte röda
+  // debug-konturer — så läget måste aktiveras manuellt.
+  const [showHiddenTurbines, setShowHiddenTurbines] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { PlacementMap } from "@/components/PlacementMap";
 import {
@@ -13,15 +13,19 @@ import { ERICSBERG_AREA_DISCLAIMER } from "@/lib/ericsbergArea";
 const SAVED_KEY = "vindkraft-ar-katrineholm:savedPlacements";
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
 
+// De 8 verkliga planerade vindkraftverk (från src/lib/turbines.ts, SWEREF99 TM
+// konverterat till WGS84) som ligger NÄRMAST Katrineholms centrum. Kartverktyget
+// utgår alltså från den verkliga planen — användaren experimenterar därifrån,
+// inte från en godtycklig startposition. Se replit.md / turbines.ts för källan.
 const DEFAULT_TURBINES: PlacedTurbine[] = [
-  { id: "p1", lat: 58.893, lon: 16.045 },
-  { id: "p2", lat: 58.891, lon: 16.075 },
-  { id: "p3", lat: 58.883, lon: 16.035 },
-  { id: "p4", lat: 58.883, lon: 16.06 },
-  { id: "p5", lat: 58.883, lon: 16.085 },
-  { id: "p6", lat: 58.874, lon: 16.04 },
-  { id: "p7", lat: 58.873, lon: 16.065 },
-  { id: "p8", lat: 58.874, lon: 16.078 },
+  { id: "t25", lat: 58.99268, lon: 16.26596 }, // V5-2, ~3.4 km från Katrineholm
+  { id: "t24", lat: 58.99401, lon: 16.28032 }, // V5-1, ~4.2 km
+  { id: "t29", lat: 58.97705, lon: 16.28416 }, // V5-6, ~4.9 km
+  { id: "t26", lat: 58.99142, lon: 16.29339 }, // V5-3, ~5.0 km
+  { id: "t27", lat: 58.98694, lon: 16.30302 }, // V5-4, ~5.6 km
+  { id: "t28", lat: 58.97971, lon: 16.30244 }, // V5-5, ~5.8 km
+  { id: "t14", lat: 58.93001, lon: 16.23653 }, // V3-1, ~7.5 km
+  { id: "t15", lat: 58.92455, lon: 16.21137 }, // V3-2, ~7.9 km
 ];
 
 interface SavedPlacement {
@@ -43,36 +47,87 @@ function loadSaved(): SavedPlacement[] {
 
 let nextTurbineSeq = 1;
 
+/**
+ * Hur länge "Beräknar påverkan…" visas innan hushåll/buller/skuggor/poäng
+ * och kartans färger uppdateras (0,5–1s enligt spec). Den tunga
+ * `scorePlacement()`-omräkningen (hushåll, avstånd, spacing — O(n²)-ish för
+ * många verk) körs alltså inte synkront på varje flytt/tillägg/borttagning
+ * längre; den skjuts till efter denna fördröjning, vilket också var en del
+ * av krascharna vid många objekt (se PlacementMap.tsx för motsvarande fix
+ * av per-render `scorePlacement([t])`-anrop).
+ */
+const RECOMPUTE_DELAY_MS = 700;
+
 export default function PlaceTurbines() {
   const [, navigate] = useLocation();
   const [turbines, setTurbines] = useState<PlacedTurbine[]>(DEFAULT_TURBINES);
+  const [committedTurbines, setCommittedTurbines] = useState<PlacedTurbine[]>(DEFAULT_TURBINES);
+  const [calculating, setCalculating] = useState(false);
   const [saved, setSaved] = useState<SavedPlacement[]>([]);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [showEstateBoundary, setShowEstateBoundary] = useState(false);
 
+  const turbinesRef = useRef(turbines);
+  turbinesRef.current = turbines;
+  const commitTimerRef = useRef<number | null>(null);
+
   useEffect(() => {
     setSaved(loadSaved());
   }, []);
 
-  const result = useMemo(() => scorePlacement(turbines), [turbines]);
+  useEffect(() => () => {
+    if (commitTimerRef.current) window.clearTimeout(commitTimerRef.current);
+  }, []);
+
+  const scheduleRecompute = useCallback(() => {
+    setCalculating(true);
+    if (commitTimerRef.current) window.clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = window.setTimeout(() => {
+      setCommittedTurbines(turbinesRef.current);
+      setCalculating(false);
+    }, RECOMPUTE_DELAY_MS);
+  }, []);
+
+  // De tunga/synliga effekterna (hushållsantal, buller/skuggor, totalpoäng,
+  // kartfärger) drivs av `committedTurbines`, som bara hoppar fram efter
+  // `scheduleRecompute`s fördröjning — detta ger den efterfrågade "Beräknar
+  // påverkan…"-känslan istället för att allt smäller om direkt vid varje
+  // flytt. Verkens faktiska position på kartan (`turbines`) uppdateras dock
+  // omedelbart så flytt-animationen känns direkt och responsiv.
+  const result = useMemo(() => scorePlacement(committedTurbines), [committedTurbines]);
   const colors = PLACEMENT_LEVEL_COLORS[result.level];
 
-  const handleMove = useCallback((id: string, lat: number, lon: number) => {
-    setTurbines((prev) => prev.map((t) => (t.id === id ? { ...t, lat, lon } : t)));
-  }, []);
+  const handleMove = useCallback(
+    (id: string, lat: number, lon: number) => {
+      setTurbines((prev) => prev.map((t) => (t.id === id ? { ...t, lat, lon } : t)));
+      scheduleRecompute();
+    },
+    [scheduleRecompute],
+  );
 
-  const handleAdd = useCallback((lat: number, lon: number) => {
-    setTurbines((prev) => [...prev, { id: `custom-${Date.now()}-${nextTurbineSeq++}`, lat, lon }]);
-  }, []);
+  const handleAdd = useCallback(
+    (lat: number, lon: number) => {
+      setTurbines((prev) => [...prev, { id: `custom-${Date.now()}-${nextTurbineSeq++}`, lat, lon }]);
+      scheduleRecompute();
+    },
+    [scheduleRecompute],
+  );
 
-  const handleRemove = useCallback((id: string) => {
-    setTurbines((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+  const handleRemove = useCallback(
+    (id: string) => {
+      setTurbines((prev) => prev.filter((t) => t.id !== id));
+      scheduleRecompute();
+    },
+    [scheduleRecompute],
+  );
 
   function handleReset() {
     setTurbines(DEFAULT_TURBINES);
+    setCommittedTurbines(DEFAULT_TURBINES);
+    setCalculating(false);
+    if (commitTimerRef.current) window.clearTimeout(commitTimerRef.current);
   }
 
   function handleSave() {
@@ -111,7 +166,9 @@ export default function PlaceTurbines() {
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <div>
           <p className="text-xs font-semibold tracking-wide text-[#FFB347]">PLACERA VINDKRAFTVERKEN SJÄLV</p>
-          <p className="text-sm text-white/70">Ericsbergs marker · klicka för att placera, dra för att flytta</p>
+          <p className="text-sm text-white/70">
+            Ericsbergs marker · klicka för att placera · tryck på ett verk för att flytta/ta bort
+          </p>
         </div>
         <button
           onClick={() => navigate("/")}
@@ -136,12 +193,22 @@ export default function PlaceTurbines() {
       <div className="relative flex-1 overflow-hidden p-3">
         <PlacementMap
           turbines={turbines}
+          colorTurbines={committedTurbines}
           onMove={handleMove}
           onAdd={handleAdd}
           onRemove={handleRemove}
           outsideBoundaryIds={result.outsideBoundaryIds}
           showEstateBoundary={showEstateBoundary}
         />
+
+        {calculating && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+            <div className="flex items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-xs font-medium text-white shadow-lg">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              Beräknar påverkan…
+            </div>
+          </div>
+        )}
       </div>
 
       {result.playfulWarning && (

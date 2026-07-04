@@ -1,0 +1,164 @@
+Jag är helt med. Jag tror faktiskt detta blir betydligt bättre ur användarsynpunkt. Jag skulle skicka följande till Replit:
+
+⸻
+
+Förbättringar av AR-vyn och kartverktyget
+
+Appen fungerar nu mycket bättre, men vi vill göra några förbättringar för att upplevelsen ska kännas mer naturlig och stabil.
+
+⸻
+
+1. Vindkraftverken ska visas med riktiga färger
+
+Just nu visas vindkraftverken som helt röda.
+
+Det fungerar bra som debug-läge, men i den vanliga AR-vyn ska de istället visas realistiskt.
+
+Önskat beteende
+
+Visa vindkraftverken med:
+
+* vita torn
+* ljusgrå rotorblad
+* rött hinderljus på toppen
+* realistiska skuggor
+* korrekt ljussättning från den virtuella solen
+
+Endast om användaren aktiverar ett särskilt Debug-läge ska modellerna visas i rött eller med hjälplinjer.
+
+Normal användare ska se dem precis som riktiga vindkraftverk.
+
+⸻
+
+2. Kartan ska starta mer utzoomad
+
+När användaren öppnar:
+
+Placera vindkraftverken själv
+
+ska kartan redan från början visa:
+
+* Katrineholm
+* Ericsbergs marker
+* Forssjö
+* Björkvik
+* de första 8 planerade vindkraftverken
+
+Användaren ska direkt förstå hur nära Katrineholm de ligger.
+
+Vi vill alltså ha en vy där hela området syns från start, ungefär som en översiktskarta.
+
+⸻
+
+3. Placera de första 8 verken på sina verkliga positioner
+
+När kartan öppnas ska de åtta vindkraftverk som ligger närmast Katrineholm redan vara placerade på sina faktiska planerade koordinater.
+
+Användaren ska alltså direkt kunna se:
+
+* var de planeras
+* hur nära tätorten de ligger
+* vilka områden som påverkas
+
+Det ska kännas som att man utgår från den verkliga planen och sedan experimenterar därifrån.
+
+⸻
+
+4. Flytta vindkraftverk på ett enklare sätt
+
+Nuvarande lösning är svår.
+
+När man försöker dra ett vindkraftverk händer ofta något av följande:
+
+* kartan flyttas
+* kartan zoomar
+* flera verk markeras
+* det är svårt att träffa rätt
+
+Det gör upplevelsen frustrerande.
+
+Ny lösning
+
+När användaren trycker på ett vindkraftverk ska en liten meny visas.
+
+Exempel:
+
+Vindkraftverk V3
+
+* Flytta
+* Ta bort
+* Information
+* Avbryt
+
+Om användaren väljer:
+
+Flytta
+
+ska kartan gå in i ett särskilt flyttläge.
+
+Visa då överst:
+
+Tryck på den nya platsen där vindkraftverket ska stå.
+
+När användaren trycker på kartan:
+
+* en markör visas
+* en streckad pil eller en mjuk animation visar hur verket flyttas från sin gamla position till den nya
+* därefter räknas påverkan om automatiskt
+
+Det blir mycket tydligare än att försöka dra objekt direkt.
+
+⸻
+
+5. Kartan ska vara lätt att panorera och zooma
+
+När inget vindkraftverk är markerat ska kartan fungera precis som Google Maps.
+
+* dra = panorera
+* nyp = zooma
+* dubbeltryck = zooma in
+
+Först när användaren aktivt valt Flytta ska nästa tryck på kartan användas för att flytta ett vindkraftverk.
+
+Detta minskar risken för feltryck kraftigt.
+
+⸻
+
+6. Åtgärda krascher vid zoom
+
+Det verkar finnas ett fel där kartan ibland kraschar när man zoomar eller panorerar samtidigt som många objekt finns på skärmen.
+
+Kontrollera:
+
+* rendering av polygoner
+* rendering av markörer
+* uppdatering av påverkningszoner
+* omberäkning av hushåll
+
+Tunga beräkningar ska köras asynkront så att kartan fortsätter vara responsiv.
+
+⸻
+
+7. Smidigare omräkning
+
+När ett vindkraftverk flyttas ska påverkan uppdateras mjukt.
+
+Visa exempelvis:
+
+Beräknar påverkan…
+
+(0,5–1 sekund)
+
+Därefter uppdateras:
+
+* antal berörda hushåll
+* buller
+* skuggor
+* totalpoäng
+* kartans färger
+
+med en mjuk animering.
+
+⸻
+
+Jag tror faktiskt att detta kommer att få kartverktyget att kännas betydligt mer professionellt och intuitivt. Att använda ett “välj → flytta → klicka på ny plats”-flöde är också ett mönster som många användare känner igen från GIS- och kartapplikationer, och det minskar risken för feltryck jämfört med att försöka dra objekt direkt på en karta.
