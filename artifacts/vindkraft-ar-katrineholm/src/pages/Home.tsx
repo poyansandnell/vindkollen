@@ -207,6 +207,23 @@ export default function Home() {
   // sant — så användaren vet att precisionen fortfarande förbättras utan
   // att AR-vyn för den skull döljs eller fördröjs.
   const stillCalibrating = ready && orientation.hasFix && !orientation.hasSettled;
+
+  // Juli 2026-fix: "AR-sessionen" (kamerabakgrundens turbin-overlay, HUD-
+  // topp-/bottenraden, badges, banderoller och pilen) fick tidigare visas
+  // SAMTIDIGT som `LoadingSequence`s laddnings-/kalibreringsskärm —
+  // rapporterad bugg: allt "blöder igenom" bakom/ovanpå kalibreringsdialogen
+  // vid appstart. Orsaken var att `ready` (GPS+kompass+kamera-fix) och
+  // `LoadingSequence`s EGEN, frikopplade tidslinje (kalibrering →
+  // nedräkning → checklista) körs parallellt — `ready` kan alltså bli sant
+  // innan laddningssekvensen visuellt är klar. Flera av dessa element
+  // ligger dessutom på samma eller högre z-index än `LoadingSequence`
+  // (topp-/bottenrad z-45, pilen z-50, inomhus-overlayen z-40 men SENARE i
+  // DOM-ordningen), så de facto ritades de ovanpå kalibreringsskärmen
+  // istället för att döljas bakom den. Genom att kräva BÅDA `ready` OCH att
+  // laddningssekvensen redan stängts (`!showLoadingSequence`) garanteras
+  // steg-för-steg-flödet produktkravet beskriver: Laddning → GPS →
+  // Kompasskalibrering → ARSession → Placera verk → Visa HUD → Klar.
+  const arSessionVisible = ready && !showLoadingSequence;
   const wind = useWindSound();
   // Kamerabaserad himmel/inomhus-heuristik (se `useSkyDetection`s jsdoc för
   // begränsningar) — styr både AR-verkens synlighet (via `isPointSky`,
@@ -654,7 +671,7 @@ export default function Home() {
 
           <CameraBackground stream={camera.stream} videoRef={videoElRef} />
 
-          {ready && (
+          {arSessionVisible && (
             <ARScene
               ref={arSceneRef}
               userLat={smoothedGeo.lat ?? geo.lat!}
@@ -674,7 +691,7 @@ export default function Home() {
             />
           )}
 
-          {ready && (
+          {arSessionVisible && (
             <NearestTurbineArrow
               headingDegRef={orientation.headingDegRef}
               bearingDeg={nearestTurbineInfo?.bearingDeg ?? null}
@@ -687,7 +704,7 @@ export default function Home() {
           {/* Dagsläge stänger av mörkläggningen helt, oavsett vilket
               visualiseringsläge (t.ex. "Kväll") som är valt — bara det
               manuella Nattläge-valet styr detta filter. */}
-          {ready && nightMode && (
+          {arSessionVisible && nightMode && (
             <div className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-b from-[#0a1030]/55 via-[#0a1030]/35 to-[#0a1030]/60" />
           )}
 
@@ -828,7 +845,7 @@ export default function Home() {
               livlös vy — och gör explicit att ljudet fortfarande fungerar.
               Ligger på ett högre z-index än både topp- och bottenraden
               (z-20) så att meddelandet ALDRIG hamnar bakom knappar/paneler. */}
-          {started && indoorsOrNoSight && (
+          {arSessionVisible && indoorsOrNoSight && (
             <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/85 px-8 text-center">
               <span className="animate-pulse text-6xl">🏠➡️🌤️</span>
               <p className="text-xl font-bold text-white">
@@ -841,7 +858,7 @@ export default function Home() {
             </div>
           )}
 
-          {ready && calibrated && (
+          {arSessionVisible && calibrated && (
             <div className="pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center">
               <span className="rounded-full bg-[#FF8B01]/90 px-4 py-1.5 text-xs font-medium text-[#090909] shadow-lg">
                 Horisont kalibrerad!
@@ -849,7 +866,7 @@ export default function Home() {
             </div>
           )}
 
-          {ready && stillCalibrating && (
+          {arSessionVisible && stillCalibrating && (
             <div className="pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center px-6">
               <span className="max-w-xs rounded-full bg-yellow-500/90 px-4 py-1.5 text-center text-xs font-medium text-[#090909] shadow-lg">
                 Kalibrerar kompass i bakgrunden – fortsätt röra telefonen långsamt för bättre precision.
@@ -860,7 +877,12 @@ export default function Home() {
           {/* Top bar — z-45: MÅSTE ligga ovanför inomhus-/fri sikt-overlayen
               (z-40, se nedan) annars visas den "framför" (ovanpå, döljande)
               statusbadgarna precis som produktkravet beskriver för
-              knapparna. Ligger fortfarande under pilen/målbekräftelsen (z-50). */}
+              knapparna. Ligger fortfarande under pilen/målbekräftelsen (z-50).
+              Juli 2026-fix: gated bakom `arSessionVisible` istället för att
+              vara helt ovillkorad — annars hann HUD:en (badges, knappar) med
+              tid ritas ovanpå `LoadingSequence`s laddnings-/kalibrerings-
+              skärm (se `arSessionVisible`s jsdoc ovan). */}
+          {arSessionVisible && (
           <div className="absolute inset-x-0 top-0 z-[45] flex flex-col gap-2 bg-gradient-to-b from-black/70 to-transparent px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
             <div className="flex items-start justify-between gap-2">
               <div>
@@ -937,8 +959,9 @@ export default function Home() {
               </button>
             </div>
           </div>
+          )}
 
-          {ready && photoError && (
+          {arSessionVisible && photoError && (
             <div className="pointer-events-none absolute inset-x-0 top-[7.5rem] z-30 flex justify-center px-4">
               <span className="rounded-full bg-red-500/20 px-4 py-1.5 text-xs text-red-200 shadow-lg">{photoError}</span>
             </div>
@@ -948,7 +971,11 @@ export default function Home() {
               får ALDRIG hamna bakom (visuellt dolda av) inomhus-overlayen
               (z-40). Dessa knappar ("Jag vill skriva på", "Fotomontage",
               "Visa karta", "Om projektet", "Placera vindkraftverken själv")
-              måste alltid synas och gå att trycka på. */}
+              måste alltid synas och gå att trycka på.
+              Juli 2026-fix: precis som topp-baren, gated bakom
+              `arSessionVisible` för att inte blöda igenom bakom
+              `LoadingSequence`. */}
+          {arSessionVisible && (
           <div className="absolute inset-x-0 bottom-0 z-[45] flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-10">
             {ready && showSoundLevel && (
               <SoundLevelPanel
@@ -1003,6 +1030,7 @@ export default function Home() {
               </button>
             )}
           </div>
+          )}
         </>
       )}
 
