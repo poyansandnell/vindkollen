@@ -12,6 +12,7 @@ import {
   HOUSEHOLD_CLUSTERS,
   KATRINEHOLM_CENTER,
   KATRINEHOLM_URBAN_RADIUS_M,
+  KOMMUN_POPULATION,
   POSITIVE_ZONES,
   SENSITIVE_ZONES,
   distanceToZoneEdgeM,
@@ -41,7 +42,24 @@ export interface PlacementScoreResult {
   /** 0-100, klipps även om delfaktorerna summerar till mer/mindre. */
   totalScore: number;
   level: PlacementLevel;
+  /** Avståndsviktad summa (över alla hushållskluster) av `households * kombineradPåverkanFraktion`. */
   householdsAffected: number;
+  /** `householdsAffected * KOMMUN_POPULATION.personsPerHousehold`, avrundat. */
+  inhabitantsAffected: number;
+  /**
+   * Viktat medelavstånd (viktat med `households * kombineradPåverkanFraktion` per
+   * kluster) till NÄRMASTE verk, bland de kluster som faktiskt är påverkade.
+   * `null` om ingen placering finns eller inget kluster har någon påverkan.
+   */
+  avgNearestHouseholdDistanceM: number | null;
+  /**
+   * 0-100: viktat medelvärde av kombinerad påverkansfraktion (se
+   * `distanceImpactFraction`/`combinedImpactFraction`) över SAMTLIGA
+   * hushållskluster, viktat med antal hushåll — dvs. hur stor andel av
+   * kommunens hushåll som (avståndsviktat) berörs. Detta är det tydliga,
+   * användarvända "Påverkansindex" som alltid visas i UI:t.
+   */
+  impactIndex: number;
   nearestHouseholdDistanceM: number | null;
   nearestHouseholdName: string | null;
   nearestUrbanDistanceM: number | null;
@@ -93,10 +111,26 @@ export interface LayerCounts {
   positiveZones: number;
 }
 
-const HOUSEHOLD_IMPACT_RADIUS_M = 2500;
-const HOUSEHOLD_WEIGHT = 25;
-const HOUSEHOLD_COUNT_WEIGHT = 15;
-const HOUSEHOLD_COUNT_SCALE = 150;
+/**
+ * Avståndsviktad påverkansmodell (ersätter en tidigare fast räckviddsradie):
+ * varje bostad/hushållskluster får en "påverkansfraktion" 0-1 baserat på
+ * avstånd till ETT verk, ankrad i följande exempelvärden (linjärt
+ * interpolerad mellan ankarna för en mjuk, kontinuerlig kurva istället för
+ * ett stegvis hopp): 0-2 km ≈ 100 %, 2-5 km ≈ 70 %, 5-10 km ≈ 40 %,
+ * 10-20 km ≈ 15 %, >20 km avtar mot 0 % (helt 0 vid 25 km). Se
+ * `combinedImpactFraction` för hur flera verk mot SAMMA hushållskluster
+ * kombineras (så att effekten ökar om flera verk påverkar samma område,
+ * istället för att bara räkna det närmaste).
+ */
+const DISTANCE_IMPACT_ANCHORS: [distanceM: number, fraction: number][] = [
+  [0, 1.0],
+  [2000, 1.0],
+  [5000, 0.7],
+  [10000, 0.4],
+  [20000, 0.15],
+  [25000, 0],
+];
+const HOUSEHOLD_IMPACT_WEIGHT = 40;
 // JUSTERAT (buggfix): en placering nära Katrineholms centrum gav tidigare
 // alldeles för lite påverkanspoäng, eftersom `HOUSEHOLD_CLUSTERS` (Ericsberg/
 // Björkvik/Marmorbruket/Forssjö) inte innehåller själva Katrineholms tätort
@@ -176,6 +210,83 @@ function householdsWithinRadius(point: { lat: number; lon: number }, radiusM: nu
   return count;
 }
 
+/**
+ * Kontinuerlig (styckvis linjär) påverkansfraktion 0-1 för EN bostad/kluster
+ * mot ETT enskilt verk, ankrad i `DISTANCE_IMPACT_ANCHORS`. Se konstantens
+ * kommentar för de exempelvärden kurvan är byggd kring.
+ */
+function distanceImpactFraction(distanceM: number): number {
+  const anchors = DISTANCE_IMPACT_ANCHORS;
+  if (distanceM <= anchors[0][0]) return anchors[0][1];
+  for (let i = 1; i < anchors.length; i++) {
+    const [d1, f1] = anchors[i - 1];
+    const [d2, f2] = anchors[i];
+    if (distanceM <= d2) {
+      const t = (distanceM - d1) / (d2 - d1);
+      return f1 + (f2 - f1) * t;
+    }
+  }
+  return 0;
+}
+
+interface HouseholdClusterImpact {
+  cluster: HouseholdCluster;
+  /** 1 - Π(1 - fraktion_i) över alla verk — ökar med varje verk som når klustret, oavsett hur många redan gör det. */
+  combinedFraction: number;
+  /** Avstånd till det NÄRMASTE verket, oavsett dess enskilda fraktion. */
+  nearestDistanceM: number;
+}
+
+/**
+ * Kombinerar flera verks påverkan på SAMMA hushållskluster via en
+ * sannolikhets-"union" (1 - produkten av att INGET verk påverkar), så att
+ * fler verk mot samma område ökar den sammanlagda effekten (utan att kunna
+ * överstiga 100 %) — istället för att bara räkna det närmaste verket.
+ */
+function computeHouseholdImpacts(turbines: PlacedTurbine[]): HouseholdClusterImpact[] {
+  return HOUSEHOLD_CLUSTERS.map((cluster) => {
+    let product = 1;
+    let nearestDistanceM = Infinity;
+    for (const t of turbines) {
+      const d = distanceMeters(t.lat, t.lon, cluster.lat, cluster.lon);
+      if (d < nearestDistanceM) nearestDistanceM = d;
+      product *= 1 - distanceImpactFraction(d);
+    }
+    return {
+      cluster,
+      combinedFraction: turbines.length > 0 ? clamp01(1 - product) : 0,
+      nearestDistanceM,
+    };
+  });
+}
+
+/**
+ * Kontinuerlig färgövergång grön → gul → orange → mörkröd för en 0-100
+ * påverkanspoäng — används för att färga kartans verk-markörer dynamiskt
+ * (istället för fyra diskreta steg som i `PLACEMENT_LEVEL_COLORS`).
+ */
+export function impactScoreToColor(score: number): string {
+  const s = clamp(score, 0, 100);
+  const stops: [number, [number, number, number]][] = [
+    [0, [52, 211, 153]],
+    [30, [234, 179, 8]],
+    [60, [249, 115, 22]],
+    [100, [127, 29, 29]],
+  ];
+  for (let i = 1; i < stops.length; i++) {
+    const [d1, c1] = stops[i - 1];
+    const [d2, c2] = stops[i];
+    if (s <= d2) {
+      const t = (s - d1) / (d2 - d1);
+      const r = Math.round(c1[0] + (c2[0] - c1[0]) * t);
+      const g = Math.round(c1[1] + (c2[1] - c1[1]) * t);
+      const b = Math.round(c1[2] + (c2[2] - c1[2]) * t);
+      return `#${[r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+    }
+  }
+  return "#7f1d1d";
+}
+
 const LAYER_COUNTS: LayerCounts = {
   householdClusters: HOUSEHOLD_CLUSTERS.length,
   natureZones: SENSITIVE_ZONES.filter((z) => z.type === "nature").length,
@@ -198,6 +309,9 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
       totalScore: 0,
       level: "low",
       householdsAffected: 0,
+      inhabitantsAffected: 0,
+      avgNearestHouseholdDistanceM: null,
+      impactIndex: 0,
       nearestHouseholdDistanceM: null,
       nearestHouseholdName: null,
       nearestUrbanDistanceM: null,
@@ -220,38 +334,44 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
       nearestHouseholdName = nearest.cluster.name;
     }
   }
-  const householdProximityScore =
-    nearestHouseholdDistanceM === null
-      ? 0
-      : clamp01(1 - nearestHouseholdDistanceM / HOUSEHOLD_IMPACT_RADIUS_M) * HOUSEHOLD_WEIGHT;
   factors.push({
     key: "householdProximity",
     label: "Avstånd till bostäder",
-    impactPoints: householdProximityScore,
+    impactPoints: 0,
     note:
       nearestHouseholdDistanceM !== null
         ? `Närmaste bebyggelse (${nearestHouseholdName}) ligger ${Math.round(nearestHouseholdDistanceM)} m från ett verk.`
         : "Inget avstånd kunde beräknas.",
   });
 
-  // --- Antal berörda hushåll (viktat efter avstånd till NÄRMASTE verk) ---
-  let householdsAffected = 0;
-  for (const cluster of HOUSEHOLD_CLUSTERS) {
-    let closest = Infinity;
-    for (const t of turbines) {
-      const d = distanceMeters(t.lat, t.lon, cluster.lat, cluster.lon);
-      if (d < closest) closest = d;
+  // --- Boendepåverkan: avståndsviktad, kombinerad över ALLA verk per hushållskluster ---
+  const householdImpacts = computeHouseholdImpacts(turbines);
+  let householdsAffectedF = 0;
+  let totalHouseholds = 0;
+  let weightedDistanceSum = 0;
+  let weightedDistanceWeight = 0;
+  for (const hi of householdImpacts) {
+    householdsAffectedF += hi.cluster.households * hi.combinedFraction;
+    totalHouseholds += hi.cluster.households;
+    if (hi.combinedFraction > 0 && Number.isFinite(hi.nearestDistanceM)) {
+      weightedDistanceSum += hi.cluster.households * hi.combinedFraction * hi.nearestDistanceM;
+      weightedDistanceWeight += hi.cluster.households * hi.combinedFraction;
     }
-    const weight = clamp01(1 - closest / HOUSEHOLD_IMPACT_RADIUS_M);
-    householdsAffected += cluster.households * weight;
   }
-  householdsAffected = Math.round(householdsAffected);
-  const householdCountScore = clamp01(householdsAffected / HOUSEHOLD_COUNT_SCALE) * HOUSEHOLD_COUNT_WEIGHT;
+  const householdsAffected = Math.round(householdsAffectedF);
+  const inhabitantsAffected = Math.round(householdsAffectedF * KOMMUN_POPULATION.personsPerHousehold);
+  const avgNearestHouseholdDistanceM = weightedDistanceWeight > 0 ? weightedDistanceSum / weightedDistanceWeight : null;
+  const impactIndex = totalHouseholds > 0 ? Math.round(clamp01(householdsAffectedF / totalHouseholds) * 100) : 0;
+  const householdImpactScore = clamp01(impactIndex / 100) * HOUSEHOLD_IMPACT_WEIGHT;
   factors.push({
-    key: "householdCount",
-    label: "Antal berörda hushåll",
-    impactPoints: householdCountScore,
-    note: `Uppskattningsvis ${householdsAffected} hushåll kan påverkas av placeringen.`,
+    key: "householdImpact",
+    label: "Boendepåverkan (avståndsviktad)",
+    impactPoints: householdImpactScore,
+    note: `Uppskattningsvis ${householdsAffected} hushåll (~${inhabitantsAffected} invånare) berörs, Påverkansindex ${impactIndex}/100${
+      avgNearestHouseholdDistanceM !== null
+        ? `, i genomsnitt ${(avgNearestHouseholdDistanceM / 1000).toLocaleString("sv-SE", { maximumFractionDigits: 1 })} km från närmaste verk.`
+        : "."
+    }`,
   });
 
   // --- Avstånd till tätort (Katrineholm) ---
@@ -509,6 +629,9 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
     totalScore,
     level,
     householdsAffected,
+    inhabitantsAffected,
+    avgNearestHouseholdDistanceM,
+    impactIndex,
     nearestHouseholdDistanceM,
     nearestHouseholdName,
     nearestUrbanDistanceM,

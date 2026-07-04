@@ -17,7 +17,7 @@ import {
   makeProjector,
   type LatLonBounds,
 } from "@/lib/webMercatorTiles";
-import { PLACEMENT_LEVEL_COLORS, scorePlacement, type PlacedTurbine } from "@/lib/placementScoring";
+import { impactScoreToColor, scorePlacement, type PlacedTurbine } from "@/lib/placementScoring";
 
 interface PlacementMapProps {
   turbines: PlacedTurbine[];
@@ -276,8 +276,8 @@ export function PlacementMap({
     const map = new Map<string, string>();
     for (const t of colorTurbines) {
       const isOutside = outsideBoundaryIds.includes(t.id);
-      const level = scorePlacement([t]).level;
-      map.set(t.id, isOutside ? "#ef4444" : PLACEMENT_LEVEL_COLORS[level].hex);
+      const soloScore = scorePlacement([t]).totalScore;
+      map.set(t.id, isOutside ? "#ef4444" : impactScoreToColor(soloScore));
     }
     return map;
   }, [colorTurbines, outsideBoundaryIds]);

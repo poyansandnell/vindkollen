@@ -469,11 +469,34 @@ export default function PlaceTurbines() {
           <span className="text-xs text-white/60">{detailsOpen ? "Dölj detaljer ▲" : "Visa mer ▼"}</span>
         </button>
 
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="rounded-lg bg-white/5 px-2.5 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-white/40">Berörda hushåll</p>
+            <p className="text-sm font-semibold text-white">{result.householdsAffected}</p>
+          </div>
+          <div className="rounded-lg bg-white/5 px-2.5 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-white/40">Berörda invånare</p>
+            <p className="text-sm font-semibold text-white">{result.inhabitantsAffected}</p>
+          </div>
+          <div className="rounded-lg bg-white/5 px-2.5 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-white/40">Snittavstånd närmaste verk</p>
+            <p className="text-sm font-semibold text-white">
+              {result.avgNearestHouseholdDistanceM !== null
+                ? `${(result.avgNearestHouseholdDistanceM / 1000).toLocaleString("sv-SE", { maximumFractionDigits: 1 })} km`
+                : "–"}
+            </p>
+          </div>
+          <div className="rounded-lg bg-white/5 px-2.5 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-white/40">Påverkansindex</p>
+            <p className="text-sm font-semibold text-white">{result.impactIndex}/100</p>
+          </div>
+        </div>
+
         {detailsOpen && (
           <div className="mt-2 space-y-2">
             <p className="text-xs text-white/70">
               Uppskattningsvis <span className="font-semibold text-white">{result.householdsAffected}</span> hushåll
-              kan påverkas.
+              (~{result.inhabitantsAffected} invånare) kan påverkas.
               {result.nearestHouseholdDistanceM !== null && (
                 <>
                   {" "}
