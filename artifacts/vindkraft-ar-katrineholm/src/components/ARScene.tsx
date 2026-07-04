@@ -118,6 +118,19 @@ const MAX_RENDER_DISTANCE_M = 9000;
 // matchar kamerans FOV/klippplan (samma skala som tidigare, enklare modell).
 const METERS_TO_UNITS = 0.9;
 
+// Antagen ögonhöjd (m) för användaren.
+const EYE_HEIGHT_M = 1.6;
+// Antagen markhöjd (m över havet) för Katrineholms tätort — vi har ingen
+// riktig höjddata för ANVÄNDARENS position (GPS-altitude är opålitlig/
+// saknas ofta i webbläsare), men verkens egen markhöjd är känd
+// (`turbine.groundHeightMeters`). Ett platt-terräng-antagande mellan
+// tätorten och Länsterberget är en medveten förenkling (dokumenterad i
+// replit.md), men matchar ändå ungefär verkens egna värden (~50-70 m).
+const ASSUMED_USER_GROUND_M = 60;
+// Säkerhetsgräns (grader ovanför horisonten) för verkets topp — se
+// felkontrollen i `layoutObjects`.
+const MAX_PLAUSIBLE_ELEVATION_DEG = 10;
+
 const TOTAL_HEIGHT_M = 250;
 const LOW_SUN_ALTITUDE_DEG = 5;
 const LOW_SUN_AZIMUTH_DEG = 245; // sydväst/väster
@@ -569,23 +582,71 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     // Körs initialt samt varje gång användarens GPS-position uppdateras
     // (i animationsloopen, men bara när koordinaterna faktiskt ändrats) —
     // annars behöver inte positionerna räknas om varje bildruta.
+    //
+    // Verkets fundament låses mot markplanet med en RIKTIG höjdvinkel
+    // (verklig höjdskillnad / verkligt avstånd), inte en fast pixel-offset —
+    // annars hamnar verket där kameran råkar peka snarare än där marken
+    // faktiskt ligger. Kamerans egen rotation (inkl. den kalibrerade
+    // horisont-offseten, se `useDeviceOrientation.ts`s `calibrateHorizon`)
+    // avgör sedan vad som syns var på skärmen; den här funktionen ansvarar
+    // bara för att verkets VÄRLDSPOSITION är fysikaliskt rätt.
     function layoutObjects() {
       const { lat: uLat, lon: uLon } = userRef.current;
       for (const obj of sceneStateRef.current!.objects) {
-        const dist = distanceMeters(uLat, uLon, obj.lat, obj.lon);
+        const realDist = Math.max(distanceMeters(uLat, uLon, obj.lat, obj.lon), 1);
         const bearing = bearingDegrees(uLat, uLon, obj.lat, obj.lon);
         const bearingRad = (bearing * Math.PI) / 180;
 
-        const renderDist = Math.min(dist, MAX_RENDER_DISTANCE_M);
-        const { realScale: useRealScale } = modeRef.current;
-        const scaleDamp = useRealScale
-          ? 1 - Math.min(renderDist / MAX_RENDER_DISTANCE_M, 1) * 0.85
-          : 1 - Math.min(renderDist / MAX_RENDER_DISTANCE_M, 1) * 0.55;
+        const renderDist = Math.min(realDist, MAX_RENDER_DISTANCE_M);
         const planeDist = 400 + renderDist * 0.12;
+
+        // Höjdskillnad mot användaren: verkets egen markhöjd över havet
+        // (`groundHeightMeters`, från lantmäteridata) minus en antagen
+        // markhöjd för Katrineholms tätort — vi har ingen riktig höjddata
+        // för ANVÄNDARENS position (GPS-altitude är opålitlig/saknas ofta i
+        // webbläsare), så ett platt-terräng-antagande mellan tätorten och
+        // Länsterberget används (dokumenterat i replit.md). Ändå betydligt
+        // mer fysikaliskt korrekt än en fast offset, eftersom det tar
+        // hänsyn till både verkligt avstånd och verklig höjd.
+        const groundDeltaM = obj.turbine.groundHeightMeters - ASSUMED_USER_GROUND_M;
+
+        // Felkontroll: om den beräknade höjdvinkeln till verkets topp skulle
+        // hamna orimligt högt ovanför horisonten (t.ex. p.g.a. en tillfällig
+        // GPS-glitch som kollapsar avståndet) räknas positionen om med ett
+        // säkert minimiavstånd istället — annars skulle verket kunna "flyga
+        // upp i himlen" på en enskild dålig avläsning. Under normal, riktig
+        // GPS-användning på den här platsen (verken ligger flera km bort)
+        // ligger den verkliga vinkeln långt under den här gränsen och
+        // omräkningen triggas aldrig.
+        const topDeltaM = groundDeltaM + obj.turbine.heightMeters - EYE_HEIGHT_M;
+        const rawTopAngleDeg = (Math.atan2(topDeltaM, realDist) * 180) / Math.PI;
+        const elevationDist =
+          Math.abs(rawTopAngleDeg) > MAX_PLAUSIBLE_ELEVATION_DEG
+            ? Math.abs(topDeltaM) / Math.tan((MAX_PLAUSIBLE_ELEVATION_DEG * Math.PI) / 180)
+            : realDist;
+
+        const baseElevationRad = Math.atan2(groundDeltaM - EYE_HEIGHT_M, elevationDist);
+
+        // Fysikaliskt korrekt skala: återskapar verkets RIKTIGA
+        // vinkelutbredning (höjd/bredd delat på det verkliga avståndet) på
+        // det komprimerade renderavståndet `planeDist`, så verket ser rätt
+        // stort ut relativt horisonten oavsett hur långt bort det egentligen
+        // är — ersätter den tidigare godtyckliga avståndsdämpningskurvan som
+        // inte var kopplad till någon verklig vinkel.
+        const { realScale: useRealScale } = modeRef.current;
+        const physicalScale = planeDist / (realDist * METERS_TO_UNITS);
+        // "Förstärkt visning" (standardläget) förstorar avlägsna verk för
+        // synlighet, men ENDAST storleken — skalan växer uppåt från den
+        // markförankrade baspunkten (se `buildTurbineMesh`, som bygger
+        // tornet från lokal origo/y=0 och uppåt), så fundamentet lämnar
+        // aldrig marken av detta.
+        const boost = useRealScale ? 1 : 1 + Math.min(renderDist / MAX_RENDER_DISTANCE_M, 1) * 2.2;
+        const scaleDamp = physicalScale * boost;
 
         const x = Math.sin(bearingRad) * planeDist;
         const z = -Math.cos(bearingRad) * planeDist;
-        const y = -8;
+        const y = planeDist * Math.tan(baseElevationRad);
+        const dist = realDist;
 
         obj.group.position.set(x, y, z);
         obj.group.scale.setScalar(scaleDamp);

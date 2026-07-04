@@ -1,0 +1,71 @@
+Ja, jag ser problemet.
+
+Vindkraftverken hamnar “uppe i himlen” eftersom appen verkar placera dem enbart efter kompassriktning (bearing), men inte efter rätt höjdvinkel (pitch/elevation) och horisontplanet. Då hamnar de där kameran råkar peka i stället för där marken faktiskt ligger.
+
+Jag skulle be Replit göra följande:
+
+⸻
+
+Fixa AR-placeringen av vindkraftverken
+
+Vindkraftverken placeras idag för högt i kamerabilden och ser ut att sväva i himlen.
+
+Vindkraftverken ska alltid stå på marken
+
+Placera varje verk genom att:
+
+* använda GPS-position
+* använda verkliga koordinater (WGS84)
+* beräkna avstånd och bearing
+* beräkna höjdskillnad mot användaren
+* projicera objektet mot markplanet
+
+Använd inte enbart telefonens kompassriktning.
+
+⸻
+
+Horisontkalibrering
+
+Lägg in en riktig horisontkalibrering.
+
+När användaren trycker på Kalibrera horisont ska appen:
+
+1. Be användaren rikta telefonen mot horisonten.
+2. Spara telefonens pitch som referens.
+3. Använd den referensen för alla AR-objekt.
+
+Efter kalibreringen ska vindkraftverken placeras relativt horisonten, inte relativt telefonens aktuella lutning.
+
+⸻
+
+Lås vindkraftverken mot markplanet
+
+Vindkraftverkens fundament ska alltid ligga på marken.
+
+Rotorn ska aldrig kunna hamna ovanför molnen om användaren står normalt.
+
+Om användaren lutar telefonen uppåt ska kameran kunna se mer himmel, men vindkraftverken ska fortfarande stå kvar på marken och bara lämna bild när man tittar för högt upp.
+
+⸻
+
+Kontrollera AR-koordinatsystemet
+
+Verifiera att:
+
+* North = sant norr
+* East = sant öster
+* Up = lodrät riktning
+* Gravity används från telefonens IMU
+* ARKit/ARCore World Alignment används korrekt
+
+Använd världskoordinater i stället för endast skärmkoordinater.
+
+⸻
+
+Felkontroll
+
+Om något verk hamnar mer än cirka 5° ovanför den beräknade horisonten ska dess position beräknas om automatiskt.
+
+⸻
+
+Det här bör göra att vindkraftverken står där de faktiskt ska stå – ute på marken i landskapet – i stället för att “flyga” i himlen. Det ger också en betydligt mer realistisk AR-upplevelse.
