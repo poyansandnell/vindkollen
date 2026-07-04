@@ -47,3 +47,4 @@
 - [Overlay z-index vs persistent indicator](overlay-zindex-vs-persistent-indicator.md) — a full-screen status overlay can silently hide an always-should-be-visible arrow/badge unless its z-index is explicitly higher than the overlay's.
 - [AR tracking freeze-vs-fade tiering](ar-tracking-freeze-vs-fade-tiering.md) — freeze position instantly on degraded fused-sensor tier, but only fade visibility after a sustained grace period; don't reuse one timer for both.
 - [Decoupled readiness vs loading timeline bleed-through](decoupled-readiness-timeline-bleedthrough.md) — a `ready` flag and a loading screen's own internal timeline can both be true at once; combine into one gate (`ready && !showLoading`) for every post-loading element.
+- [Early-mount WebGL guard](early-mount-webgl-guard.md) — mounting a `THREE.WebGLRenderer` component earlier/eagerly removes the implicit safety net of downstream gating; wrap renderer creation in its own try/catch.

@@ -63,6 +63,19 @@ interface ARSceneProps {
    * Default `false` (bakåtkompatibelt).
    */
   hideAll?: boolean;
+  /**
+   * Styr ENDAST om scenen syns (opacitet/pointer-events på DOM-elementet),
+   * INTE om den finns/renderas. Produktkrav (juli 2026, "Render first –
+   * refine continuously"): `Home.tsx` monterar `ARScene` så fort AR-
+   * sessionen startas — långt innan GPS/kompass är redo — så att den tunga
+   * engångskostnaden (3D-modeller, texturer, shader-kompilering, se mount-
+   * effekten nedan) hinner bli klar i bakgrunden. `visible` växlas sedan
+   * till `true` när allt är redo: objekten finns redan i minnet och
+   * animate-loopen kör redan, så "AR-start" upplevs som en ren
+   * synlighets-toggle, aldrig en nykonstruktion. Default `true`
+   * (bakåtkompatibelt för ev. andra konsumenter).
+   */
+  visible?: boolean;
 }
 
 const DEFAULT_IS_POINT_SKY = () => true;
@@ -329,6 +342,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     showHiddenTurbines,
     globalVisibilityFactor,
     hideAll,
+    visible = true,
   },
   forwardedRef,
 ) {
@@ -405,7 +419,16 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     // ovan. Att slå på den ökade minnestrycket på mobila GPU:er tillräckligt
     // för att WebGL-kontexten kunde tappas mitt i en session, vilket gjorde
     // att hela kameravyn plötsligt doldes bakom en ogenomskinlig canvas.
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    // Kan kasta (t.ex. ingen WebGL-support i webbläsaren/enheten). Scenen
+    // monteras numera direkt vid AR-start, långt innan vi vet om enheten
+    // ens klarar WebGL — fånga felet så att hela sidan inte kraschar, och
+    // lämna kvar den tomma monteringspunkten (kamerabilden syns då ändå).
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    } catch {
+      return;
+    }
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     mount.appendChild(renderer.domElement);
@@ -1029,7 +1052,15 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turbines]);
 
-  return <div ref={mountRef} className="absolute inset-0" />;
+  // Se `visible`-propens jsdoc: detta är en ren opacitets-/interaktions-
+  // växel på den redan konstruerade canvasen, inte en (av-)montering — den
+  // pågående animate-loopen och alla Three.js-objekt lever vidare oavsett.
+  return (
+    <div
+      ref={mountRef}
+      className={`absolute inset-0 transition-opacity duration-200 ${visible ? "opacity-100" : "pointer-events-none opacity-0"}`}
+    />
+  );
 });
 
 /**

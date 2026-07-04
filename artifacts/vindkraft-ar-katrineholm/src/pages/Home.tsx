@@ -35,6 +35,7 @@ import { estimateSoundLevel, dbaToGain, applyIndoorAttenuation, applyIndoorGain 
 import { estimateNoiseImpact } from "@/lib/noiseImpact";
 import { useWindDirection } from "@/hooks/useWindDirection";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
+import { KATRINEHOLM_CENTER } from "@/lib/ericsbergArea";
 
 const PHOTO_WATERMARK_TEXT = "Katrineholm FRAMÅT – Vindkraft AR";
 const PHOTO_DISCLAIMER_TEXT = "Fotomontage/visualisering. GPS, kompass, terräng, väder och sikt kan påverka precisionen.";
@@ -165,42 +166,20 @@ export default function Home() {
     }, 1000);
     return () => window.clearInterval(id);
   }, [started]);
-  // Manuell nödbroms: en explicit "Fortsätt ändå"-knapp för HELA
-  // väntar-overlayen, som blir tillgänglig efter `MANUAL_CONTINUE_ANYWAY_MS`
-  // om GPS-fix redan finns men kameran/kompassen ändå inte blivit klara — så
-  // en användare aldrig behöver vänta ut appen om den upplevs som "fastnad".
-  // Kräver fortfarande att kameraströmmen finns (annars finns inget att visa
-  // AR mot), men tvingar igenom kompassfix-kravet (`orientation.hasFix`) om
-  // sensorn aldrig ger en fix alls.
-  const MANUAL_CONTINUE_ANYWAY_MS = 12_000;
-  const [manualContinueAvailable, setManualContinueAvailable] = useState(false);
-  const [manualContinue, setManualContinue] = useState(false);
-  useEffect(() => {
-    if (!started) {
-      setManualContinueAvailable(false);
-      setManualContinue(false);
-      return;
-    }
-    const id = window.setTimeout(() => setManualContinueAvailable(true), MANUAL_CONTINUE_ANYWAY_MS);
-    return () => window.clearTimeout(id);
-  }, [started]);
-
-  // PRODUKTKRAV: så fort kamera, GPS och kompass har GRUNDDATA (en fix, inte
-  // nödvändigtvis en färdigkalibrerad/"settled" kompass) ska verken visas
-  // direkt, mot senaste stabila position — kalibreringen (`hasSettled`) får
-  // fortsätta i bakgrunden men får ALDRIG blockera AR-vyn. `hasSettled`
-  // krävdes tidigare här, vilket kunde få appen att stå och "tugga" på
-  // "Kalibrerar kompass…" i flera sekunder trots att det redan fanns
-  // fullt tillräcklig data för att rendera. Positionens/riktningens
-  // faktiska STABILITET (frysning vid svag signal, mjuk uttoning) hanteras
-  // separat av `useArTrackingStability` nedan — den är oberoende av detta
-  // grindvillkor och gäller även efter att `ready` blivit sant.
-  const ready =
-    started &&
-    geo.lat !== null &&
-    geo.lon !== null &&
-    (orientation.hasFix || manualContinue) &&
-    Boolean(camera.stream);
+  // PRODUKTKRAV (juli 2026, "Render first – refine continuously"): så fort
+  // kamera och GPS finns tillgängliga ska verken visas DIREKT — kompassens
+  // riktning (`orientation.hasFix`/`hasSettled`) får ALDRIG blockera detta,
+  // varken den första grovfixen eller den efterföljande kalibreringen.
+  // Innan kompassen hunnit leverera en första avläsning används helt enkelt
+  // `quaternionRef`s identitets-startvärde (rakt fram) som en rimlig första
+  // gissning; så fort första sensoravläsningen kommer (typiskt inom några
+  // hundra ms) och sedan varje efterföljande avläsning roteras kameran om
+  // kontinuerligt i `ARScene`s animate-loop (30-60 ggr/s, styrt av enhetens
+  // faktiska sensorfrekvens) — verken "glider" alltså mjukt till sin exakta
+  // riktning istället för att användaren står och väntar på att de "dyker
+  // upp". Detta ersätter den tidigare `orientation.hasFix`-spärren (och den
+  // nödbroms-knapp den krävde) helt.
+  const ready = started && geo.lat !== null && geo.lon !== null && Boolean(camera.stream);
 
   // Ren informationstext (blockerar INGET) som visas medan kompassen
   // fortfarande kalibrerar sig i bakgrunden efter att `ready` redan blivit
@@ -671,25 +650,42 @@ export default function Home() {
 
           <CameraBackground stream={camera.stream} videoRef={videoElRef} />
 
-          {arSessionVisible && (
-            <ARScene
-              ref={arSceneRef}
-              userLat={smoothedGeo.lat ?? geo.lat!}
-              userLon={smoothedGeo.lon ?? geo.lon!}
-              quaternionRef={orientation.quaternionRef}
-              turbines={activeTurbines}
-              sunMode={sunMode}
-              realScale={realScale}
-              visibility={visibility}
-              nightMode={nightMode}
-              shadowFlicker={shadowFlicker}
-              isPointSky={sky.isPointSky}
-              getOcclusionGrid={sky.getOcclusionGrid}
-              showHiddenTurbines={showHiddenTurbines}
-              globalVisibilityFactor={globalVisibilityFactor}
-              hideAll={indoorsOrNoSight}
-            />
-          )}
+          {/* PRESTANDA (produktkrav juli 2026): `ARScene` monteras redan här,
+              så fort `started` är sant — INTE bara när `arSessionVisible`
+              blir sant. Dess tunga engångskostnad (bygga 29 procedurella
+              3D-modeller, canvas-texturer, material och shader-kompilering
+              via `onBeforeCompile`, se `ARScene.tsx`) sker alltså i
+              bakgrunden UNDER `LoadingSequence`s animation, istället för att
+              blockera huvudtråden precis i det ögonblick användaren
+              förväntar sig se verken. Komponenten hålls kvar monterad hela
+              AR-sessionen och styrs bara av sin `visible`-prop (opacitet på
+              en redan existerande canvas) — objekten skapas alltså EN gång,
+              och "AR-start" är bara en synlighets-toggle, aldrig en
+              nykonstruktion. Innan en riktig GPS-fix finns används
+              Katrineholms centrum som en tillfällig platshållarposition;
+              `ARScene`s egen animate-loop upptäcker automatiskt när
+              `userLat`/`userLon` sedan hoppar till den riktiga positionen
+              (samma "har flyttat sig"-koll som annars bara triggar en vanlig
+              omplacering) och lägger om verken direkt, utan att skapa om
+              något. */}
+          <ARScene
+            ref={arSceneRef}
+            visible={arSessionVisible}
+            userLat={smoothedGeo.lat ?? geo.lat ?? KATRINEHOLM_CENTER.lat}
+            userLon={smoothedGeo.lon ?? geo.lon ?? KATRINEHOLM_CENTER.lon}
+            quaternionRef={orientation.quaternionRef}
+            turbines={activeTurbines}
+            sunMode={sunMode}
+            realScale={realScale}
+            visibility={visibility}
+            nightMode={nightMode}
+            shadowFlicker={shadowFlicker}
+            isPointSky={sky.isPointSky}
+            getOcclusionGrid={sky.getOcclusionGrid}
+            showHiddenTurbines={showHiddenTurbines}
+            globalVisibilityFactor={globalVisibilityFactor}
+            hideAll={indoorsOrNoSight}
+          />
 
           {arSessionVisible && (
             <NearestTurbineArrow
@@ -714,7 +710,6 @@ export default function Home() {
               <p className="text-sm text-white/90">
                 {!camera.stream && "Startar kameran…"}
                 {camera.stream && geo.lat === null && "Väntar på GPS-signal…"}
-                {camera.stream && geo.lat !== null && !orientation.hasFix && "Kompassen behöver kalibreras."}
               </p>
 
               {/* Statuspanel: visar GPS/kompass/kamera/AR-status var för sig
@@ -772,22 +767,13 @@ export default function Home() {
                 </button>
               </div>
 
-              {manualContinueAvailable && !manualContinue && camera.stream && geo.lat !== null && (
-                <button
-                  onClick={() => setManualContinue(true)}
-                  className="rounded-full bg-[#FF8B01] px-4 py-2 text-xs font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347]"
-                >
-                  Fortsätt ändå →
-                </button>
-              )}
-              {/* Samma hjälptexter som produktkravet specificerar för de två
-                  vanligaste fastnandena, så användaren aldrig bara ser en
-                  snurrande spinner utan förklaring. */}
+              {/* Samma hjälptext som produktkravet specificerar för det enda
+                  kvarvarande blockerande läget (GPS), så användaren aldrig
+                  bara ser en snurrande spinner utan förklaring. Kompassen
+                  blockerar sedan juli 2026 aldrig `ready` — se motiveringen
+                  vid `ready` ovan. */}
               {camera.stream && geo.lat === null && (
                 <p className="text-xs text-white/50">Gå gärna ut på en öppen plats och rikta telefonen mot himlen.</p>
-              )}
-              {camera.stream && geo.lat !== null && !orientation.hasFix && (
-                <p className="text-xs text-white/50">Vrid telefonen enligt instruktionen ovan (liggande, sedan stående).</p>
               )}
               {camera.stream && geo.lat === null && !geo.error && (
                 <p className="text-[11px] text-white/40">
