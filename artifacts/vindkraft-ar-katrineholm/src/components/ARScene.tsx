@@ -158,6 +158,12 @@ interface TurbineObject {
   shadowMaterial: THREE.MeshBasicMaterial;
   shadowBaseOpacity: number;
   materials: (THREE.MeshStandardMaterial | THREE.MeshBasicMaterial)[];
+  /**
+   * Varje materials ursprungsfärg, sparad EN gång vid uppbyggnad — används
+   * för att kunna tona tillbaka från `INDOOR_TINT_COLOR` (se `hideAll` i
+   * `applyFinalOpacities`) utan att ackumulera färgdrift över tid.
+   */
+  originalColors: THREE.Color[];
   /** Opacitet innan himmelsmasken tillämpas (från avstånd/siktläge). */
   baseOpacity: number;
   /**
@@ -206,6 +212,29 @@ const NEAR_CENTER_FORCE_DEG = 25;
 // tal på egen hand).
 const IN_VIEW_HALF_ANGLE_DEG = FOV_DEGREES / 2;
 export const MAX_RENDER_DISTANCE_M = 9000;
+
+// Juli 2026-fix (kritisk buggrapport: "inga verk visas alls"): `hideAll`
+// (den kamera-heuristikbaserade inomhus-/fri sikt-detekteringen, se
+// `useSkyDetection`) och `globalVisibilityFactor`s "hide"-läge (Outdoor
+// Confidence Index) kunde tidigare båda tvinga turbinernas opacitet till
+// EXAKT 0 — en falsk positiv i endera heuristiken (t.ex. mulen himmel,
+// kameran riktad nedåt en sekund) gjorde alla 29 verk fullständigt osynliga
+// med NOLL indikation om varför. Produktkrav: en 3D-modell som redan
+// skapats/positionerats ska ALDRIG bli helt osynlig av en mjuk synlighets-
+// heuristik — bara av verklig per-pixel-ocklusion (`attachOcclusionShader`,
+// mark/hus/träd) eller genom att ligga utanför `MAX_RENDER_DISTANCE_M`.
+// `INDOOR_DIM_FACTOR` (uttrycklig "inomhus"-detektering) och
+// `MIN_CONFIDENCE_VISIBILITY_FACTOR` (den mjukare ML/himmel-konfidensen)
+// är därför GOLV, inte nollor — och `obj.forceVisible` (2-sekunders
+// säkerhetsfallbacken, se `Home.tsx`s `calibrationFallbackActive`) vinner nu
+// över BÅDA istället för att förlora mot `hideAll`, se `applyFinalOpacities`.
+const INDOOR_DIM_FACTOR = 0.45;
+const MIN_CONFIDENCE_VISIBILITY_FACTOR = 0.15;
+// Grå/blå ton som turbinkroppens material blandas mot när `hideAll` är
+// aktivt — en tydlig visuell signal ("det här verket är dämpat för att du
+// verkar vara inomhus", inte bara halvtransparent i sin vanliga färg).
+const INDOOR_TINT_COLOR = new THREE.Color(0x6b7c93);
+const INDOOR_TINT_BLEND = 0.6;
 // Meter -> scenens enheter. Vald så att den visuella storleken/avstånden
 // matchar kamerans FOV/klippplan (samma skala som tidigare, enklare modell).
 const METERS_TO_UNITS = 0.9;
@@ -480,6 +509,19 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   const lastFrameAtRef = useRef<number | null>(null);
   const renderLoopStalledRef = useRef(false);
 
+  // "Visible=true": loggas EN gång när `visible`-propen (arSessionVisible i
+  // Home.tsx) faktiskt slår om till true — se produktkravets punkt 2.
+  const loggedVisibleRef = useRef(false);
+  useEffect(() => {
+    if (visible && !loggedVisibleRef.current) {
+      loggedVisibleRef.current = true;
+      console.info("[AR][pipeline] Visible=true (ARScene canvas)");
+    }
+    if (!visible) {
+      loggedVisibleRef.current = false;
+    }
+  }, [visible]);
+
   userRef.current = { lat: userLat, lon: userLon };
   modeRef.current = {
     sunMode,
@@ -558,6 +600,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     }
     renderer.domElement.addEventListener("webglcontextlost", handleContextLost, false);
     renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored, false);
+    console.info("[AR][pipeline] Renderer attached");
 
     const ambient = new THREE.AmbientLight(0xffffff, 1.1);
     scene.add(ambient);
@@ -668,11 +711,19 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       };
     }
 
-    const objects: TurbineObject[] = turbines.map((turbine) => {
+    console.info(`[AR][pipeline] Loaded ${turbines.length} turbines`);
+    const objects: TurbineObject[] = turbines.map((turbine, index) => {
+      console.info(`[AR][pipeline] Creating turbine #${index} (${turbine.name})`);
       const { lat, lon } = swerefToWgs84(turbine.easting, turbine.northing);
       const { group, bladesGroup, materials } = buildTurbineMesh(turbine);
       for (const mat of materials) attachOcclusionShader(mat);
       scene.add(group);
+      // "Anchor created"/"Model loaded": denna app använder inte WebXR/
+      // ARCore-ankare (se replit.md: bäring/avstånd + enhetsorientering,
+      // för bred webbläsarkompatibilitet) — gruppens/mesh:ens skapande OCH
+      // tillägg till scenen ÄR motsvarigheten, loggas därför direkt här.
+      console.info(`[AR][pipeline] Anchor created for turbine #${index} (${turbine.name})`);
+      console.info(`[AR][pipeline] Model loaded for turbine #${index} (${turbine.name})`);
       const label = createCanvasLabel();
       label.sprite.scale.set(34, 8.5, 1);
       scene.add(label.sprite);
@@ -733,6 +784,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         shadowMaterial,
         shadowBaseOpacity: 0,
         materials,
+        originalColors: materials.map((mat) => mat.color.clone()),
         baseOpacity: 1,
         // Konservativ startpunkt: dolt tills himmelsdetekteringen (ML eller
         // heuristik) faktiskt bekräftat fri himmel vid verkets skärmposition.
@@ -897,25 +949,36 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
      * bildruta i renderloopen när himmelsmasken uppdateras.
      */
     function applyFinalOpacities(obj: TurbineObject) {
-      // `globalVisibilityFactor` (Outdoor Confidence Index-tröskeln) verkar
-      // som en global gate — 0 döljer alla verk helt oavsett ocklusion,
-      // ~0.6 tonar ned dem för "cautious"-läget. `obj.forceVisible`
-      // (rakt-fram-garanti ±25° eller kalibreringsfallbackens
-      // `forceVisibleIds`, se `animate`) kringgår denna gate helt — men
-      // INTE `hideAll` (den riktiga inomhus-/väggöverlayen, som redan
-      // täcker hela skärmen ovanpå AR-canvasen och därför gör
-      // kringgåendet osynligt ändå; att låta `hideAll` vinna håller
-      // logiken enkel och odubbel).
-      const globalFactor = modeRef.current.hideAll
-        ? 0
-        : obj.forceVisible
-          ? 1
-          : modeRef.current.globalVisibilityFactor;
+      // `globalVisibilityFactor` (Outdoor Confidence Index-tröskeln) och
+      // `hideAll` (inomhus-/fri sikt-heuristiken) verkar båda som DÄMPNINGAR,
+      // aldrig som fullständiga döljningar — se motiveringen vid
+      // `INDOOR_DIM_FACTOR`/`MIN_CONFIDENCE_VISIBILITY_FACTOR` ovan.
+      // `obj.forceVisible` (rakt-fram-garanti ±25° eller
+      // kalibreringsfallbackens `forceVisibleIds`, se `animate`) vinner nu
+      // över BÅDA — 2-sekunderssäkerhetsnätet ska garantera att användaren
+      // ser något på riktigt, inte bara en dämpad skugga, oavsett vad
+      // inomhusheuristiken eller Outdoor Confidence Index tycker just då.
+      const globalFactor = obj.forceVisible
+        ? 1
+        : modeRef.current.hideAll
+          ? INDOOR_DIM_FACTOR
+          : Math.max(modeRef.current.globalVisibilityFactor, MIN_CONFIDENCE_VISIBILITY_FACTOR);
       const skyFactor = (obj.forceVisible ? 1 : obj.skyFactor) * globalFactor;
       const bodyOpacity = obj.baseOpacity * globalFactor;
-      for (const mat of obj.materials) {
+      // Grå/blå ton (produktkrav: "gray/blue tint" när verket visas dämpat
+      // p.g.a. inomhus-heuristiken) — blandas alltid tillbaka mot
+      // `originalColors` när `hideAll`/`forceVisible` inte längre gäller, så
+      // färgen aldrig fastnar tonad.
+      const tintActive = modeRef.current.hideAll && !obj.forceVisible;
+      for (let i = 0; i < obj.materials.length; i++) {
+        const mat = obj.materials[i];
         mat.transparent = true;
         mat.opacity = bodyOpacity;
+        if (tintActive) {
+          mat.color.copy(obj.originalColors[i]).lerp(INDOOR_TINT_COLOR, INDOOR_TINT_BLEND);
+        } else {
+          mat.color.copy(obj.originalColors[i]);
+        }
       }
       (obj.label.sprite.material as THREE.SpriteMaterial).opacity = skyFactor;
       (obj.distanceLabel.sprite.material as THREE.SpriteMaterial).opacity = skyFactor;
@@ -1135,11 +1198,11 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         obj.light.visible = blinkOn;
         obj.glow.visible = blinkOn;
 
-        const shadowGlobalFactor = modeRef.current.hideAll
-          ? 0
-          : obj.forceVisible
-            ? 1
-            : modeRef.current.globalVisibilityFactor;
+        const shadowGlobalFactor = obj.forceVisible
+          ? 1
+          : modeRef.current.hideAll
+            ? INDOOR_DIM_FACTOR
+            : Math.max(modeRef.current.globalVisibilityFactor, MIN_CONFIDENCE_VISIBILITY_FACTOR);
         const shadowSkyFactor = obj.skyFactor * shadowGlobalFactor;
         if (flickerActive && obj.shadow.visible) {
           const flicker = 0.55 + 0.45 * Math.cos(obj.bladesGroup.rotation.z * 3);

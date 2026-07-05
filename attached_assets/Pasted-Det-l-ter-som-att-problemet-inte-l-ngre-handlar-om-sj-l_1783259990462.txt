@@ -1,0 +1,105 @@
+Det låter som att problemet inte längre handlar om själva modellerna, utan om att AR-ankringen aldrig blir aktiv. Om inga vindkraftverk visas alls finns det sannolikt ett fel tidigare i kedjan.
+
+Jag skulle ge Replit följande instruktion:
+
+⸻
+
+Kritisk bugg – vindkraftverk renderas inte
+
+Det finns en blockerande bugg där inga vindkraftverk visas.
+
+1. Rendera direkt
+
+Så fort:
+
+* GPS-position finns
+* kompass ger heading
+
+…ska samtliga vindkraftverk skapas direkt.
+
+Inte vänta på:
+
+* perfekt kompass
+* AR-plane detection
+* extra kalibrering
+* gyrostabilisering
+
+Allt detta får förbättra positionen i efterhand.
+
+⸻
+
+2. Lägg debug-utskrifter
+
+Logga exakt varje steg.
+
+GPS OK
+Compass OK
+Loaded 29 turbines
+Creating turbine #1
+Creating turbine #2
+...
+Anchor created
+Model loaded
+Renderer attached
+Visible = true
+
+Om någon rad saknas vet vi exakt var den stannar.
+
+⸻
+
+3. Fallback om ARCore inte hittar world tracking
+
+Om ARCore inte lyckas skapa world anchors:
+
+* skapa ändå modellerna framför kameran
+* använd GPS + kompass
+* flytta dem senare när tracking förbättras
+
+Användaren ska alltid se något.
+
+⸻
+
+4. Visa även inomhus
+
+Om användaren står inne i ett hus eller bakom en vägg ska vindkraftverken inte försvinna.
+
+Istället:
+
+* de blir cirka 40–60 % transparenta
+* färgen tonas mot grå/blå
+* en liten ikon/text kan visas:
+
+Vindkraftverket skyms av byggnad eller terräng.
+
+När användaren kommer ut blir modellen automatiskt helt opak igen.
+
+⸻
+
+5. Occlusion
+
+Använd occlusion endast mot:
+
+* mark
+* kullar
+* träd
+* byggnader
+
+Aldrig som anledning att inte skapa modellen.
+
+Modellen ska alltid existera.
+
+⸻
+
+6. Säkerhetsregel
+
+Om modellen inte har synts inom 2 sekunder efter att AR startat:
+
+* förstör alla anchors
+* skapa om samtliga
+* logga orsaken
+
+Ingen användare ska kunna fastna i ett läge där inga verk visas.
+
+⸻
+
+Jag misstänker faktiskt att felet ligger i att modellen aldrig instansieras, inte att den hamnar på fel plats. Därför är debug-loggarna ovan viktiga – de kommer snabbt avslöja om felet ligger i GPS, kompass, AR-ankare, modellinläsning eller renderingen.

@@ -91,6 +91,13 @@ export default function Home() {
   }, []);
   const activeTurbines = customTurbines ?? TURBINES;
   const usingCustomPlacement = customTurbines !== null;
+  // Juli 2026-fix (kritisk buggrapport punkt 2, "explicit debug logging för
+  // varje pipeline-steg"): "Loaded N turbines" loggas EN gång per faktisk
+  // ändring av datakällan (standard- eller anpassad placering), inte varje
+  // rendering — annars svämmar konsolen över utan att tillföra något.
+  useEffect(() => {
+    console.info(`[AR][pipeline] Loaded ${activeTurbines.length} turbines`);
+  }, [activeTurbines]);
   const handleClearCustomPlacement = useCallback(() => {
     localStorage.removeItem(AR_HANDOFF_KEY);
     setCustomTurbines(null);
@@ -216,6 +223,43 @@ export default function Home() {
   // HUD:en snyggt utan att blöda igenom, precis som den ursprungliga fixen
   // avsåg — men utan att BLOCKERA den underliggande renderingen.
   const arSessionVisible = ready;
+
+  // Juli 2026-fix (kritisk buggrapport punkt 2): explicita, engångsloggade
+  // brödsmulor för de tidiga pipeline-stegen ("GPS OK", "Compass OK",
+  // "Visible=true") — tidigare fanns ENDAST visuell felsökningstext i
+  // gränssnittet (t.ex. `LiveDebugStrip`/`SensorDebugPanel`), ingenting i
+  // webbläsarkonsolen, vilket gjorde det svårt för en testare att skicka en
+  // exakt reproducerbar felrapport. `useRef`-flaggorna säkerställer att
+  // varje rad bara loggas EN gång per AR-session, inte varje omrendering.
+  const loggedGpsOkRef = useRef(false);
+  const loggedCompassOkRef = useRef(false);
+  const loggedVisibleRef = useRef(false);
+  useEffect(() => {
+    if (!started) {
+      loggedGpsOkRef.current = false;
+      loggedCompassOkRef.current = false;
+      loggedVisibleRef.current = false;
+    }
+  }, [started]);
+  useEffect(() => {
+    if (geo.lat !== null && geo.lon !== null && !loggedGpsOkRef.current) {
+      loggedGpsOkRef.current = true;
+      console.info(`[AR][pipeline] GPS OK (lat=${geo.lat.toFixed(5)}, lon=${geo.lon.toFixed(5)}, accuracy=${geo.accuracy ?? "okänd"}m)`);
+    }
+  }, [geo.lat, geo.lon, geo.accuracy]);
+  useEffect(() => {
+    if (orientation.hasFix && !loggedCompassOkRef.current) {
+      loggedCompassOkRef.current = true;
+      console.info("[AR][pipeline] Compass OK (första kompassavläsning mottagen)");
+    }
+  }, [orientation.hasFix]);
+  useEffect(() => {
+    if (arSessionVisible && !loggedVisibleRef.current) {
+      loggedVisibleRef.current = true;
+      console.info("[AR][pipeline] Visible=true (GPS+kompass+kamera redo, AR-scenen visas)");
+    }
+  }, [arSessionVisible]);
+
   const wind = useWindSound();
   // Kamerabaserad himmel/inomhus-heuristik (se `useSkyDetection`s jsdoc för
   // begränsningar) — styr både AR-verkens synlighet (via `isPointSky`,
@@ -614,14 +658,24 @@ export default function Home() {
     }
     const elapsed = Date.now() - noTurbinesInFrontSinceRef.current;
     if (elapsed >= CALIBRATION_FALLBACK_DELAY_MS) {
+      // Juli 2026-fix (kritisk buggrapport punkt 6, "safety rule: force-
+      // recreate/force-show + log if nothing visible within 2s"): explicit
+      // konsolvarning så en testare/utvecklare ser exakt NÄR och VARFÖR
+      // säkerhetsnätet triggade, inte bara att verk plötsligt dök upp.
+      console.warn(
+        `[AR][safety] No turbines in camera FOV for ${CALIBRATION_FALLBACK_DELAY_MS}ms — force-showing ${nearestThreeTurbineIds.length} nearest turbines`,
+      );
       setCalibrationFallbackActive(true);
       return;
     }
     const id = window.setTimeout(() => {
+      console.warn(
+        `[AR][safety] No turbines in camera FOV for ${CALIBRATION_FALLBACK_DELAY_MS}ms — force-showing ${nearestThreeTurbineIds.length} nearest turbines`,
+      );
       setCalibrationFallbackActive(true);
     }, CALIBRATION_FALLBACK_DELAY_MS - elapsed);
     return () => window.clearTimeout(id);
-  }, [arSessionVisible, ready, inFrontOfCameraCount]);
+  }, [arSessionVisible, ready, inFrontOfCameraCount, nearestThreeTurbineIds]);
 
   const forceVisibleIds = useMemo(() => {
     if (!calibrationFallbackActive || nearestThreeTurbineIds.length === 0) return undefined;
@@ -661,6 +715,17 @@ export default function Home() {
     if (arTracking.weakSignalMessage) {
       return { message: `⚠️ ${arTracking.weakSignalMessage}`, tone: "yellow" };
     }
+    // Juli 2026-fix (kritisk buggrapport punkt 4): ersätter den tidigare
+    // skärmtäckande svarta inomhus-overlayen. Verken visas numera ALLTID,
+    // bara dämpade/gråblåtonade (se `INDOOR_DIM_FACTOR`/tint i
+    // `ARScene.tsx`), så en liten, icke-blockerande statusrad räcker som
+    // indikator istället för att täcka hela vyn.
+    if (indoorsOrNoSight) {
+      return {
+        message: "🏠 Skymd/inomhus – verken visas dämpade. Ljudet fortsätter baserat på din position.",
+        tone: "yellow",
+      };
+    }
     if (wind.playing) {
       return { message: "🔊 Vindljud aktivt", tone: "orange" };
     }
@@ -682,6 +747,7 @@ export default function Home() {
     orientation.orientationStalled,
     orientation.headingFallbackActive,
     arTracking.weakSignalMessage,
+    indoorsOrNoSight,
     wind.playing,
     calibrated,
     stillCalibrating,
@@ -1119,26 +1185,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* Inomhus-/fri sikt-overlay: visas bara EFTER att `ready` är sant
-              (dvs. GPS/kompass/kamera har redan fått fix) — se
-              `indoorsOrNoSight`s jsdoc ovan för varför. Turbinerna är redan
-              garanterat osynliga (se `hideAll` till ARScene ovan), så detta
-              ger en tydlig, stor förklaring istället för en till synes tom/
-              livlös vy — och gör explicit att ljudet fortfarande fungerar.
-              Ligger på ett högre z-index än både topp- och bottenraden
-              (z-20) så att meddelandet ALDRIG hamnar bakom knappar/paneler. */}
-          {arSessionVisible && indoorsOrNoSight && (
-            <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/85 px-8 text-center">
-              <span className="animate-pulse text-6xl">🏠➡️🌤️</span>
-              <p className="text-xl font-bold text-white">
-                Du verkar vara inomhus eller saknar fri sikt mot vindkraftverken
-              </p>
-              <p className="max-w-xs text-sm text-white/80">
-                Vindljudet visas fortfarande baserat på din position. Flytta dig till ett fönster eller gå
-                utomhus för att se dem i AR.
-              </p>
-            </div>
-          )}
+          {/* Juli 2026-fix (kritisk buggrapport punkt 4, "turbinerna måste
+              förbli synliga inomhus — aldrig helt försvinna"): den tidigare
+              skärmtäckande svarta "inomhus"-overlayen (bg-black/85, z-40) är
+              BORTTAGEN. Verken visas numera ALLTID i ARScene, bara dämpade/
+              gråblåtonade (se `INDOOR_DIM_FACTOR`/tint-konstanterna och
+              `applyFinalOpacities` i ARScene.tsx), så inget behöver längre
+              maskera hela vyn. Statusen kommuniceras istället som en liten,
+              icke-blockerande rad via `statusBanner` nedan. */}
 
           {/* Juli 2026-fix (produktkrav 2, "endast EN statusruta åt gången"):
               denna enda platsen ersätter fyra tidigare oberoende banderoller
