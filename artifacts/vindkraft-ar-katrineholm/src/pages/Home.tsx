@@ -1470,6 +1470,9 @@ export default function Home() {
           headingAccuracyDeg={orientation.headingAccuracyDegRef.current}
           pitchDeg={orientation.pitchDegRef.current}
           horizonOffsetDeg={orientation.horizonOffsetDegRef.current}
+          headingUpdatesPerSecond={orientation.updatesPerSecond}
+          lastHeadingUpdateAgeMs={orientation.lastUpdateAgeMs}
+          headingValuesFrozen={orientation.valuesFrozen}
           arTrackingTier={arTracking.tier}
           frozenForMs={arTracking.debug.frozenForMs}
           visibleTurbineCount={visibleTurbineCount}

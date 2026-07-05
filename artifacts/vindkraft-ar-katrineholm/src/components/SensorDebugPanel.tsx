@@ -7,6 +7,12 @@ interface SensorDebugPanelProps {
   headingAccuracyDeg: number | null;
   pitchDeg: number | null;
   horizonOffsetDeg: number;
+  /** Produktkrav ("Heading updates/sec"): antal orienterings-event senaste sekunden. */
+  headingUpdatesPerSecond: number;
+  /** Produktkrav ("Last update: Nms"): ms sedan senaste orienterings-event, `null` innan första. */
+  lastHeadingUpdateAgeMs: number | null;
+  /** Produktkrav: sant när VARKEN gir ELLER pitch/roll rört sig alls trots att event fortfarande kommer in. */
+  headingValuesFrozen: boolean;
   arTrackingTier: ArTrackingTier;
   frozenForMs: number;
   visibleTurbineCount: number;
@@ -76,6 +82,9 @@ export function SensorDebugPanel({
   headingAccuracyDeg,
   pitchDeg,
   horizonOffsetDeg,
+  headingUpdatesPerSecond,
+  lastHeadingUpdateAgeMs,
+  headingValuesFrozen,
   arTrackingTier,
   frozenForMs,
   visibleTurbineCount,
@@ -107,7 +116,15 @@ export function SensorDebugPanel({
       </div>
 
       <Row label="GPS-precision" value={fmt(gpsAccuracyM, " m")} />
-      <Row label="Kompassriktning (gir)" value={fmt(headingDeg, "°", 0)} />
+      <Row label="Heading" value={fmt(headingDeg, "°", 1)} />
+      <Row label="Heading updates/sec" value={`${headingUpdatesPerSecond}`} />
+      <Row label="Last update" value={lastHeadingUpdateAgeMs === null ? "–" : `${Math.round(lastHeadingUpdateAgeMs)} ms`} />
+      {headingValuesFrozen && (
+        <div className="flex items-baseline justify-between gap-3 border-b border-white/5 py-1.5 text-xs">
+          <span className="text-white/60">Sensorvärden</span>
+          <span className="font-mono text-red-400">Fastnade — återansluter…</span>
+        </div>
+      )}
       <Row label="Kompass-stabilitet" value={`${Math.round(headingStability * 100)}%`} />
       <Row label="Kompassens felmarginal" value={fmt(headingAccuracyDeg, "°", 0)} />
       <Row label="Pitch (lutning)" value={fmt(pitchDeg, "°", 0)} />

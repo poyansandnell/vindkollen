@@ -1,0 +1,10 @@
+---
+name: Device orientation values frozen despite events still firing
+description: A sensor-silence watchdog (checks last-event timestamp) and a "value stuck while other axes move" heuristic both miss the case where ALL orientation axes freeze identically while events keep firing at normal cadence.
+---
+
+Two common device-orientation safeguards each cover only one failure mode: (1) a total-silence watchdog that reattaches listeners if no event arrives for N ms, and (2) a "this one value is stuck while a correlated value keeps changing" fallback (e.g. heading frozen while pitch/roll still move → fall back to raw alpha delta). Neither catches a real Android browser bug where the orientation event pipeline keeps firing at its normal rate but alpha/beta/gamma are bit-for-bit identical on every event — the silence watchdog sees "events still arriving" and does nothing, and the correlated-value fallback sees "nothing is moving, including the thing I'd fall back to" and also does nothing. The raw-value fallback for case (2) is itself worthless here since it reads from the same frozen event fields.
+
+**Why:** production reports described exactly this ("arrow/AR objects frozen, but FPS/other stability metrics still looked fine") because internal stability/quality refs are only mutated from inside the event handler, so they silently freeze at their last-good value too instead of reflecting that no new information is arriving.
+
+**How to apply:** add a third, independent check: track how long *none* of the tracked raw axes have changed (even a small epsilon) regardless of event arrival rate, using a threshold longer than the correlated-value fallback's but not reliant on total silence. When tripped, apply the same remedy as total-silence (tear down + re-add listeners, force dependent quality/stability metrics down) since a same-source raw fallback cannot help. Also expose an updates-per-second + last-update-age debug readout — it is the fastest way for a live bug report to distinguish "no events" vs "events but frozen values" vs "genuinely no motion".

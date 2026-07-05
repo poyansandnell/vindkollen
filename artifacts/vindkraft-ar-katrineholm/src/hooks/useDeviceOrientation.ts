@@ -130,6 +130,30 @@ export interface DeviceOrientationApi {
    */
   orientationStalled: boolean;
   /**
+   * Produktkrav ("Heading updates/sec"): antal `deviceorientation(absolute)`-
+   * event mottagna under den senaste sekunden — beräknat i vakthunden
+   * (var `ORIENTATION_WATCHDOG_INTERVAL_MS`), inte per event, för att inte
+   * trigga en re-render i sensorns fulla 15-60 Hz-takt.
+   */
+  updatesPerSecond: number;
+  /**
+   * Produktkrav ("Last update: Nms"): millisekunder sedan senaste
+   * mottagna orienterings-event, `null` innan första eventet. Samma
+   * underliggande tidsstämpel som `lastOrientationEventAtRef`, men som
+   * reaktiv (state) millisekund-ålder redo att visas direkt i UI.
+   */
+  lastUpdateAgeMs: number | null;
+  /**
+   * Produktkrav ("värdena fryser trots att event fortsätter komma in"):
+   * sant när VARKEN rå girriktning ELLER rå pitch/roll ändrats alls på
+   * över `STUCK_VALUES_MS`, trots att event fortfarande strömmar in i
+   * normal takt (annars hade `orientationStalled` redan varit sant). Till
+   * skillnad från `headingFallbackActive` (som bara gäller giren, med
+   * pitch/roll som fortfarande rör sig) — det här är det striktare,
+   * tidigare oupptäckta fallet där HELA sensorpipelinen internt kört fast.
+   */
+  valuesFrozen: boolean;
+  /**
    * Produktkrav 5: den EN OCH ENDA funktionen för "vilken riktning gäller
    * just nu" — både pilen och AR-scenens bäringsjämförelser ska anropa
    * denna istället för att var för sig läsa `headingDegRef`, så de aldrig
@@ -217,6 +241,15 @@ const ORIENTATION_STALLED_MS = 1200;
 // Hur ofta (ms) vakthunden kollar `lastOrientationEventAtRef` — oberoende
 // av sensorernas egen (varierande) frekvens.
 const ORIENTATION_WATCHDOG_INTERVAL_MS = 400;
+
+// Juli 2026-produktkrav ("kompassen fryser trots att event fortsätter
+// komma in"): hur länge (ms) VARKEN den råa girriktningen ELLER rå
+// pitch/roll får stå still — oavsett hur ofta event kommer in — innan det
+// räknas som att sensorpipelinen internt kört fast (identiska värden i
+// varje event). Klart längre än `HEADING_STALE_MS` (som bara handlar om
+// giren ensam, medan pitch/roll fortfarande rör sig) eftersom detta ska
+// fånga det STRIKTARE fallet att INGENTING alls längre rör sig i rådatan.
+const STUCK_VALUES_MS = 1800;
 // Hur stor rå förändring (grader) som räknas som "sensorn rör sig alls" —
 // satt klart under de vanliga bruströsklarna ovan eftersom vi bara vill
 // upptäcka att RÅDATAN uppdateras, inte om ändringen är stor nog för att
@@ -425,6 +458,23 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   const orientationStalledRef = useRef(false);
   const [orientationStalled, setOrientationStalled] = useState(false);
 
+  // Juli 2026-produktkrav ("värdena fryser trots att event fortsätter
+  // strömma in"): varken `headingFrozen`-skyddet (kräver att pitch/roll
+  // FORTSÄTTER ändras) eller `orientationStalled`-vakthunden (kräver att
+  // INGA event alls kommer in) upptäcker fallet där webbläsaren/OS:et
+  // fortsätter leverera event i normal takt men med IDENTISKA alpha/beta/
+  // gamma-värden varje gång — ett känt läge på vissa Android-enheter där
+  // sensor-fusionen internt kört fast men händelseloopen inte gjort det.
+  // Detta räknas separat här: hur länge (ms) VARKEN den råa girriktningen
+  // ELLER rå pitch/roll ändrats alls, oavsett om event strömmar in.
+  const updatesPerSecondRef = useRef(0);
+  const [updatesPerSecond, setUpdatesPerSecond] = useState(0);
+  const recentEventTimestampsRef = useRef<number[]>([]);
+  const lastUpdateAtRef = useRef<number | null>(null);
+  const [lastUpdateAgeMs, setLastUpdateAgeMs] = useState<number | null>(null);
+  const valuesFrozenRef = useRef(false);
+  const [valuesFrozen, setValuesFrozen] = useState(false);
+
   // Tvåstegskalibreringen (se konstanterna ovan): vilka sektorer som svepts
   // i vardera fasen sedan `startCalibrationTracking()` senast anropades.
   // `calibrationPhaseRef` styr vilken fas som just nu räknar avläsningar —
@@ -489,6 +539,17 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
 
     const nowMs = Date.now();
     lastOrientationEventAtRef.current = nowMs;
+    lastUpdateAtRef.current = nowMs;
+
+    // Produktkrav ("Heading updates/sec"-felsökningsfält): rullande fönster
+    // av senaste event-tidsstämplarna (senaste sekunden) — räknas om till
+    // en frekvens i den separata felsökningsvakthunden nedan istället för
+    // varje event, för att slippa en `setState` per sensoravläsning
+    // (15-60 Hz) och därmed onödiga re-renders.
+    const timestamps = recentEventTimestampsRef.current;
+    timestamps.push(nowMs);
+    while (timestamps.length > 0 && nowMs - timestamps[0] > 1000) timestamps.shift();
+    updatesPerSecondRef.current = timestamps.length;
 
     // Juli 2026-produktkrav 4 ("skydd mot frusen heading"): jämför den RÅA
     // (helt outjämnade) girriktningen och rå beta/gamma mot sina egna
@@ -520,6 +581,22 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     const pitchRollFreshMs =
       rawPitchRollLastChangeAtRef.current === null ? Infinity : nowMs - rawPitchRollLastChangeAtRef.current;
     const headingFrozen = headingStaleMs > HEADING_STALE_MS && pitchRollFreshMs < HEADING_STALE_MS;
+
+    // Se `STUCK_VALUES_MS`-kommentaren ovan: till skillnad från `headingFrozen`
+    // (som kräver att pitch/roll FORTSÄTTER röra sig) upptäcker detta det
+    // striktare fallet att VARKEN gir NOCH pitch/roll längre rör sig alls i
+    // rådatan, trots att event fortfarande strömmar in (annars hade
+    // `orientationStalled`-vakthunden redan fångat det). `event.alpha`
+    // fungerar då inte heller som reservkälla (den är också fryst), så det
+    // enda den här flaggan kan göra är detsamma som total sensortystnad:
+    // signalera nedströms och trigga en lyssnar-återanslutning i vakthunden.
+    const pitchRollStaleMs =
+      rawPitchRollLastChangeAtRef.current === null ? 0 : nowMs - rawPitchRollLastChangeAtRef.current;
+    const allValuesStuck = headingStaleMs > STUCK_VALUES_MS && pitchRollStaleMs > STUCK_VALUES_MS;
+    if (allValuesStuck !== valuesFrozenRef.current) {
+      valuesFrozenRef.current = allValuesStuck;
+      setValuesFrozen(allValuesStuck);
+    }
 
     // Reservkälla: den råa `event.alpha`-signalen fortsätter i regel
     // uppdateras av enhetens rotationssensorer även när den beräknade
@@ -784,6 +861,26 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
         orientationStalledRef.current = false;
         setOrientationStalled(false);
       }
+
+      // Se `STUCK_VALUES_MS`-kommentaren ovan (`allValuesStuck` i
+      // `handleOrientation`): samma återanslutningsåtgärd som total
+      // sensortystnad, men triggad av att RÅVÄRDENA slutat röra sig trots
+      // att event fortfarande kommer in (så `stalled`-grenen ovan aldrig
+      // slår till på egen hand för det här fallet).
+      if (valuesFrozenRef.current && !stalled) {
+        headingStabilityRef.current = 0;
+        pitchStabilityRef.current = 0;
+        window.removeEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
+        window.removeEventListener("deviceorientation", handleOrientation as EventListener, true);
+        window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
+        window.addEventListener("deviceorientation", handleOrientation as EventListener, true);
+      }
+
+      // Felsökningsfält ("Heading updates/sec", "Last update: Nms") —
+      // uppdateras här (var 400:e ms) istället för per event, så det inte
+      // triggar en re-render 15-60 gånger/sekund.
+      setUpdatesPerSecond(updatesPerSecondRef.current);
+      setLastUpdateAgeMs(lastUpdateAtRef.current === null ? null : Date.now() - lastUpdateAtRef.current);
     }, ORIENTATION_WATCHDOG_INTERVAL_MS);
 
     return () => {
@@ -863,6 +960,9 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     headingFallbackActive,
     lastOrientationEventAtRef,
     orientationStalled,
+    updatesPerSecond,
+    lastUpdateAgeMs,
+    valuesFrozen,
     getCurrentHeading,
   };
 }

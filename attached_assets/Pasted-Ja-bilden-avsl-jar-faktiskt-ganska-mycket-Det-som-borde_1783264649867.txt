@@ -1,0 +1,62 @@
+Ja, bilden avslöjar faktiskt ganska mycket.
+
+Det som borde hända är att:
+
+* Pilen ska uppdateras kontinuerligt (10–30 gånger/sekund) när du vrider mobilen.
+* Vindkraftverken ska fortfarande renderas även om du är inomhus. Väggar ska kunna skymma dem, men de får inte sluta beräknas.
+* När du vrider mobilen ska verken direkt komma in i synfältet när du pekar mot dem.
+
+På din bild händer inget av detta, vilket tyder på att riktningsuppdateringen (heading) har låst sig.
+
+Jag skulle ge Replit den här instruktionen:
+
+⸻
+
+Bugg – Heading/kompass uppdateras inte live
+
+Det verkar som att appen bara läser kompassens riktning vid start eller väldigt sällan.
+
+Den måste istället:
+
+* Lyssna kontinuerligt på deviceorientation/AbsoluteOrientationSensor (eller motsvarande API).
+* Uppdatera heading varje animation frame (requestAnimationFrame) eller minst 20–30 gånger/sekund.
+* Varje ny heading ska direkt trigga:
+    * uppdatering av pilens riktning,
+    * uppdatering av alla vindkraftverks positioner i AR,
+    * ny beräkning av vilka verk som ligger inom kamerans synfält.
+
+Pilen får aldrig vara statisk utan ska röra sig helt mjukt medan telefonen vrids.
+
+Lägg gärna in debug:
+
+Heading: 123.4°
+Heading updates/sec: 29
+Last update: 18 ms
+
+Om “updates/sec” blir 0 eller 1 vet vi direkt att orienteringshändelserna har stannat.
+
+Rendering
+
+Vindkraftverken ska fortsätta renderas även när användaren står inomhus.
+
+De får inte stoppas bara för att kameran ser ett fönster eller en vägg.
+
+Placeringen ska alltid baseras på:
+
+* GPS
+* kompass
+* telefonens orientering
+* kamerans FOV
+
+inte på om kameran tror att användaren är utomhus.
+
+Om ett verk är bakom ett hus ska det bara döljas av ocklusion – inte tas bort ur scenen.
+
+⸻
+
+Jag misstänker faktiskt att ni har två separata buggar:
+
+1. Kompassen fryser, därför ändras inte pilen.
+2. AR-renderingen uppdateras inte när heading ändras, så verken blir kvar på samma plats eller visas inte alls.
+
+Det borde gå att lösa genom att se till att både pilen och alla AR-objekt uppdateras från samma live-orienteringsström varje bildruta.
