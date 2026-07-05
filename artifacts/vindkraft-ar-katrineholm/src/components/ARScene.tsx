@@ -107,6 +107,13 @@ export interface ARSceneHandle {
    * att hela kameravyn plötsligt försvann bakom en ogenomskinlig canvas).
    */
   capturePhoto: () => Promise<string | null>;
+  /**
+   * Antal verk som just nu ligger inom halva kamerans FOV, med den
+   * FULLSTÄNDIGA (gir+pitch) vinkeln mot kamerans optiska axel — se
+   * `inFrontOfCameraCountRef`. Läses av `Home.tsx` istället för att
+   * approximera samma tal själv med en horisontell-only bäringsjämförelse.
+   */
+  getInFrontOfCameraCount: () => number;
 }
 
 interface TurbineObject {
@@ -164,6 +171,12 @@ const FOV_DEGREES = 65;
 // är en "garanterat synligt rakt fram"-zon, inte hela synfältet (som redan
 // får normal rendering via skärmprojektionen i `applyVisibility`/`animate`).
 const NEAR_CENTER_FORCE_DEG = 25;
+// Halva kamerans FOV (grader) — samma tröskel som `Home.tsx`s
+// `FOV_HALF_DEG`, används för `inFrontOfCameraCountRef` (produktkrav: en
+// autoritativ, pitch-medveten "syns just nu på skärmen"-räkning som delas
+// mellan de två platserna som annars skulle behöva komma överens om samma
+// tal på egen hand).
+const IN_VIEW_HALF_ANGLE_DEG = FOV_DEGREES / 2;
 export const MAX_RENDER_DISTANCE_M = 9000;
 // Meter -> scenens enheter. Vald så att den visuella storleken/avstånden
 // matchar kamerans FOV/klippplan (samma skala som tidigare, enklare modell).
@@ -410,6 +423,18 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   // kameravyn plötsligt försvann bakom en ogenomskinlig canvas (förlorad
   // WebGL-kontext).
   const pendingCaptureRef = useRef<((dataUrl: string | null) => void) | null>(null);
+  // Juli 2026-fix ("verk fastklistrade på skärmen vid nedåtlutning"): antal
+  // verk som just nu ligger inom halva kamerans FOV, beräknat med den
+  // FULLSTÄNDIGA 3D-vinkeln (gir OCH pitch, se `angleFromOpticalAxisDeg` i
+  // `animate`) mot kamerans verkliga optiska axel — inte en horisontell-only
+  // kompassjämförelse. `Home.tsx`s tidigare egna beräkning av samma tal
+  // (för kalibreringsfallbacken) använde bara bäring/kompassriktning och
+  // ignorerade pitch helt, vilket gjorde att räkningen aldrig ändrades när
+  // telefonen lutades upp/ner — verken uppfattades då som skärmbundna
+  // istället för världsförankrade. Genom att exponera SAMMA autoritativa
+  // tal som redan styr `forceVisible`/"rakt fram"-garantin (se nedan)
+  // garanteras att båda mekanismerna alltid är överens.
+  const inFrontOfCameraCountRef = useRef(0);
 
   userRef.current = { lat: userLat, lon: userLon };
   modeRef.current = {
@@ -437,6 +462,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         }
         pendingCaptureRef.current = resolve;
       }),
+    getInFrontOfCameraCount: () => inFrontOfCameraCountRef.current,
   }));
 
   useEffect(() => {
@@ -990,6 +1016,9 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         shader.uniforms.uShowHidden.value = showHiddenValue;
       }
 
+      // Nollställs varje bildruta, se `inFrontOfCameraCountRef`.
+      let inFrontOfCameraCount = 0;
+
       for (const obj of state.objects) {
         obj.bladesGroup.rotation.z += obj.bladeRadPerSec * dt;
 
@@ -1007,14 +1036,38 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         // mellan råa kompass-/bäringsgrader. Träffar denna zon renderas
         // verket alltid som ett riktigt 3D-objekt, oavsett hur dålig
         // kompassprecisionen/Outdoor Confidence Index-tröskeln är just nu.
+        //
+        // Juli 2026-fix ("verk fastklistrade på skärmen vid nedåtlutning
+        // mot balkong/mark"): denna vinkel beräknades tidigare bara
+        // horisontellt (`atan2(camSpaceVec.x, -camSpaceVec.z)`), dvs. gir/
+        // bäring — helt oberoende av `camSpaceVec.y` (pitch). Det gjorde
+        // att "rakt fram"-garantin (och den identiskt beräknade
+        // `inFrontOfCameraCount` i `Home.tsx`) förblev sann/falsk baserat
+        // enbart på kompassriktning, oavsett hur mycket telefonen lutades
+        // upp/ner — verket tvingades kvar som synligt (eller förblev
+        // dolt) helt frikopplat från den faktiska vertikala siktlinjen,
+        // vilket upplevdes som att verket satt fastklistrat på skärmen
+        // istället för att vara förankrat i världen. `angleFromOpticalAxisDeg`
+        // använder istället HELA 3D-vektorn (x,y,z i kamerarymden) för att
+        // räkna den verkliga rymdvinkeln mot kamerans optiska axel — den
+        // ändras alltså korrekt både vid gir- och pitch-rörelser.
         const inFrontOfCamera = camSpaceVec.z < 0;
-        const yawFromCenterDeg = inFrontOfCamera
-          ? (Math.atan2(camSpaceVec.x, -camSpaceVec.z) * 180) / Math.PI
-          : null;
-        const nearCenter = yawFromCenterDeg !== null && Math.abs(yawFromCenterDeg) <= NEAR_CENTER_FORCE_DEG;
+        const camSpaceDist = camSpaceVec.length();
+        const angleFromOpticalAxisDeg =
+          inFrontOfCamera && camSpaceDist > 0
+            ? (Math.acos(Math.min(1, Math.max(-1, -camSpaceVec.z / camSpaceDist))) * 180) / Math.PI
+            : null;
+        const nearCenter = angleFromOpticalAxisDeg !== null && angleFromOpticalAxisDeg <= NEAR_CENTER_FORCE_DEG;
         obj.forceVisible =
           (nearCenter && obj.renderDistM <= MAX_RENDER_DISTANCE_M) ||
           modeRef.current.forceVisibleIds.has(obj.turbine.id);
+        if (
+          angleFromOpticalAxisDeg !== null &&
+          angleFromOpticalAxisDeg <= IN_VIEW_HALF_ANGLE_DEG &&
+          obj.renderDistM <= MAX_RENDER_DISTANCE_M
+        ) {
+          inFrontOfCameraCount++;
+        }
 
         let skyTarget = obj.skyFactor;
         if (inFrontOfCamera) {
@@ -1046,6 +1099,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
           obj.shadowMaterial.opacity = obj.shadowBaseOpacity * shadowSkyFactor;
         }
       }
+
+      inFrontOfCameraCountRef.current = inFrontOfCameraCount;
 
       state.renderer.render(state.scene, state.camera);
 

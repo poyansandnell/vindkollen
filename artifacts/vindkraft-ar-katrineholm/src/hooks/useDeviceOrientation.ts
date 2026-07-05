@@ -64,6 +64,16 @@ export interface DeviceOrientationApi {
    */
   pitchDegRef: React.MutableRefObject<number | null>;
   /**
+   * 0..1 mått på hur stabil pitch/roll (tilt) varit över de senaste dryga
+   * sekunden — samma princip som `headingStabilityRef` men för
+   * höjd-/rollrörelse ("gyro-stabilitet") istället för gir. En stadigt
+   * hållen telefon ger 1; skakning/omvinkling ger ett lägre värde. Muterad
+   * varje sensoravläsning. Används av `useArTrackingStability` för att den
+   * sammanvägda "AR-stabilitet"-indikatorn ska spegla FLER signaler än bara
+   * GPS och kompassgir.
+   */
+  pitchStabilityRef: React.MutableRefObject<number>;
+  /**
    * Den aktuella horisont-kalibreringsoffseten (grader) som
    * `calibrateHorizon` senast satte — 0 om aldrig kalibrerad manuellt.
    * Read-only ur konsumentens perspektiv (skrivs bara internt av
@@ -314,6 +324,13 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   // Litet rullande fönster av senaste |Δgir|/tidssteg-samples (grader/s) —
   // används bara för att räkna fram `headingStabilityRef`, ingen render.
   const headingDeltaSamplesRef = useRef<number[]>([]);
+  // Motsvarande 0..1-mått för pitch/roll (beta+gamma) — "gyro-stabilitet",
+  // används av `useArTrackingStability` (produktkrav: "AR-stabilitet" ska
+  // vara en genuin sammanvägning, inte bara gir/kompass) för att fånga upp
+  // att telefonen faktiskt hålls stadigt i höjd- och rollriktning också,
+  // inte bara att kompassriktningen inte svänger.
+  const pitchStabilityRef = useRef(1);
+  const pitchDeltaSamplesRef = useRef<number[]>([]);
   // Sant så fort ett riktigt `deviceorientationabsolute`-event tagits emot.
   // Många Android-webbläsare skickar BÅDE `deviceorientationabsolute` OCH
   // vanliga `deviceorientation`-event för samma sensoravläsning — men den
@@ -528,6 +545,20 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
       headingStabilityRef.current = Math.max(0, 1 - avgDegPerSec / 20);
     }
 
+    // Gyro-/tilt-stabilitet: samma rullande-medel-teknik som ovan, men på
+    // den kombinerade pitch+roll-rörelsehastigheten (|Δbeta|+|Δgamma|)/s —
+    // fångar upp att TELEFONEN skakar/vinklas om, oberoende av om
+    // kompassriktningen (gir) råkar hålla sig stabil under tiden.
+    if (prevBetaRaw !== null && prevGammaRaw !== null && dt > 0) {
+      const tiltDegPerSec = (Math.abs(smoothedBeta - prevBetaRaw) + Math.abs(smoothedGamma - prevGammaRaw)) / dt;
+      const samples = pitchDeltaSamplesRef.current;
+      samples.push(tiltDegPerSec);
+      if (samples.length > 24) samples.shift();
+      const avgTiltDegPerSec = samples.reduce((a, b) => a + b, 0) / samples.length;
+      // 0°/s -> stabilitet 1; >=20°/s (kraftig skakning/omvinkling) -> 0.
+      pitchStabilityRef.current = Math.max(0, 1 - avgTiltDegPerSec / 20);
+    }
+
     // Konvertera tillbaka till en "alpha" som ger rätt gir i standardformeln.
     const alphaForQuaternion = (360 - smoothedHeading) % 360;
     const adjustedBeta = smoothedBeta - betaOffsetRef.current;
@@ -630,6 +661,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     headingStabilityRef,
     headingAccuracyDegRef,
     pitchDegRef,
+    pitchStabilityRef,
     horizonOffsetDegRef,
     calibrationPhase,
     calibrationProgress,

@@ -1,27 +1,36 @@
 interface ArStabilityBadgeProps {
-  /** 0..1, från `useArTrackingStability`s `debug.combinedQuality` (svagaste av GPS/kompass). */
-  quality: number;
+  /**
+   * 0..100, från `useArTrackingStability`s `positioningConfidencePercent` —
+   * en genuin sammanvägning av GPS-precision, kompass-stabilitet,
+   * kompass-precision, gyro-/tiltstabilitet och horisontlåsning. INTE samma
+   * tal som styr frysning/uttoning (`debug.combinedQuality`/`tier`) — den
+   * smalare säkerhetskritiska signalen förblir oförändrad; denna badge är
+   * en bredare, mer ärlig "hur bra är läget just nu"-indikator (produktkrav
+   * juli 2026: "AR-stabilitet: 100%" upplevdes missvisande).
+   */
+  percent: number;
 }
 
 // Samma tröskelprincip som `CompassStabilityBadge`/`GpsQualityBadge`.
-const HIGH_QUALITY_THRESHOLD = 0.8;
-const LOW_QUALITY_THRESHOLD = 0.55;
+const HIGH_QUALITY_THRESHOLD = 80;
+const LOW_QUALITY_THRESHOLD = 55;
 
 function tierFor(percent: number): { className: string; icon: string } {
-  if (percent >= HIGH_QUALITY_THRESHOLD * 100) return { className: "bg-green-500/20 text-green-200", icon: "🟢" };
-  if (percent >= LOW_QUALITY_THRESHOLD * 100) return { className: "bg-yellow-500/20 text-yellow-200", icon: "🟡" };
+  if (percent >= HIGH_QUALITY_THRESHOLD) return { className: "bg-green-500/20 text-green-200", icon: "🟢" };
+  if (percent >= LOW_QUALITY_THRESHOLD) return { className: "bg-yellow-500/20 text-yellow-200", icon: "🟡" };
   return { className: "bg-red-500/20 text-red-200", icon: "🔴" };
 }
 
 /**
- * Liten alltid-synlig, live-uppdaterad badge som visar den KOMBINERADE
- * AR-trackingkvaliteten (svagaste av GPS/kompass, se `useArTrackingStability`s
- * `combinedQuality`) som 0..100% — produktkrav 2 ("AR-stabilitet"). Samma
- * signal som styr om placeringen fryses (`tier`/`freeze`), så användaren kan
- * koppla ihop en låg procentsats med varför verken just nu inte flyttar sig.
+ * Liten alltid-synlig, live-uppdaterad badge som visar den sammanvägda
+ * positioneringskonfidensen (se `ArStabilityBadgeProps.percent`s jsdoc) som
+ * 0..100% — produktkrav 2 ("AR-stabilitet"). Väger samman FLER signaler än
+ * bara GPS/kompass-stabilitet, så en enskild svag signal (t.ex. okalibrerad
+ * kompass) syns i procenten även om positionen råkar vara fryst/stabil just
+ * nu av andra skäl.
  */
-export function ArStabilityBadge({ quality }: ArStabilityBadgeProps) {
-  const percent = Math.round(Math.min(Math.max(quality, 0), 1) * 100);
+export function ArStabilityBadge({ percent: rawPercent }: ArStabilityBadgeProps) {
+  const percent = Math.round(Math.min(Math.max(rawPercent, 0), 100));
   const { className, icon } = tierFor(percent);
   return (
     <span

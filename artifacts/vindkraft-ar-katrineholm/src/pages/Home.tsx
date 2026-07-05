@@ -243,6 +243,8 @@ export default function Home() {
     gpsAccuracy: geo.accuracy,
     headingStabilityRef: orientation.headingStabilityRef,
     headingAccuracyDegRef: orientation.headingAccuracyDegRef,
+    pitchStabilityRef: orientation.pitchStabilityRef,
+    calibrationComplete: orientation.calibrationComplete,
     orientationHasFix: orientation.hasFix,
   });
 
@@ -379,7 +381,6 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started]);
 
-  const FOV_HALF_DEG = 32.5;
   const CALIBRATION_FALLBACK_TURBINE_COUNT = 3;
   const CALIBRATION_FALLBACK_DELAY_MS = 2000;
 
@@ -396,19 +397,29 @@ export default function Home() {
   }, [turbineDistancesM]);
 
   // Antal verk som just nu ligger inom halva kamerans FOV OCH inom
-  // renderavstånd (produktkrav 2: "in-front-of-camera count") — beräknat
-  // från samma bäring/avstånd som `ARScene` använder, men här på den
-  // reaktiva kompassriktningen (`headingDegState`) istället för den råa
-  // renderloop-referensen, så React faktiskt ser värdet ändras.
-  const inFrontOfCameraCount = useMemo(() => {
-    if (!turbineDistancesM || !turbineBearingsDeg || headingDegState === null) return 0;
-    let count = 0;
-    for (let i = 0; i < turbineDistancesM.length; i++) {
-      if (turbineDistancesM[i] > MAX_RENDER_DISTANCE_M) continue;
-      if (Math.abs(normalizeAngle(headingDegState - turbineBearingsDeg[i])) <= FOV_HALF_DEG) count++;
-    }
-    return count;
-  }, [turbineDistancesM, turbineBearingsDeg, headingDegState]);
+  // renderavstånd (produktkrav 2: "in-front-of-camera count").
+  //
+  // Juli 2026-fix ("verk fastklistrade på skärmen vid nedåtlutning"): denna
+  // räkning byggde tidigare på en EGEN, horisontell-only jämförelse mellan
+  // `headingDegState` och `turbineBearingsDeg` — dvs. rå kompassriktning,
+  // helt oberoende av hur mycket telefonen lutas upp/ner. Det gjorde att
+  // kalibreringsfallbacken nedan (som denna räkning styr) antingen aldrig
+  // triggade, eller förblev triggad, rent utifrån bäring — och tvingade då
+  // verk att stanna/inte stanna kvar synliga oavsett vertikal siktlinje.
+  // Läser nu istället av `ARScene`s egen, autoritativa räkning
+  // (`getInFrontOfCameraCount`), som använder den FULLSTÄNDIGA 3D-vinkeln
+  // (gir+pitch) mot kamerans verkliga optiska axel — samma tal som redan
+  // styr "rakt fram"-garantins `forceVisible` inne i scenen, så de två
+  // mekanismerna aldrig kan bli inbördes oense.
+  const [inFrontOfCameraCount, setInFrontOfCameraCount] = useState(0);
+  useEffect(() => {
+    if (!started) return;
+    const id = window.setInterval(() => {
+      setInFrontOfCameraCount(arSceneRef.current?.getInFrontOfCameraCount() ?? 0);
+    }, 250);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [started]);
 
   // Anledningar till att verk kan vara dolda just nu, för sensordebug-
   // panelen — samlar ihop de olika (annars separata) döljningsmekanismerna
@@ -1037,7 +1048,7 @@ export default function Home() {
               </div>
               <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
-                <ArStabilityBadge quality={arTracking.debug.combinedQuality} />
+                <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
                 <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
                 <LineOfSightStatus status={lineOfSightStatus} />
                 <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />

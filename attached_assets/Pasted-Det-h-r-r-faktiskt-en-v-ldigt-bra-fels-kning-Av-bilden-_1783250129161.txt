@@ -1,0 +1,85 @@
+Det här är faktiskt en väldigt bra felsökning. Av bilden ser jag två separata problem:
+
+1. Vindkraftverken sitter fast i skärmen (värsta AR-felet)
+
+Det syns tydligt att när du tittar ner mot altanen ligger verken fortfarande kvar på skärmen. Det betyder att de inte längre är förankrade i världens koordinatsystem, utan renderas relativt kameran.
+
+Detta ska de absolut inte göra.
+
+Skicka detta till Replit:
+
+Kritiskt AR-fel
+
+Vindkraftverken verkar nu vara bundna till kameran (screen space) istället för till världskoordinater (world space).
+
+Symptom:
+
+* När mobilen vrids ned mot marken följer vindkraftverken med kameran.
+* De ligger kvar på altanen/golvet istället för att hamna under horisonten.
+* De verkar nästan fastklistrade på skärmen.
+
+Vindkraftverken måste alltid renderas i ett fast world coordinate system.
+
+Kameran ska endast flyttas genom:
+
+* GPS-position
+* Device Orientation (yaw/pitch/roll)
+* eventuell ARKit/WebXR camera pose
+
+Kameran får aldrig flytta objekten i screen space.
+
+Kontrollera att:
+
+* inga CSS-transform används för turbinerna
+* inga overlay-lager används
+* inga screen coordinates används
+* alla turbiner renderas som riktiga 3D-objekt i scenen.
+
+Om användaren tittar rakt ned ska samtliga turbiner försvinna under kamerans synfält.
+
+Om användaren tittar upp mot himlen ska de komma tillbaka exakt där de står i verkligheten.
+
+⸻
+
+2. Ljudnivån måste stämma exakt med det som visas
+
+Just nu visas 36,9 dBA men ljudet verkar inte motsvara den nivån.
+
+Jag skulle skriva:
+
+Ljudmotorn behöver kalibreras.
+
+Volymen från högtalaren ska motsvara den beräknade ljudnivån.
+
+Exempel:
+
+* 30 dBA → nästan ohörbart
+* 35 dBA → mycket svagt sus
+* 40 dBA → tydligt vindkraftsljud
+* 45 dBA → markant hörbart
+* 50 dBA → ganska högt
+* 55+ dBA → kraftigt
+
+Den visade dBA-nivån och den upplevda ljudstyrkan ska följa samma kurva.
+
+Använd en logaritmisk volymkurva (inte linjär), eftersom decibel är logaritmiskt.
+
+När användaren går närmare ett verk ska ljudnivån förändras kontinuerligt utan hopp.
+
+⸻
+
+En tredje sak jag skulle lägga till
+
+Jag ser att statusen säger AR-stabilitet: 100 %, trots att AR:n uppenbart inte är korrekt.
+
+Den indikatorn borde inte bara visa att sensorerna fungerar, utan hur säker positioneringen faktiskt är.
+
+Exempel:
+
+* GPS-kvalitet
+* Kompassprecision
+* Gyrostabilitet
+* Horisontlåsning
+* Tracking-kvalitet
+
+Om någon av dessa är dålig ska inte appen visa 100 %, utan kanske 63 % eller 82 %, så användaren direkt förstår varför placeringen inte är helt tillförlitlig. Det gör upplevelsen både mer trovärdig och mer användbar.

@@ -125,16 +125,24 @@ const REFERENCE_MAX_DBA = 55;
  */
 export function dbaToGain(totalDba: number): number {
   if (!Number.isFinite(totalDba)) return 0;
-  const t = (totalDba - AUDIBILITY_FLOOR_DBA) / (REFERENCE_MAX_DBA - AUDIBILITY_FLOOR_DBA);
-  const clamped = Math.min(Math.max(t, 0), 1);
-  // Juli 2026-fix ("ljudet låter lika högt oavsett avstånd"): en RÄTLINJIG
-  // 0..1-mappning gav en alldeles för utjämnad hörbar volymkurva — kombinerat
-  // med `useWindSound.ts`s tidigare kraftiga kompressor/makeup-gain (som
-  // separat togs bort) upplevdes nästan hela avståndsintervallet som "samma
-  // volym". En kvadratisk kurva ger tydligare, mer verklighetstrogna
-  // avståndssteg: nära verk hörs klart kraftigare, långt bort klart tystare,
-  // istället för att allt kliver mot en gemensam medelnivå.
-  return clamped * clamped;
+  // Juli 2026-fix ("den visade dBA-nivån matchar inte hur högt det låter"):
+  // en tidigare version normaliserade linjärt mellan golv/tak och sedan
+  // KVADRERADE resultatet (`clamped * clamped`) — en godtycklig kurva, inte
+  // en verklig dB->amplitud-omvandling. Det gav en volym som INTE svarade
+  // logaritmiskt/kontinuerligt på dBA-siffran man faktiskt ser i panelen:
+  // två lika stora dBA-steg gav olika stora hörbara volymskillnader beroende
+  // på var i intervallet man befann sig.
+  //
+  // Den fysikaliskt korrekta relationen mellan en nivå i dB och en linjär
+  // amplitud/gain är EXPONENTIELL: var -20 dB halverar amplituden en tiondel
+  // (10^(-20/20) = 0.1), och varje lika stort dB-steg ger alltid samma
+  // *förhållande* i upplevd volym (ungefär en fördubbling av upplevd
+  // ljudstyrka per +10 dB, i linje med hur mänsklig hörsel fungerar) —
+  // kontinuerligt, utan hopp, och konsekvent med `estimateSoundLevel`s redan
+  // logaritmiska (20*log10(d)) avstånds-/kombineringsformel.
+  if (totalDba <= AUDIBILITY_FLOOR_DBA) return 0;
+  const gain = 10 ** ((totalDba - REFERENCE_MAX_DBA) / 20);
+  return Math.min(Math.max(gain, 0), 1);
 }
 
 /**

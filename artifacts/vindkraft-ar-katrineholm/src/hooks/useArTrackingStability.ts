@@ -26,7 +26,29 @@ export interface ArTrackingDebugInfo {
   headingAccuracyDeg: number | null;
   gpsQuality: number;
   headingQuality: number;
+  /** 0..1 — se `headingAccuracyToQuality`. 1 (neutral) på enheter som inte rapporterar kompassprecision. */
+  headingAccuracyQuality: number;
+  /** 0..1 — se `pitchStabilityToQuality` ("gyro-stabilitet"). */
+  pitchQuality: number;
+  /** 0..1 — 1 om horisonten är kalibrerad (`calibrationComplete`), annars en fast, mildare bestraffning. */
+  horizonLockQuality: number;
+  /**
+   * Svagaste av GPS/kompassgir (se `combinedQuality`s jsdoc) — den SMALA,
+   * säkerhetskritiska signalen som styr `freeze`/`fadeFactor`. Oförändrad
+   * av juli 2026-utökningen nedan, för att inte ändra frys-/uttoningsbeteendet.
+   */
   combinedQuality: number;
+  /**
+   * Produktkrav (juli 2026): "AR-stabilitet: 100%" upplevdes missvisande —
+   * den visade bara att GPS+kompassgir var stabila ("sensorerna fungerar"),
+   * inte en genuin positioneringskonfidens. `positioningConfidence` väger
+   * istället samman GPS-precision, kompass-STABILITET (gir), kompass-
+   * PRECISION (webkitCompassAccuracy, om tillgänglig), gyro-/tiltstabilitet
+   * (pitch/roll) och horisontlåsning (om `calibrateHorizon` körts) till ett
+   * enda 0..1-tal — se vikterna i `useArTrackingStability`. Driver ENDAST
+   * `ArStabilityBadge`s visade procentsats, inte frys-/uttoningslogiken.
+   */
+  positioningConfidence: number;
   tier: ArTrackingTier;
   frozenForMs: number;
   reasons: string[];
@@ -56,6 +78,16 @@ export interface ArTrackingStabilityResult {
    * råkar trigga en re-render, inte kontinuerligt/"live" som kravet är.
    */
   compassQualityPercent: number;
+  /**
+   * 0..100, live-uppdaterad varje `REEVALUATE_INTERVAL_MS` — samma tal som
+   * `debug.positioningConfidence` men avrundat till procent. Detta (INTE
+   * `debug.combinedQuality`) är vad `ArStabilityBadge` i `Home.tsx` ska visa
+   * som "AR-stabilitet", eftersom det speglar en genuin sammanvägning av
+   * GPS, kompass-stabilitet, kompass-precision, gyro-/tiltstabilitet och
+   * horisontlåsning — inte bara de två svagaste-länken-signalerna som
+   * `freeze`/`fadeFactor` styrs av.
+   */
+  positioningConfidencePercent: number;
   debug: ArTrackingDebugInfo;
 }
 
@@ -109,6 +141,48 @@ function headingStabilityToQuality(stability: number): number {
   return (stability - HEADING_FREEZE_STABILITY) / (HEADING_GOOD_STABILITY - HEADING_FREEZE_STABILITY);
 }
 
+// Kompassprecision (webkitCompassAccuracy, grader): <= GOOD full kvalitet,
+// >= BAD noll. `null` (webbläsaren rapporterar inte alls, t.ex. Android) och
+// `-1` ("okänt", vissa iOS-versioner) behandlas separat nedan — `null` är
+// NEUTRALT (1) eftersom frånvaro av signal inte ska bestraffa enheter som
+// aldrig kan rapportera den, men `-1` ("uttryckligen okänt") räknas som BAD.
+const HEADING_ACCURACY_GOOD_DEG = 8;
+const HEADING_ACCURACY_BAD_DEG = 25;
+
+function headingAccuracyToQuality(accuracyDeg: number | null): number {
+  if (accuracyDeg === null) return 1;
+  if (accuracyDeg < 0) return 0;
+  if (accuracyDeg <= HEADING_ACCURACY_GOOD_DEG) return 1;
+  if (accuracyDeg >= HEADING_ACCURACY_BAD_DEG) return 0;
+  return 1 - (accuracyDeg - HEADING_ACCURACY_GOOD_DEG) / (HEADING_ACCURACY_BAD_DEG - HEADING_ACCURACY_GOOD_DEG);
+}
+
+// Gyro-/tiltstabilitet (pitch+roll) använder samma 0..1-skala och tröskel-
+// princip som `headingStabilityToQuality` — se `pitchStabilityRef`s jsdoc i
+// `useDeviceOrientation`.
+function pitchStabilityToQuality(stability: number): number {
+  if (stability >= HEADING_GOOD_STABILITY) return 1;
+  if (stability <= HEADING_FREEZE_STABILITY) return 0;
+  return (stability - HEADING_FREEZE_STABILITY) / (HEADING_GOOD_STABILITY - HEADING_FREEZE_STABILITY);
+}
+
+// Vikter för `positioningConfidence` (summerar till 1) — GPS och
+// kompass-STABILITET väger tyngst eftersom de historiskt sett redan var
+// `combinedQuality`s underlag och därmed mest beprövade; precision/gyro/
+// horisont är kompletterande signaler som nyanserar bilden utan att
+// dominera den.
+const CONFIDENCE_WEIGHTS = {
+  gps: 0.35,
+  headingStability: 0.25,
+  headingAccuracy: 0.15,
+  pitch: 0.15,
+  horizon: 0.1,
+} as const;
+
+// Mild (inte total) bestraffning om horisonten aldrig kalibrerats manuellt —
+// standardvärdet fungerar oftast bra nog för att inte motivera 0.
+const HORIZON_UNCALIBRATED_QUALITY = 0.7;
+
 /**
  * Kontinuerlig sensorfusion för AR-PLACERINGENS stabilitet (produktkrav 1-4):
  * väger samman GPS-precision och kompass-/riktningsstabilitet till en enda
@@ -137,14 +211,28 @@ export function useArTrackingStability(params: {
   gpsAccuracy: number | null;
   headingStabilityRef: React.MutableRefObject<number>;
   headingAccuracyDegRef: React.MutableRefObject<number | null>;
+  pitchStabilityRef: React.MutableRefObject<number>;
+  calibrationComplete: boolean;
   orientationHasFix: boolean;
 }): ArTrackingStabilityResult {
-  const { enabled, gpsAccuracy, headingStabilityRef, headingAccuracyDegRef, orientationHasFix } = params;
+  const {
+    enabled,
+    gpsAccuracy,
+    headingStabilityRef,
+    headingAccuracyDegRef,
+    pitchStabilityRef,
+    calibrationComplete,
+    orientationHasFix,
+  } = params;
 
   const [tier, setTier] = useState<ArTrackingTier>("initializing");
   const [fadeFactor, setFadeFactor] = useState(1);
   const [frozenForMs, setFrozenForMs] = useState(0);
   const [compassQualityPercent, setCompassQualityPercent] = useState(0);
+  // Live (250ms-pollad, precis som `compassQualityPercent`) 0..100-version av
+  // `positioningConfidence` — se dess jsdoc i `ArTrackingDebugInfo`. Driver
+  // `ArStabilityBadge` i `Home.tsx`, ENDAST för visning.
+  const [positioningConfidencePercent, setPositioningConfidencePercent] = useState(0);
   const degradedSinceRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -153,6 +241,7 @@ export function useArTrackingStability(params: {
       setFadeFactor(1);
       setFrozenForMs(0);
       setCompassQualityPercent(0);
+      setPositioningConfidencePercent(0);
       degradedSinceRef.current = null;
       return;
     }
@@ -163,6 +252,13 @@ export function useArTrackingStability(params: {
       // av sensoravläsningar och ändras därför nästan alltid en aning mellan
       // varje 250ms-tick.
       setCompassQualityPercent(Math.round(headingStabilityToQuality(headingStabilityRef.current) * 100));
+      const liveConfidence =
+        gpsAccuracyToQuality(gpsAccuracy) * CONFIDENCE_WEIGHTS.gps +
+        headingStabilityToQuality(headingStabilityRef.current) * CONFIDENCE_WEIGHTS.headingStability +
+        headingAccuracyToQuality(headingAccuracyDegRef.current) * CONFIDENCE_WEIGHTS.headingAccuracy +
+        pitchStabilityToQuality(pitchStabilityRef.current) * CONFIDENCE_WEIGHTS.pitch +
+        (calibrationComplete ? 1 : HORIZON_UNCALIBRATED_QUALITY) * CONFIDENCE_WEIGHTS.horizon;
+      setPositioningConfidencePercent(Math.round(liveConfidence * 100));
 
       if (gpsAccuracy === null || !orientationHasFix) {
         setTier((prev) => (prev === "initializing" ? prev : "initializing"));
@@ -209,15 +305,27 @@ export function useArTrackingStability(params: {
     }, REEVALUATE_INTERVAL_MS);
 
     return () => window.clearInterval(id);
-  }, [enabled, gpsAccuracy, orientationHasFix, headingStabilityRef]);
+  }, [enabled, gpsAccuracy, orientationHasFix, headingStabilityRef, headingAccuracyDegRef, pitchStabilityRef, calibrationComplete]);
 
   const gpsQuality = gpsAccuracyToQuality(gpsAccuracy);
   const headingQuality = headingStabilityToQuality(headingStabilityRef.current);
+  const headingAccuracyQuality = headingAccuracyToQuality(headingAccuracyDegRef.current);
+  const pitchQuality = pitchStabilityToQuality(pitchStabilityRef.current);
+  const horizonLockQuality = calibrationComplete ? 1 : HORIZON_UNCALIBRATED_QUALITY;
+  const positioningConfidence =
+    gpsQuality * CONFIDENCE_WEIGHTS.gps +
+    headingQuality * CONFIDENCE_WEIGHTS.headingStability +
+    headingAccuracyQuality * CONFIDENCE_WEIGHTS.headingAccuracy +
+    pitchQuality * CONFIDENCE_WEIGHTS.pitch +
+    horizonLockQuality * CONFIDENCE_WEIGHTS.horizon;
   const reasons: string[] = [];
   if (gpsAccuracy === null) reasons.push("Ingen GPS-fix ännu");
   else if (gpsQuality < 1) reasons.push(`Svag GPS-precision (±${Math.round(gpsAccuracy)} m)`);
   if (!orientationHasFix) reasons.push("Ingen kompassriktning ännu");
   else if (headingQuality < 1) reasons.push("Kompassen/riktningen är instabil just nu");
+  if (headingAccuracyQuality < 0.5) reasons.push("Kompassen behöver kalibreras om (t.ex. rör telefonen i en åtta)");
+  if (pitchQuality < 0.5) reasons.push("Telefonen hålls ostadigt (skakar/vinklas om)");
+  if (!calibrationComplete) reasons.push("Horisonten är inte kalibrerad ännu");
   if (reasons.length === 0) reasons.push("Inga kända problem");
 
   const freeze = tier === "degraded" || tier === "lost";
@@ -228,13 +336,18 @@ export function useArTrackingStability(params: {
     weakSignalMessage: freeze ? WEAK_SIGNAL_MESSAGE : null,
     fadeFactor,
     compassQualityPercent,
+    positioningConfidencePercent,
     debug: {
       gpsAccuracyM: gpsAccuracy,
       headingStability: headingStabilityRef.current,
       headingAccuracyDeg: headingAccuracyDegRef.current,
       gpsQuality,
       headingQuality,
+      headingAccuracyQuality,
+      pitchQuality,
+      horizonLockQuality,
       combinedQuality: Math.min(gpsQuality, headingQuality),
+      positioningConfidence,
       tier,
       frozenForMs,
       reasons,
