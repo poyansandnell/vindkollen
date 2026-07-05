@@ -26,6 +26,7 @@ import { CompassStabilityBadge } from "@/components/CompassStabilityBadge";
 import { GpsQualityBadge } from "@/components/GpsQualityBadge";
 import { ArStabilityBadge } from "@/components/ArStabilityBadge";
 import { NearestTurbineArrow } from "@/components/NearestTurbineArrow";
+import { LiveDebugStrip } from "@/components/LiveDebugStrip";
 import { PhotoMontageModal } from "@/components/PhotoMontageModal";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
@@ -198,22 +199,23 @@ export default function Home() {
   // att AR-vyn för den skull döljs eller fördröjs.
   const stillCalibrating = ready && orientation.hasFix && !orientation.hasSettled;
 
-  // Juli 2026-fix: "AR-sessionen" (kamerabakgrundens turbin-overlay, HUD-
-  // topp-/bottenraden, badges, banderoller och pilen) fick tidigare visas
-  // SAMTIDIGT som `LoadingSequence`s laddnings-/kalibreringsskärm —
-  // rapporterad bugg: allt "blöder igenom" bakom/ovanpå kalibreringsdialogen
-  // vid appstart. Orsaken var att `ready` (GPS+kompass+kamera-fix) och
-  // `LoadingSequence`s EGEN, frikopplade tidslinje (kalibrering →
-  // nedräkning → checklista) körs parallellt — `ready` kan alltså bli sant
-  // innan laddningssekvensen visuellt är klar. Flera av dessa element
-  // ligger dessutom på samma eller högre z-index än `LoadingSequence`
-  // (topp-/bottenrad z-45, pilen z-50, inomhus-overlayen z-40 men SENARE i
-  // DOM-ordningen), så de facto ritades de ovanpå kalibreringsskärmen
-  // istället för att döljas bakom den. Genom att kräva BÅDA `ready` OCH att
-  // laddningssekvensen redan stängts (`!showLoadingSequence`) garanteras
-  // steg-för-steg-flödet produktkravet beskriver: Laddning → GPS →
-  // Kompasskalibrering → ARSession → Placera verk → Visa HUD → Klar.
-  const arSessionVisible = ready && !showLoadingSequence;
+  // Juli 2026-fix (regressionsrapport: "renderingen väntar på kalibrering"):
+  // `arSessionVisible` STYRDE TIDIGARE av `ready && !showLoadingSequence` —
+  // dvs. hela AR-sessionen (kamerabakgrund, turbin-overlay, HUD, pilen)
+  // förblev osynlig tills `LoadingSequence`s EGEN tidslinje (kalibrering →
+  // nedräkning → checklista) helt stängts, oavsett att `ARScene`s
+  // requestAnimationFrame-loop redan renderade och positionerade alla verk
+  // korrekt under tiden. I dåliga magnetfält kunde kalibreringssteget ta upp
+  // till ~18s PER delsteg (se `LoadingSequence.tsx`), vilket upplevdes precis
+  // som produktkravet varnar för: "inga verk visas, pilen reagerar inte" —
+  // fast rendering/positionering i själva verket kördes hela tiden bakom en
+  // overlay. `arSessionVisible` beror nu ENDAST på `ready` (GPS+kompass+
+  // kamera-fix) — ALDRIG på om laddningssekvensen visuellt hunnit stängas.
+  // `LoadingSequence` har istället fått ett högre z-index än alla HUD-
+  // element (se dess egen kommentar) så den ändå visuellt täcker/döljer
+  // HUD:en snyggt utan att blöda igenom, precis som den ursprungliga fixen
+  // avsåg — men utan att BLOCKERA den underliggande renderingen.
+  const arSessionVisible = ready;
   const wind = useWindSound();
   // Kamerabaserad himmel/inomhus-heuristik (se `useSkyDetection`s jsdoc för
   // begränsningar) — styr både AR-verkens synlighet (via `isPointSky`,
@@ -416,6 +418,20 @@ export default function Home() {
     if (!started) return;
     const id = window.setInterval(() => {
       setInFrontOfCameraCount(arSceneRef.current?.getInFrontOfCameraCount() ?? 0);
+    }, 250);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [started]);
+
+  // Juli 2026-fix (regressionsrapport punkt 8: persistent felsökningstext
+  // med FPS/bildrutenummer) — pollas oftare (250ms) än de flesta andra
+  // debug-talen ovan, eftersom hela poängen är att SNABBT kunna se att
+  // renderloopen fortfarande lever (stigande bildrutenummer, rimlig FPS).
+  const [arDebugStats, setArDebugStats] = useState({ fps: 0, frameCount: 0 });
+  useEffect(() => {
+    if (!started) return;
+    const id = window.setInterval(() => {
+      setArDebugStats(arSceneRef.current?.getDebugStats() ?? { fps: 0, frameCount: 0 });
     }, 250);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -832,6 +848,26 @@ export default function Home() {
             />
           )}
 
+          {/* Juli 2026-fix (regressionsrapport punkt 8): persistent,
+              alltid synlig felsökningstext — INTE gated bakom
+              `showSensorDebug` som `SensorDebugPanel` nedan. Visas hela
+              AR-sessionen (även under `LoadingSequence`, som ligger ovanpå
+              den) så man alltid, utan att öppna något extra läge, kan se
+              att renderloopen lever. */}
+          {arSessionVisible && (
+            <LiveDebugStrip
+              fps={arDebugStats.fps}
+              frameCount={arDebugStats.frameCount}
+              headingDeg={headingDegState}
+              bearingToNearestDeg={nearestTurbineInfo?.bearingDeg ?? null}
+              angleDiffToNearestDeg={angleDiffToNearestDeg}
+              gpsAccuracyM={geo.accuracy}
+              headingAccuracyDeg={orientation.headingAccuracyDegRef.current}
+              renderedTurbineCount={withinRangeTurbineCount}
+              visibleTurbineCount={visibleTurbineCount}
+            />
+          )}
+
           {/* Dagsläge stänger av mörkläggningen helt, oavsett vilket
               visualiseringsläge (t.ex. "Kväll") som är valt — bara det
               manuella Nattläge-valet styr detta filter. */}
@@ -987,7 +1023,12 @@ export default function Home() {
             </div>
           )}
 
-          {arSessionVisible && stillCalibrating && (
+          {/* Juli 2026-fix (regressionsrapport: "UI ligger ovanpå varandra"):
+              denna banderoll och "Horisont kalibrerad!" ovan delar samma
+              plats (top-32) — utan `&& !calibrated` kunde båda visas
+              SAMTIDIGT under kalibreringens 1.8s-bekräftelsefönster, staplat
+              på varandra. Endast EN statusruta åt gången i denna position. */}
+          {arSessionVisible && stillCalibrating && !calibrated && (
             <div className="pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center px-6">
               <span className="max-w-xs rounded-full bg-yellow-500/90 px-4 py-1.5 text-center text-xs font-medium text-[#090909] shadow-lg">
                 Kalibrerar kompass i bakgrunden – fortsätt röra telefonen långsamt för bättre precision.

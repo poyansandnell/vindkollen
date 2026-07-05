@@ -23,8 +23,17 @@ interface LoadingSequenceProps {
 // (t.ex. en sensor som fastnar helt) går sekvensen ändå vidare efter
 // `CALIBRATION_PHASE_MAX_WAIT_MS`, precis som appens övriga sensor-
 // watchdogs (se `useCameraStream.ts`/`useGeolocation.ts`).
-const CALIBRATION_PHASE_HINT_MS = 7000;
-const CALIBRATION_PHASE_MAX_WAIT_MS = 18000;
+//
+// Juli 2026-fix (regressionsrapport: "renderingen väntar på kalibrering"):
+// sänkta kraftigt från 7000/18000ms — denna overlay får ALDRIG vara det som
+// får appen att kännas trasig/hängande. `Home.tsx`s `arSessionVisible` beror
+// inte längre på att den här sekvensen stängts (rendering/positionering
+// pågår redan bakom den), men själva overlayen ska ändå försvinna snabbt så
+// användaren snabbt ser den redan levande AR-vyn. Ett explicit
+// "Hoppa över"-alternativ finns dessutom synligt direkt (se nedan), inte
+// bara efter hjälptexten.
+const CALIBRATION_PHASE_HINT_MS = 2000;
+const CALIBRATION_PHASE_MAX_WAIT_MS = 5000;
 // Kort paus så "Kompass kalibrerad ✓" hinner synas innan nedräkningen tar vid.
 const CALIBRATION_DONE_PAUSE_MS = 900;
 
@@ -172,7 +181,16 @@ export function LoadingSequence({
   const countdownStage = COUNTDOWN_STAGES[Math.min(countdownIndex, COUNTDOWN_STAGES.length - 1)];
 
   return (
-    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-[#090909] px-6 text-center text-white">
+    // Juli 2026-fix (regressionsrapport: "renderingen väntar på
+    // kalibrering"/"UI ligger ovanpå varandra"): höjt från z-40 till z-[70] —
+    // MÅSTE ligga strikt ovanför ALLA AR-HUD-element (topp-/bottenraden
+    // z-45, pilen/målbekräftelsen z-50) eftersom `Home.tsx`s `arSessionVisible`
+    // inte längre väntar in att den här sekvensen stängs. AR-scenen (kamera,
+    // turbiner, HUD) renderas alltså redan LIVE bakom denna overlay hela
+    // tiden — ett lägre z-index skulle låta HUD:en blöda igenom ovanpå
+    // kalibreringsskärmen precis som den ursprungliga bug-rapporten (som
+    // ledde till `!showLoadingSequence`-spärren) beskrev.
+    <div className="absolute inset-0 z-[70] flex flex-col items-center justify-center bg-[#090909] px-6 text-center text-white">
       {uiPhase === "calibration" && (
         <div className="mx-auto w-full max-w-md">
           <p className="text-xs font-medium uppercase tracking-wide text-[#FFB347]">Katrineholm FRAMÅT</p>
@@ -205,17 +223,24 @@ export function LoadingSequence({
           </p>
 
           {showCalibrationHint && calibrationPhase !== "done" && (
-            <>
-              <p className="mt-1 text-[11px] text-white/40" aria-live="polite">
-                Tar det lång tid? Se till att telefonen inte ligger nära metall eller elektronik, och fortsätt vrida den.
-              </p>
-              <button
-                onClick={() => setUiPhase("countdown")}
-                className="mt-3 rounded-full border border-white/20 bg-white/5 px-4 py-1.5 text-xs font-medium text-white/80 hover:bg-white/10"
-              >
-                Fortsätt ändå →
-              </button>
-            </>
+            <p className="mt-1 text-[11px] text-white/40" aria-live="polite">
+              Tar det lång tid? Se till att telefonen inte ligger nära metall eller elektronik, och fortsätt vrida den.
+            </p>
+          )}
+
+          {/* Juli 2026-fix (regressionsrapport punkt 1: "renderingen får
+              aldrig blockeras av kalibrering"): tidigare dök detta knapp
+              FÖRST upp efter `CALIBRATION_PHASE_HINT_MS` — under tiden hade
+              användaren inget sätt att hoppa förbi kalibreringsskärmen alls.
+              Synlig direkt nu, hela kalibreringsfasen igenom, så vem som
+              helst kan hoppa till den redan levande AR-vyn omedelbart. */}
+          {calibrationPhase !== "done" && (
+            <button
+              onClick={() => setUiPhase("countdown")}
+              className="mt-3 rounded-full border border-white/20 bg-white/5 px-4 py-1.5 text-xs font-medium text-white/80 hover:bg-white/10"
+            >
+              Hoppa över →
+            </button>
           )}
         </div>
       )}

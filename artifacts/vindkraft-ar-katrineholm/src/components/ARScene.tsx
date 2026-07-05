@@ -114,6 +114,15 @@ export interface ARSceneHandle {
    * approximera samma tal själv med en horisontell-only bäringsjämförelse.
    */
   getInFrontOfCameraCount: () => number;
+  /**
+   * Juli 2026-fix (regressionsrapport punkt 8: persistent, alltid synlig
+   * felsökningstext) — aktuell renderloop-hälsa: bildrutor/sekund (mätt över
+   * ett rullande ~500ms-fönster, se `animate`) och totalt antal renderade
+   * bildrutor sedan `ARScene` monterades. Ett `frameCount` som fortsätter
+   * stiga är i sig ett bevis på att renderloopen faktiskt kör kontinuerligt
+   * och inte har fastnat/blockerats.
+   */
+  getDebugStats: () => { fps: number; frameCount: number };
 }
 
 interface TurbineObject {
@@ -435,6 +444,14 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   // tal som redan styr `forceVisible`/"rakt fram"-garantin (se nedan)
   // garanteras att båda mekanismerna alltid är överens.
   const inFrontOfCameraCountRef = useRef(0);
+  // Juli 2026-fix (regressionsrapport punkt 8: persistent felsökningstext
+  // ska visa FPS och bildrutenummer) — uppdateras i `animate` nedan och
+  // läses av `Home.tsx` via `getDebugStats()`, samma mönster som
+  // `inFrontOfCameraCountRef`/`getInFrontOfCameraCount`.
+  const frameCountRef = useRef(0);
+  const fpsRef = useRef(0);
+  const fpsWindowStartRef = useRef<number | null>(null);
+  const fpsWindowFramesRef = useRef(0);
 
   userRef.current = { lat: userLat, lon: userLon };
   modeRef.current = {
@@ -463,6 +480,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         pendingCaptureRef.current = resolve;
       }),
     getInFrontOfCameraCount: () => inFrontOfCameraCountRef.current,
+    getDebugStats: () => ({ fps: fpsRef.current, frameCount: frameCountRef.current }),
   }));
 
   useEffect(() => {
@@ -1101,6 +1119,19 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       }
 
       inFrontOfCameraCountRef.current = inFrontOfCameraCount;
+
+      // FPS mäts över ett rullande ~500ms-fönster (inte ett enskilt dt) för
+      // en stabil, läsbar siffra i felsökningstexten istället för att
+      // studsa bildruta för bildruta.
+      frameCountRef.current += 1;
+      fpsWindowFramesRef.current += 1;
+      if (fpsWindowStartRef.current === null) {
+        fpsWindowStartRef.current = timestamp;
+      } else if (timestamp - fpsWindowStartRef.current >= 500) {
+        fpsRef.current = Math.round((fpsWindowFramesRef.current * 1000) / (timestamp - fpsWindowStartRef.current));
+        fpsWindowStartRef.current = timestamp;
+        fpsWindowFramesRef.current = 0;
+      }
 
       state.renderer.render(state.scene, state.camera);
 

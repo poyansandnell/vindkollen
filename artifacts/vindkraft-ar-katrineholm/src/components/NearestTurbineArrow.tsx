@@ -5,14 +5,15 @@ import { formatDistance } from "@/lib/geo";
 // pilen kunna gömma sig (eller visas i onödan) fel jämfört med vad som
 // faktiskt syns i AR-vyn just nu.
 const FOV_DEGREES = 65;
-// Hur ofta pilens riktning uppdateras. Sänkt (juli 2026, produktkrav "pilen
-// ska tydligt rotera åt rätt håll") från 150ms till 80ms — 150ms kändes
-// märkbart hackigt/eftersläpande när man vred mobilen snabbt, trots att
-// kompassen i sig hinner ändras betydligt oftare. Fortfarande ett enkelt
-// intervall (inte requestAnimationFrame) eftersom mänsklig handrörelse ändå
-// inte kräver bildruteexakt uppdatering, och undviker att re-rendera
-// `Home.tsx`s stora komponentträd i onödan.
-const POLL_INTERVAL_MS = 80;
+// Hur ofta pilens riktning uppdateras. Sänkt (juli 2026 regressionsrapport,
+// produktkrav "pilen ska uppdateras 30-60 ggr/s") från 80ms (~12/s) till
+// 20ms (~50/s) — 80ms upplevdes fortfarande som att pilen "bara beräknades
+// en gång" jämfört med den 30-60Hz-uppdaterade AR-scenen runt omkring den.
+// Fortfarande ett enkelt intervall (inte requestAnimationFrame) eftersom
+// mänsklig handrörelse ändå inte kräver bildruteexakt uppdatering, och
+// undviker att re-rendera `Home.tsx`s stora komponentträd i onödan — men
+// tätt nog att kännas lika responsiv som scenen.
+const POLL_INTERVAL_MS = 20;
 // Vinkeln pilen roterar per grad avvikelse utanför synfältet — ger en
 // proportionell (inte bara binär vänster/höger) rotation, så pilen tydligt
 // "följer med" när man vrider mobilen mot målet istället för att bara peka
@@ -30,7 +31,12 @@ const MAX_ARROW_ROTATION_DEG = 80;
 // stabiliseras helt ska pilen ändå till slut dyka upp, inte vara dold för
 // evigt).
 const MIN_SETTLE_COMPASS_QUALITY_PERCENT = 45;
-const MAX_SETTLE_WAIT_MS = 4000;
+// Juli 2026 regressionsrapport: sänkt från 4000ms — pilen ska "börja rotera
+// direkt när telefonen vrids", inte kännas som att den väntar in en
+// kalibrering. Kvalitetströskeln ovan (nås oftast på under en sekund) är
+// fortfarande den normala vägen ut ur väntan; denna timeout är bara den
+// yttersta säkerheten för enheter med en riktigt dålig magnetometer.
+const MAX_SETTLE_WAIT_MS = 1200;
 
 function circularDiffDeg(target: number, current: number): number {
   return ((target - current + 540) % 360) - 180;

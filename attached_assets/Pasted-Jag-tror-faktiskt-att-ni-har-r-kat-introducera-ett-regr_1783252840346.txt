@@ -1,0 +1,185 @@
+Jag tror faktiskt att ni har råkat introducera ett regressionsfel. På bilderna syns flera saker som pekar på att AR-loopen inte längre körs kontinuerligt.
+
+Det här skulle jag skicka till Replit:
+
+⸻
+
+🚨 Kritiska buggar efter senaste uppdateringen
+
+Den senaste ändringen har gjort att AR-renderingen i princip slutat fungera. Vi behöver återställa realtidsrenderingen.
+
+1. Renderingen måste starta DIREKT (högsta prioritet)
+
+Nu väntar systemet på att någon kalibrering ska bli klar.
+
+Det är fel.
+
+Vindkraftverken ska börja renderas omedelbart när kameran öppnas.
+
+Gör istället:
+
+* initiera GPS
+* initiera kompass
+* initiera AR-session
+* rendera samtliga vindkraftverk direkt
+
+Om kompass eller GPS förbättras efteråt ska endast positionen justeras.
+
+Renderingen får aldrig blockeras av kalibrering.
+
+⸻
+
+2. Kör renderingen varje frame
+
+Kontrollera att renderWindTurbines() körs inne i requestAnimationFrame().
+
+Exempel:
+
+requestAnimationFrame(updateAR)
+updateAR():
+updateCompass()
+updateGPS()
+updateHeading()
+updateCamera()
+updateWindmills()
+updateArrow()
+renderScene()
+requestAnimationFrame(updateAR)
+
+Om updateWindmills() inte körs varje frame kommer inga verk visas.
+
+⸻
+
+3. Pilen uppdateras inte
+
+Pilen verkar bara beräknas en gång.
+
+Den ska uppdateras varje frame.
+
+Varje gång heading ändras:
+
+bearing = calculateBearing()
+difference = bearing - heading
+arrow.rotation = difference
+
+Det ska ske 30–60 gånger per sekund.
+
+⸻
+
+4. Vindkraftverken följer inte telefonen
+
+Det verkar som world matrix inte längre uppdateras.
+
+Varje frame ska:
+
+* läsa kamerans position
+* läsa heading
+* läsa pitch
+* läsa roll
+* transformera alla vindkraftverk
+
+Aldrig använda gamla koordinater.
+
+⸻
+
+5. Kompassstatus har försvunnit
+
+Tidigare visades:
+
+🟢 Stabil
+
+🟡 Kalibreras
+
+🔴 Instabil
+
+Den ska tillbaka.
+
+Visa dessutom:
+
+Kompass:
+82 %
+GPS:
+95 %
+AR:
+91 %
+
+Det gör felsökningen mycket enklare.
+
+⸻
+
+6. UI ligger ovanpå varandra
+
+Toast-notiser får inte visas samtidigt.
+
+Inför en kö.
+
+Exempel:
+
+GPS-status
+↓
+AR-status
+↓
+Kalibrering
+↓
+Närmaste verk
+
+Endast EN informationsruta åt gången.
+
+⸻
+
+7. “Svag positionering” ska inte stoppa renderingen
+
+Den får endast visa information.
+
+Den får aldrig hindra:
+
+* rendering
+* uppdatering
+* pil
+* ljud
+
+Använd senaste position tills en bättre kommer.
+
+⸻
+
+8. Lägg in debug-text
+
+Visa alltid:
+
+FPS
+Heading
+Bearing
+Skillnad
+GPS accuracy
+Compass accuracy
+Antal renderade verk
+Antal synliga verk
+Frame number
+
+Exempel:
+
+FPS: 58
+Heading: 214°
+Bearing: 206°
+Δ: -8°
+GPS ±2m
+Compass 89%
+Rendered: 29
+Visible: 11
+
+⸻
+
+Målet
+
+Appen ska fungera så här:
+
+* Kameran öppnas.
+* Alla 29 verk renderas direkt.
+* Pilen börjar rotera direkt när telefonen vrids.
+* Vindkraftverken följer kameran mjukt i realtid.
+* GPS och kompass får förbättra precisionen efter hand utan att stoppa renderingen.
+* UI ska aldrig överlappa.
+
+⸻
+
+Utifrån dina skärmbilder är min misstanke att de har flyttat renderingen till att vara beroende av att kalibreringen blir “klar”, eller att updateWindmills() och updateArrow() inte längre körs i den kontinuerliga requestAnimationFrame-loopen. Det skulle förklara exakt varför inga verk visas och varför pilen inte reagerar när du vrider telefonen.

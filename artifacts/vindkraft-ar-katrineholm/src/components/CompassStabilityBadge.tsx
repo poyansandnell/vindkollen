@@ -10,10 +10,16 @@ const LOW_QUALITY_THRESHOLD = 60;
 // skulle badgen studsa mellan gult och grönt vid minsta brus runt 60%.
 const HIGH_QUALITY_THRESHOLD = 80;
 
-function tierFor(percent: number): { className: string; icon: string } {
-  if (percent >= HIGH_QUALITY_THRESHOLD) return { className: "bg-green-500/20 text-green-200", icon: "🟢" };
-  if (percent >= LOW_QUALITY_THRESHOLD) return { className: "bg-yellow-500/20 text-yellow-200", icon: "🟡" };
-  return { className: "bg-red-500/20 text-red-200", icon: "🔴" };
+// Juli 2026-fix (regressionsrapport punkt 5: "kompassstatus har försvunnit
+// — 🟢 Stabil / 🟡 Kalibreras / 🔴 Instabil ska tillbaka"): badgen visade
+// tidigare BARA procenten (t.ex. "Kompass: 82% stabil") utan någon
+// kategorisk textetikett. Lägger nu till den efterfrågade klartextetiketten
+// bredvid ikonen/procenten — utan att ta bort procenttalet, som fortfarande
+// är den mer exakta signalen (produktkrav 2).
+function tierFor(percent: number): { className: string; icon: string; label: string } {
+  if (percent >= HIGH_QUALITY_THRESHOLD) return { className: "bg-green-500/20 text-green-200", icon: "🟢", label: "Stabil" };
+  if (percent >= LOW_QUALITY_THRESHOLD) return { className: "bg-yellow-500/20 text-yellow-200", icon: "🟡", label: "Kalibreras" };
+  return { className: "bg-red-500/20 text-red-200", icon: "🔴", label: "Instabil" };
 }
 
 /**
@@ -25,14 +31,14 @@ function tierFor(percent: number): { className: string; icon: string } {
  * åtgärdas av just den rörelsen (bryter en tillfällig magnetisk låsning).
  */
 export function CompassStabilityBadge({ percent }: CompassStabilityBadgeProps) {
-  const { className, icon } = tierFor(percent);
+  const { className, icon, label } = tierFor(percent);
   return (
     <div className="flex flex-col items-end gap-1">
       <span
         className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${className}`}
       >
         <span aria-hidden>{icon}</span>
-        Kompass: {percent}% stabil
+        Kompass: {label} ({percent}%)
       </span>
       {percent < LOW_QUALITY_THRESHOLD && (
         <span className="max-w-[9.5rem] text-right text-[10px] leading-tight text-yellow-200/90">
