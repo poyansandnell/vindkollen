@@ -64,6 +64,15 @@ interface ARSceneProps {
    */
   hideAll?: boolean;
   /**
+   * Turbin-id:n (se `TurbineSweref.id`) som ska tvingas till full synlighet
+   * oavsett `globalVisibilityFactor`/`hideAll` — juli 2026-produktkrav: en
+   * 2-sekunders "inga verk syns"-fallback i `Home.tsx` som visar de tre
+   * närmaste verken som "AR-testobjekt" medan sensorerna kalibreras, samt
+   * en alltid-aktiv "rakt fram"-garanti (se `NEAR_CENTER_FORCE_DEG`) — INTE
+   * bara denna prop. Default tom mängd (bakåtkompatibelt).
+   */
+  forceVisibleIds?: Set<string>;
+  /**
    * Styr ENDAST om scenen syns (opacitet/pointer-events på DOM-elementet),
    * INTE om den finns/renderas. Produktkrav (juli 2026, "Render first –
    * refine continuously"): `Home.tsx` monterar `ARScene` så fort AR-
@@ -79,6 +88,7 @@ interface ARSceneProps {
 }
 
 const DEFAULT_IS_POINT_SKY = () => true;
+const EMPTY_FORCE_VISIBLE_IDS: Set<string> = new Set();
 const DEFAULT_OCCLUSION_GRID = new Float32Array(GRID_COLS * GRID_ROWS).fill(1);
 const DEFAULT_GET_OCCLUSION_GRID = () => DEFAULT_OCCLUSION_GRID;
 // Mjuk tröskel (smoothstep) runt "hälften ockluderad" istället för en hård
@@ -127,6 +137,14 @@ interface TurbineObject {
   blinkOnMs: number;
   blinkOffsetMs: number;
   renderDistM: number;
+  /**
+   * Sant när verket antingen ligger inom `NEAR_CENTER_FORCE_DEG` av kamerans
+   * riktning (produktkrav: "verk inom ±25° ska renderas även vid dålig
+   * kompassprecision") eller listas i `forceVisibleIds`-propen (2-sekunders
+   * kalibreringsfallback) — omräknas varje bildruta i `animate`, se
+   * `applyFinalOpacities`.
+   */
+  forceVisible: boolean;
 }
 
 interface CanvasLabel {
@@ -137,6 +155,15 @@ interface CanvasLabel {
 }
 
 const FOV_DEGREES = 65;
+// Juli 2026-produktkrav 4: verk inom denna vinkel (grader) från kamerans
+// faktiska riktning (gir+pitch+roll, INTE bara rå kompassavläsning) ska
+// ALLTID renderas som ett verkligt 3D-objekt, även om Outdoor Confidence
+// Index/AR-trackingens uttoning annars skulle döma dem osynliga p.g.a. dålig
+// kompassprecision eller en (falskt) konservativ himmel-heuristik. Klart
+// snävare än halva kamera-FOV (`FOV_DEGREES / 2` = 32.5°) med avsikt — detta
+// är en "garanterat synligt rakt fram"-zon, inte hela synfältet (som redan
+// får normal rendering via skärmprojektionen i `applyVisibility`/`animate`).
+const NEAR_CENTER_FORCE_DEG = 25;
 export const MAX_RENDER_DISTANCE_M = 9000;
 // Meter -> scenens enheter. Vald så att den visuella storleken/avstånden
 // matchar kamerans FOV/klippplan (samma skala som tidigare, enklare modell).
@@ -342,6 +369,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     showHiddenTurbines,
     globalVisibilityFactor,
     hideAll,
+    forceVisibleIds,
     visible = true,
   },
   forwardedRef,
@@ -367,6 +395,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     showHiddenTurbines: showHiddenTurbines ?? false,
     globalVisibilityFactor: globalVisibilityFactor ?? 1,
     hideAll: hideAll ?? false,
+    forceVisibleIds: forceVisibleIds ?? EMPTY_FORCE_VISIBLE_IDS,
   });
   const skyRef = useRef({
     isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
@@ -392,6 +421,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     showHiddenTurbines: showHiddenTurbines ?? false,
     globalVisibilityFactor: globalVisibilityFactor ?? 1,
     hideAll: hideAll ?? false,
+    forceVisibleIds: forceVisibleIds ?? EMPTY_FORCE_VISIBLE_IDS,
   };
   skyRef.current = {
     isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
@@ -632,6 +662,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         blinkOnMs: BLINK_ON_MS,
         blinkOffsetMs,
         renderDistM: 0,
+        forceVisible: false,
       };
     });
 
@@ -786,9 +817,19 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     function applyFinalOpacities(obj: TurbineObject) {
       // `globalVisibilityFactor` (Outdoor Confidence Index-tröskeln) verkar
       // som en global gate — 0 döljer alla verk helt oavsett ocklusion,
-      // ~0.6 tonar ned dem för "cautious"-läget.
-      const globalFactor = modeRef.current.hideAll ? 0 : modeRef.current.globalVisibilityFactor;
-      const skyFactor = obj.skyFactor * globalFactor;
+      // ~0.6 tonar ned dem för "cautious"-läget. `obj.forceVisible`
+      // (rakt-fram-garanti ±25° eller kalibreringsfallbackens
+      // `forceVisibleIds`, se `animate`) kringgår denna gate helt — men
+      // INTE `hideAll` (den riktiga inomhus-/väggöverlayen, som redan
+      // täcker hela skärmen ovanpå AR-canvasen och därför gör
+      // kringgåendet osynligt ändå; att låta `hideAll` vinna håller
+      // logiken enkel och odubbel).
+      const globalFactor = modeRef.current.hideAll
+        ? 0
+        : obj.forceVisible
+          ? 1
+          : modeRef.current.globalVisibilityFactor;
+      const skyFactor = (obj.forceVisible ? 1 : obj.skyFactor) * globalFactor;
       const bodyOpacity = obj.baseOpacity * globalFactor;
       for (const mat of obj.materials) {
         mat.transparent = true;
@@ -959,8 +1000,24 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         // Navhöjdspunkten (`obj.light.position`) används som representativ
         // ankarpunkt eftersom den täcker den mest synliga delen av verket.
         camSpaceVec.copy(obj.light.position).applyMatrix4(state.camera.matrixWorldInverse);
+        // "Rakt fram"-garantin (produktkrav 4): vinkeln mellan verkets
+        // riktning och kamerans faktiska optiska axel (-Z i kamerarymden,
+        // efter att `quaternionRef` — gir+pitch+roll — redan tillämpats på
+        // `state.camera` ovan i denna funktion), INTE bara en jämförelse
+        // mellan råa kompass-/bäringsgrader. Träffar denna zon renderas
+        // verket alltid som ett riktigt 3D-objekt, oavsett hur dålig
+        // kompassprecisionen/Outdoor Confidence Index-tröskeln är just nu.
+        const inFrontOfCamera = camSpaceVec.z < 0;
+        const yawFromCenterDeg = inFrontOfCamera
+          ? (Math.atan2(camSpaceVec.x, -camSpaceVec.z) * 180) / Math.PI
+          : null;
+        const nearCenter = yawFromCenterDeg !== null && Math.abs(yawFromCenterDeg) <= NEAR_CENTER_FORCE_DEG;
+        obj.forceVisible =
+          (nearCenter && obj.renderDistM <= MAX_RENDER_DISTANCE_M) ||
+          modeRef.current.forceVisibleIds.has(obj.turbine.id);
+
         let skyTarget = obj.skyFactor;
-        if (camSpaceVec.z < 0) {
+        if (inFrontOfCamera) {
           ndcVec.copy(obj.light.position).project(state.camera);
           const u = (ndcVec.x + 1) / 2;
           const v = (1 - ndcVec.y) / 2;
@@ -976,7 +1033,12 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         obj.light.visible = blinkOn;
         obj.glow.visible = blinkOn;
 
-        const shadowSkyFactor = obj.skyFactor * (modeRef.current.hideAll ? 0 : modeRef.current.globalVisibilityFactor);
+        const shadowGlobalFactor = modeRef.current.hideAll
+          ? 0
+          : obj.forceVisible
+            ? 1
+            : modeRef.current.globalVisibilityFactor;
+        const shadowSkyFactor = obj.skyFactor * shadowGlobalFactor;
         if (flickerActive && obj.shadow.visible) {
           const flicker = 0.55 + 0.45 * Math.cos(obj.bladesGroup.rotation.z * 3);
           obj.shadowMaterial.opacity = obj.shadowBaseOpacity * shadowSkyFactor * flicker;

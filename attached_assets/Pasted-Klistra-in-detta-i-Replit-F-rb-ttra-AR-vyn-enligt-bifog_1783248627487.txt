@@ -1,0 +1,37 @@
+Klistra in detta i Replit:
+
+⸻
+
+Förbättra AR-vyn enligt bifogad bild:
+
+1. Statusindikatorerna högst upp kapas/försvinner
+    * Se till att alla indikatorer ligger inom safe-area på iPhone.
+    * De ska kunna scrolla horisontellt om de inte får plats.
+    * Lägg padding-top: env(safe-area-inset-top) och padding-left/right.
+    * Ingen indikator får hamna bakom Dynamic Island eller utanför skärmen.
+    * Gör statusraden overflow-x: auto, white-space: nowrap och använd mindre text på små skärmar.
+2. Vindkraftverken syns inte alls trots att AR är aktiv
+    * Fixa så att verken alltid renderas direkt när GPS och kompass finns.
+    * Om verket är bakom användaren eller utanför kamerariktningen ska pilen visas, men om det ligger inom synfältet ska själva vindkraftverket synas.
+    * Kontrollera att filtrering inte råkar dölja alla verk.
+    * Lägg till debug-overlay som visar:
+        * antal verk laddade
+        * antal verk inom renderingsavstånd
+        * antal verk framför kameran
+        * närmaste verkets avstånd
+        * bearing till närmaste verk
+        * aktuell kompassriktning
+        * skillnad i grader mellan kamera och verk
+3. Fallback om AR-projektionen misslyckas
+    * Om inga verk syns efter 2 sekunder ska appen automatiskt visa närmaste 3 verk som “AR-testobjekt” i rätt riktning ungefärligt.
+    * Visa text: “Kalibrerar visning – rör mobilen långsamt i en åtta”.
+    * Men lås inte fast appen i kalibreringsläge.
+4. Gör verken lättare att hitta
+    * Närmaste verk ska alltid kunna visas med tydlig pil.
+    * Om användaren vrider mot pilens riktning ska verket dyka upp i bild.
+    * När verket är inom ±25 grader från kamerariktningen ska det renderas även om kompassprecisionen är dålig.
+5. Viktigt
+    * Ljudnivå, knappar och folkomröstningsknappen fungerar bra – rör dem inte mer än att layouten inte skymmer AR-vyn.
+    * Prioritet är att vindkraftverken faktiskt syns direkt och att toppindikatorerna inte kapas.
+
+Målet: När AR-läget öppnas ska användaren direkt se statusindikatorer korrekt placerade och vindkraftverken ska dyka upp i kameravyn utan att fastna eller vara osynliga.

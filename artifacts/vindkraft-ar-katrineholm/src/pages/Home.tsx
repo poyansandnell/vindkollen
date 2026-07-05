@@ -30,7 +30,7 @@ import { PhotoMontageModal } from "@/components/PhotoMontageModal";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { TURBINES, type TurbineSweref } from "@/lib/turbines";
-import { distanceMeters, bearingDegrees, isNightTime } from "@/lib/geo";
+import { distanceMeters, bearingDegrees, isNightTime, normalizeAngle } from "@/lib/geo";
 import { swerefToWgs84, wgs84ToSweref } from "@/lib/sweref";
 import { getBladeRpm } from "@/lib/turbineAnimation";
 import { estimateSoundLevel, dbaToGain, applyIndoorAttenuation, applyIndoorGain } from "@/lib/soundLevel";
@@ -353,6 +353,63 @@ export default function Home() {
     return turbineDistancesM.filter((d) => d <= MAX_RENDER_DISTANCE_M).length;
   }, [turbineDistancesM, globalVisibilityFactor, indoorsOrNoSight]);
 
+  // Bäring (grader från norr) till samtliga verk — delar `stableGeo` med
+  // `turbineDistancesM` ovan, så de två alltid syftar på exakt samma
+  // (stabiliserade) position/index-ordning.
+  const turbineBearingsDeg = useMemo(() => {
+    if (stableGeo.lat === null || stableGeo.lon === null) return null;
+    return activeTurbines.map((t) => {
+      const { lat, lon } = swerefToWgs84(t.easting, t.northing);
+      return bearingDegrees(stableGeo.lat as number, stableGeo.lon as number, lat, lon);
+    });
+  }, [activeTurbines, stableGeo.lat, stableGeo.lon]);
+
+  // Reaktiv kompassriktning — `orientation.headingDegRef` är medvetet en ref
+  // (uppdateras 30-60 ggr/s i ARScenes renderloop utan att trigga en
+  // React-omrendering), så vi pollar den till state i en långsammare takt
+  // (samma mönster som `NearestTurbineArrow`) för debug-panelen och
+  // 2-sekunders-fallbacken nedan, som BÅDA behöver ett reaktivt värde.
+  const [headingDegState, setHeadingDegState] = useState<number | null>(null);
+  useEffect(() => {
+    if (!started) return;
+    const id = window.setInterval(() => {
+      setHeadingDegState(orientation.headingDegRef.current);
+    }, 250);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [started]);
+
+  const FOV_HALF_DEG = 32.5;
+  const CALIBRATION_FALLBACK_TURBINE_COUNT = 3;
+  const CALIBRATION_FALLBACK_DELAY_MS = 2000;
+
+  // Antal laddade verk (produktkrav 2: debug-fält "turbines loaded count") —
+  // samma mängd som skickas till `ARScene`.
+  const loadedTurbineCount = activeTurbines.length;
+
+  // Antal verk inom max-renderavstånd, OAVSETT riktning/synlighetsfaktor
+  // (produktkrav 2: "within render distance count") — särskiljer "verket
+  // finns inom räckhåll" från "verket råkar synas just nu".
+  const withinRangeTurbineCount = useMemo(() => {
+    if (!turbineDistancesM) return 0;
+    return turbineDistancesM.filter((d) => d <= MAX_RENDER_DISTANCE_M).length;
+  }, [turbineDistancesM]);
+
+  // Antal verk som just nu ligger inom halva kamerans FOV OCH inom
+  // renderavstånd (produktkrav 2: "in-front-of-camera count") — beräknat
+  // från samma bäring/avstånd som `ARScene` använder, men här på den
+  // reaktiva kompassriktningen (`headingDegState`) istället för den råa
+  // renderloop-referensen, så React faktiskt ser värdet ändras.
+  const inFrontOfCameraCount = useMemo(() => {
+    if (!turbineDistancesM || !turbineBearingsDeg || headingDegState === null) return 0;
+    let count = 0;
+    for (let i = 0; i < turbineDistancesM.length; i++) {
+      if (turbineDistancesM[i] > MAX_RENDER_DISTANCE_M) continue;
+      if (Math.abs(normalizeAngle(headingDegState - turbineBearingsDeg[i])) <= FOV_HALF_DEG) count++;
+    }
+    return count;
+  }, [turbineDistancesM, turbineBearingsDeg, headingDegState]);
+
   // Anledningar till att verk kan vara dolda just nu, för sensordebug-
   // panelen — samlar ihop de olika (annars separata) döljningsmekanismerna
   // i ett läsbart facit.
@@ -440,6 +497,61 @@ export default function Home() {
       return closest;
     }, null);
   }, [activeTurbines, geo.lat, geo.lon]);
+
+  // Vinkelskillnad (grader, alltid ≥0) mellan aktuell kompassriktning och
+  // bäringen till närmaste verk (produktkrav 2: "angular diff
+  // camera↔turbine") — delar `nearestTurbineInfo` med pilen/monitorn.
+  const angleDiffToNearestDeg = useMemo(() => {
+    if (nearestTurbineInfo === null || headingDegState === null) return null;
+    return Math.abs(normalizeAngle(headingDegState - nearestTurbineInfo.bearingDeg));
+  }, [nearestTurbineInfo, headingDegState]);
+
+  // Tre närmaste verkens id:n, sorterade på avstånd — underlaget för
+  // 2-sekunders-kalibreringsfallbacken nedan ("visa de 3 närmaste som
+  // AR-testobjekt").
+  const nearestThreeTurbineIds = useMemo(() => {
+    if (!turbineDistancesM) return [];
+    return activeTurbines
+      .map((t, i) => ({ id: t.id, d: turbineDistancesM[i] }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, CALIBRATION_FALLBACK_TURBINE_COUNT)
+      .map((x) => x.id);
+  }, [activeTurbines, turbineDistancesM]);
+
+  // Produktkrav 3: om INGA verk legat inom kamerans FOV under 2 sammanhängande
+  // sekunder (medan AR-sessionen faktiskt är synlig/redo) tvingas de tre
+  // närmaste verken synliga som "AR-testobjekt" (via `forceVisibleIds` till
+  // `ARScene`, se dess jsdoc), tillsammans med en icke-blockerande
+  // kalibreringsbanderoll. Låser ALDRIG appen i kalibreringsläge — så fort
+  // minst ett verk naturligt hamnar i FOV igen (`inFrontOfCameraCount > 0`)
+  // stängs fallbacken av igen automatiskt, utan att kräva någon
+  // användaråtgärd.
+  const [calibrationFallbackActive, setCalibrationFallbackActive] = useState(false);
+  const noTurbinesInFrontSinceRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!arSessionVisible || !ready || inFrontOfCameraCount > 0) {
+      noTurbinesInFrontSinceRef.current = null;
+      setCalibrationFallbackActive(false);
+      return;
+    }
+    if (noTurbinesInFrontSinceRef.current === null) {
+      noTurbinesInFrontSinceRef.current = Date.now();
+    }
+    const elapsed = Date.now() - noTurbinesInFrontSinceRef.current;
+    if (elapsed >= CALIBRATION_FALLBACK_DELAY_MS) {
+      setCalibrationFallbackActive(true);
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setCalibrationFallbackActive(true);
+    }, CALIBRATION_FALLBACK_DELAY_MS - elapsed);
+    return () => window.clearTimeout(id);
+  }, [arSessionVisible, ready, inFrontOfCameraCount]);
+
+  const forceVisibleIds = useMemo(() => {
+    if (!calibrationFallbackActive || nearestThreeTurbineIds.length === 0) return undefined;
+    return new Set(nearestThreeTurbineIds);
+  }, [calibrationFallbackActive, nearestThreeTurbineIds]);
 
   const noiseImpact = useMemo(() => {
     const exposureSeconds =
@@ -696,6 +808,7 @@ export default function Home() {
             showHiddenTurbines={showHiddenTurbines}
             globalVisibilityFactor={globalVisibilityFactor}
             hideAll={indoorsOrNoSight}
+            forceVisibleIds={forceVisibleIds}
           />
 
           {arSessionVisible && (
@@ -871,6 +984,22 @@ export default function Home() {
             </div>
           )}
 
+          {/* Produktkrav 3: 2-sekunders "inga verk i FOV"-fallback — visar de
+              tre närmaste verken som "AR-testobjekt" (`forceVisibleIds` till
+              ARScene) och en icke-blockerande banderoll. Placerad på en egen
+              rad (top-44, under `stillCalibrating`/`calibrated`s top-32) så
+              båda kan synas samtidigt utan att skarva; `pointer-events-none`
+              och ingen egen "läge"-state gör att den ALDRIG kan låsa/blockera
+              resten av appen — den stängs av sig själv så fort minst ett
+              verk hamnar i FOV igen (se `calibrationFallbackActive`s jsdoc). */}
+          {arSessionVisible && calibrationFallbackActive && (
+            <div className="pointer-events-none absolute inset-x-0 top-44 z-30 flex justify-center px-6">
+              <span className="max-w-xs rounded-full bg-yellow-500/90 px-4 py-1.5 text-center text-xs font-medium text-[#090909] shadow-lg">
+                Kalibrerar visning – rör mobilen långsamt i en åtta
+              </span>
+            </div>
+          )}
+
           {/* Top bar — z-45: MÅSTE ligga ovanför inomhus-/fri sikt-overlayen
               (z-40, se nedan) annars visas den "framför" (ovanpå, döljande)
               statusbadgarna precis som produktkravet beskriver för
@@ -880,15 +1009,33 @@ export default function Home() {
               tid ritas ovanpå `LoadingSequence`s laddnings-/kalibrerings-
               skärm (se `arSessionVisible`s jsdoc ovan). */}
           {arSessionVisible && (
-          <div className="absolute inset-x-0 top-0 z-[45] flex flex-col gap-2 bg-gradient-to-b from-black/70 to-transparent px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
-            <div className="flex items-start justify-between gap-2">
-              <div>
+          <div
+            className="absolute inset-x-0 top-0 z-[45] flex flex-col gap-2 bg-gradient-to-b from-black/70 to-transparent pb-8 pt-[max(1rem,env(safe-area-inset-top))]"
+            style={{
+              paddingLeft: "max(1rem, env(safe-area-inset-left))",
+              paddingRight: "max(1rem, env(safe-area-inset-right))",
+            }}
+          >
+            {/* Juli 2026-fix: statusbadge-raden klipptes/doldes på iPhone —
+                orsaken var dubbel: (1) fasta sidopaddingar (`px-4`) ignorerade
+                hela `env(safe-area-inset-*)` i landskapsläge (skärmens rundade
+                hörn/"notch"), och (2) `flex-wrap` + `justify-end` på en rad
+                med FLER badges än skärmbredden gjorde att överskjutande
+                badges radbröts UTANFÖR den synliga höjden istället för att bli
+                nåbara. Fixat genom att låta badge-raden själv scrolla
+                horisontellt (`overflow-x-auto`, `whitespace-nowrap`, INTE
+                `flex-wrap`) — och medvetet UTAN `justify-end`, eftersom
+                `justify-content: flex-end` tillsammans med `overflow-x-auto`
+                är en känd Chrome-bugg som gör innehåll som "skjuts ut" åt
+                vänster om den synliga rutan helt onåbart via scroll. */}
+            <div className="flex items-start gap-2">
+              <div className="shrink-0">
                 <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKRAFT AR</p>
                 <p className="text-sm text-white/90">
                   Katrineholm · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}
                 </p>
               </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
                 <ArStabilityBadge quality={arTracking.debug.combinedQuality} />
                 <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
@@ -1124,6 +1271,12 @@ export default function Home() {
           frozenForMs={arTracking.debug.frozenForMs}
           visibleTurbineCount={visibleTurbineCount}
           totalTurbineCount={activeTurbines.length}
+          loadedTurbineCount={loadedTurbineCount}
+          withinRangeTurbineCount={withinRangeTurbineCount}
+          inFrontOfCameraCount={inFrontOfCameraCount}
+          nearestDistanceM={nearestTurbineInfo?.distanceM ?? null}
+          bearingToNearestDeg={nearestTurbineInfo?.bearingDeg ?? null}
+          angleDiffToNearestDeg={angleDiffToNearestDeg}
           hideReasons={debugHideReasons}
           onClose={() => setShowSensorDebug(false)}
         />

@@ -11,6 +11,18 @@ interface SensorDebugPanelProps {
   frozenForMs: number;
   visibleTurbineCount: number;
   totalTurbineCount: number;
+  /** Produktkrav 2: antal laddade verk (samma mängd som skickas till ARScene). */
+  loadedTurbineCount: number;
+  /** Produktkrav 2: antal verk inom max-renderavstånd, oavsett riktning. */
+  withinRangeTurbineCount: number;
+  /** Produktkrav 2: antal verk just nu inom kamerans FOV (och inom räckhåll). */
+  inFrontOfCameraCount: number;
+  /** Produktkrav 2: avstånd (m) till närmaste verk. */
+  nearestDistanceM: number | null;
+  /** Produktkrav 2: bäring (grader från norr) till närmaste verk. */
+  bearingToNearestDeg: number | null;
+  /** Produktkrav 2: vinkelskillnad (grader) mellan kompassriktning och närmaste verk. */
+  angleDiffToNearestDeg: number | null;
   hideReasons: string[];
   onClose: () => void;
 }
@@ -60,6 +72,12 @@ export function SensorDebugPanel({
   frozenForMs,
   visibleTurbineCount,
   totalTurbineCount,
+  loadedTurbineCount,
+  withinRangeTurbineCount,
+  inFrontOfCameraCount,
+  nearestDistanceM,
+  bearingToNearestDeg,
+  angleDiffToNearestDeg,
   hideReasons,
   onClose,
 }: SensorDebugPanelProps) {
@@ -88,6 +106,12 @@ export function SensorDebugPanel({
       </div>
       {frozenForMs > 0 && <Row label="Frusen/försämrad i" value={`${(frozenForMs / 1000).toFixed(1)} s`} />}
       <Row label="Synliga verk" value={`${visibleTurbineCount} / ${totalTurbineCount}`} />
+      <Row label="Laddade verk" value={`${loadedTurbineCount}`} />
+      <Row label="Inom renderavstånd" value={`${withinRangeTurbineCount}`} />
+      <Row label="Inom kamerans FOV nu" value={`${inFrontOfCameraCount}`} />
+      <Row label="Avstånd till närmaste verk" value={fmt(nearestDistanceM, " m", 0)} />
+      <Row label="Bäring till närmaste verk" value={fmt(bearingToNearestDeg, "°", 0)} />
+      <Row label="Vinkeldiff kamera↔närmaste verk" value={fmt(angleDiffToNearestDeg, "°", 0)} />
 
       <div className="mt-2">
         <p className="mb-1 text-xs text-white/60">Döljningsanledningar:</p>
