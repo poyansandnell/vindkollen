@@ -196,6 +196,36 @@ export function PlacementMap({
   const lastTapRef = useRef<{ time: number; clientX: number; clientY: number } | null>(null);
   const moveAnimTimerRef = useRef<number | null>(null);
   const vertexDragRef = useRef<{ pointerId: number; index: number } | null>(null);
+  const pendingViewUpdateRef = useRef<((v: ViewState) => ViewState) | null>(null);
+  const viewUpdateRafRef = useRef<number | null>(null);
+
+  // Kartan "hänger sig" (mest märkbart vid tvåfingers pinch-zoom, men även
+  // vid snabb panorering) berodde på att VARJE rå touchmove/pointermove-
+  // händelse (ofta betydligt fler än 60/s på riktiga enheter) körde en synkron
+  // `setView` -> omräkning av `bounds`/`project`/`tiles` -> upp till
+  // `MAX_TILES` nya <img>-src-byten. Genom att bara spara den SENASTE
+  // beräknade view-uppdateringen och applicera den en gång per
+  // animationsframe (requestAnimationFrame) begränsas kartans omräkningar
+  // till skärmens uppdateringsfrekvens istället för till pekhändelsernas —
+  // pekningen känns fortfarande direkt eftersom det alltid är den senaste
+  // positionen som vinner, bara redundanta mellansteg hoppas över.
+  function scheduleViewUpdate(updater: (v: ViewState) => ViewState) {
+    pendingViewUpdateRef.current = updater;
+    if (viewUpdateRafRef.current !== null) return;
+    viewUpdateRafRef.current = window.requestAnimationFrame(() => {
+      viewUpdateRafRef.current = null;
+      const pending = pendingViewUpdateRef.current;
+      pendingViewUpdateRef.current = null;
+      if (pending) setView(pending);
+    });
+  }
+
+  useEffect(
+    () => () => {
+      if (viewUpdateRafRef.current !== null) window.cancelAnimationFrame(viewUpdateRafRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     const el = containerRef.current;
@@ -387,7 +417,7 @@ export function PlacementMap({
     const dLat = (dyPx / rect.height) * view.latSpan;
     const lonSpan = bounds.maxLon - bounds.minLon;
     const dLon = (dxPx / rect.width) * lonSpan;
-    setView((v) => ({ ...v, centerLat: pan.startCenterLat + dLat, centerLon: pan.startCenterLon - dLon }));
+    scheduleViewUpdate((v) => ({ ...v, centerLat: pan.startCenterLat + dLat, centerLon: pan.startCenterLon - dLon }));
   }
 
   function endDrag(e: React.PointerEvent) {
@@ -467,7 +497,7 @@ export function PlacementMap({
       const [a, b] = [e.touches[0], e.touches[1]];
       const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
       const scale = pinchRef.current.distance / Math.max(distance, 1);
-      setView((v) => ({
+      scheduleViewUpdate((v) => ({
         ...v,
         latSpan: Math.min(Math.max(pinchRef.current!.latSpan * scale, MIN_LAT_SPAN), MAX_LAT_SPAN),
       }));

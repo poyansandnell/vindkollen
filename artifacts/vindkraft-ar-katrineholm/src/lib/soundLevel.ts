@@ -126,7 +126,15 @@ const REFERENCE_MAX_DBA = 55;
 export function dbaToGain(totalDba: number): number {
   if (!Number.isFinite(totalDba)) return 0;
   const t = (totalDba - AUDIBILITY_FLOOR_DBA) / (REFERENCE_MAX_DBA - AUDIBILITY_FLOOR_DBA);
-  return Math.min(Math.max(t, 0), 1);
+  const clamped = Math.min(Math.max(t, 0), 1);
+  // Juli 2026-fix ("ljudet låter lika högt oavsett avstånd"): en RÄTLINJIG
+  // 0..1-mappning gav en alldeles för utjämnad hörbar volymkurva — kombinerat
+  // med `useWindSound.ts`s tidigare kraftiga kompressor/makeup-gain (som
+  // separat togs bort) upplevdes nästan hela avståndsintervallet som "samma
+  // volym". En kvadratisk kurva ger tydligare, mer verklighetstrogna
+  // avståndssteg: nära verk hörs klart kraftigare, långt bort klart tystare,
+  // istället för att allt kliver mot en gemensam medelnivå.
+  return clamped * clamped;
 }
 
 /**

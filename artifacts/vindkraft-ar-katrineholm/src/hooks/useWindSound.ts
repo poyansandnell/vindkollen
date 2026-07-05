@@ -244,15 +244,25 @@ export function useWindSound() {
     // som spelas upp via ett dolt <audio>-element (se `startAudioElement`
     // nedan) istället för direkt till `ctx.destination`, för att garantera
     // huvudhögtalar-routing på iPhone.
+    // Juli 2026-fix ("ljudet låter lika högt oavsett avstånd"): den
+    // tidigare hårda kompressorn (tröskel -26dB, ratio 18:1) + en 270%
+    // makeup-gain platt-trycker praktiskt taget hela dynamiken INNAN
+    // `updateProximity`s dBA-styrda volym ens hinner uttrycka sig — en tyst
+    // (låg dBA) signal komprimerades upp mot nästan samma nivå som en högre,
+    // så avståndet till verken slutade höras. Kompressorn är nu bara ett
+    // säkerhetsnät mot digital klippning (mjuk knä, låg ratio), och
+    // makeup-gainen kompenserar bara för kompressorns egen, nu blygsamma,
+    // nivåsänkning — ingen konstgjord volymboost ovanpå den riktiga
+    // dBA-styrda gainen.
     const compressor = ctx.createDynamicsCompressor();
-    compressor.threshold.value = -26;
-    compressor.knee.value = 8;
-    compressor.ratio.value = 18;
-    compressor.attack.value = 0.003;
-    compressor.release.value = 0.22;
+    compressor.threshold.value = -18;
+    compressor.knee.value = 12;
+    compressor.ratio.value = 3;
+    compressor.attack.value = 0.01;
+    compressor.release.value = 0.25;
 
     const makeupGain = ctx.createGain();
-    makeupGain.gain.value = 2.7;
+    makeupGain.gain.value = 1.1;
 
     const limiter = ctx.createWaveShaper();
     limiter.curve = makeSoftClipCurve() as Float32Array<ArrayBuffer>;

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatDistance } from "@/lib/geo";
-import { SEVERITY_COLORS, soundLevelSeverity, SOUND_LEVEL_DISCLAIMER, type SoundLevelEstimate } from "@/lib/soundLevel";
+import { SEVERITY_COLORS, soundLevelSeverity, SOUND_LEVEL_DISCLAIMER, dbaToGain, type SoundLevelEstimate } from "@/lib/soundLevel";
 
 /**
  * Kompakt, alltid synlig liten textrad med ljudnivå (dBA) + antal bidragande
@@ -91,6 +91,10 @@ export function SoundLevelPanel({
               </p>
               <p className="text-[11px] text-white/70">
                 Antal vindkraftverk som bidrar: <span className="text-white/90">{estimate.contributingCount}</span>
+              </p>
+              <p className="mt-1.5 text-[10px] text-white/50">
+                Avstånd: {estimate.nearestDistanceM !== null ? formatDistance(estimate.nearestDistanceM) : "–"} –
+                ljudnivå: {Math.round(dbaToGain(estimate.totalDba) * 100)}%
               </p>
               {indoors && (
                 <p className="mt-1.5 text-[11px] font-medium text-white/85">

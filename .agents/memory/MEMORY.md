@@ -48,3 +48,5 @@
 - [AR tracking freeze-vs-fade tiering](ar-tracking-freeze-vs-fade-tiering.md) — freeze position instantly on degraded fused-sensor tier, but only fade visibility after a sustained grace period; don't reuse one timer for both.
 - [Decoupled readiness vs loading timeline bleed-through](decoupled-readiness-timeline-bleedthrough.md) — a `ready` flag and a loading screen's own internal timeline can both be true at once; combine into one gate (`ready && !showLoading`) for every post-loading element.
 - [Early-mount WebGL guard](early-mount-webgl-guard.md) — mounting a `THREE.WebGLRenderer` component earlier/eagerly removes the implicit safety net of downstream gating; wrap renderer creation in its own try/catch.
+- [Compressor flattens distance perception](audio-compressor-flattens-distance-perception.md) — a hard compressor + big makeup gain can squash a correctly distance-driven gain so "louder when closer" stops being audible.
+- [Touchmove-triggered tile recompute hang](touchmove-triggered-tile-recompute-hang.md) — raw touchmove/pointermove firing setState directly re-triggers tile-layout recompute faster than the screen refreshes; throttle to one update per rAF.

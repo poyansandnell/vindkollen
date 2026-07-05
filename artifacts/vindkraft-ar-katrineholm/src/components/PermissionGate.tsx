@@ -144,7 +144,7 @@ export function PermissionGate({ onStart, onOpenMapTool, starting, errors, turbi
               både mobil och dator.
             */}
             <a
-              href="/samradsyttrande-forsvarsmakten.pdf"
+              href={`${import.meta.env.BASE_URL}samradsyttrande-forsvarsmakten.pdf`}
               target="_blank"
               rel="noopener noreferrer"
               className="mx-auto flex w-fit items-center gap-1.5 rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 px-4 py-2 text-[11px] font-medium text-[#FFB347] transition hover:bg-[#FF8B01]/20"

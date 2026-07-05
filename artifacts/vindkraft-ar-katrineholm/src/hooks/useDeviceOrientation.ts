@@ -135,6 +135,60 @@ const HEADING_TURN_CONFIRM_SAMPLES = 2;
 // rörelse — då hoppar vi över just den avläsningen istället för att låta
 // den slå igenom i den utjämnade riktningen.
 const MAX_PLAUSIBLE_TURN_RATE_DEG_PER_SEC = 720;
+
+// Juli 2026-fix ("verken glider vid minsta mobilrörelse"): beta/gamma
+// (pitch/roll) använde tidigare bara en FAST tidskonstant (0.35s) utan
+// bruströskel-baserad adaptivitet eller extremvärdes-filtrering — exakt de
+// två knep som redan fixade motsvarande glid-problem för gir (alpha) ovan.
+// Små, ofrivilliga handskakningar i pitch/roll slog därför igenom nästan
+// direkt och fick verken att kännas som de "flyter" i förhållande till
+// bakgrundskameran även när telefonen i praktiken hölls stilla. Samma
+// tvåhastighets-/bekräftelsemönster som giren appliceras nu på beta/gamma
+// var för sig (egna bekräftelseräknare, då en ren pitch-rörelse inte ska
+// triggra rolls snabba läge och vice versa).
+const PITCH_ROLL_NOISE_DELTA_DEG = 2.5;
+const PITCH_ROLL_TURN_DELTA_DEG = 9;
+const PITCH_ROLL_STILL_TAU = 0.9;
+const PITCH_ROLL_TURN_TAU = 0.15;
+const PITCH_ROLL_TURN_CONFIRM_SAMPLES = 2;
+// Samma resonemang som `MAX_PLAUSIBLE_TURN_RATE_DEG_PER_SEC` ovan, men för
+// pitch/roll: en enskild avläsning som antyder en orimligt snabb tiltning
+// beror nästan alltid på en sensorglitch, inte en verklig rörelse.
+const MAX_PLAUSIBLE_TILT_RATE_DEG_PER_SEC = 720;
+
+/**
+ * Adaptiv tidskonstant för en linjär (icke-cirkulär) vinkel, enligt samma
+ * "liten skillnad => brus (dämpa kraftigt), stor OCH bekräftad skillnad =>
+ * avsiktlig rörelse (släpp igenom snabbt)"-princip som giren använder ovan.
+ */
+function computeAdaptiveLinearTau(
+  rawDelta: number,
+  turnConfirmCountRef: React.MutableRefObject<number>,
+  turnConfirmDirRef: React.MutableRefObject<1 | -1 | null>,
+): number {
+  const absDelta = Math.abs(rawDelta);
+  if (absDelta >= PITCH_ROLL_NOISE_DELTA_DEG) {
+    const direction: 1 | -1 = rawDelta >= 0 ? 1 : -1;
+    if (turnConfirmDirRef.current === direction) {
+      turnConfirmCountRef.current += 1;
+    } else {
+      turnConfirmDirRef.current = direction;
+      turnConfirmCountRef.current = 1;
+    }
+  } else {
+    turnConfirmDirRef.current = null;
+    turnConfirmCountRef.current = 0;
+  }
+
+  if (turnConfirmCountRef.current >= PITCH_ROLL_TURN_CONFIRM_SAMPLES) {
+    const t = Math.min(
+      1,
+      Math.max(0, (absDelta - PITCH_ROLL_NOISE_DELTA_DEG) / (PITCH_ROLL_TURN_DELTA_DEG - PITCH_ROLL_NOISE_DELTA_DEG)),
+    );
+    return PITCH_ROLL_STILL_TAU + (PITCH_ROLL_TURN_TAU - PITCH_ROLL_STILL_TAU) * t;
+  }
+  return PITCH_ROLL_STILL_TAU;
+}
 // Hur stabil (se `headingStabilityRef`) girriktningen måste vara, och hur
 // länge sammanhängande, innan kompassen anses ha "rätat in sig" (`hasSettled`).
 const SETTLE_STABILITY_THRESHOLD = 0.75;
@@ -239,6 +293,13 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   const turnConfirmDirRef = useRef<1 | -1 | null>(null);
   const betaRef = useRef<number | null>(null);
   const gammaRef = useRef<number | null>(null);
+  // Egna bekräftelseräknare för beta/gamma (se `computeAdaptiveLinearTau`
+  // ovan) — separata från girens, så en ren pitch-rörelse inte råkar
+  // "bekräfta" en rollvridning eller vice versa.
+  const betaTurnConfirmCountRef = useRef(0);
+  const betaTurnConfirmDirRef = useRef<1 | -1 | null>(null);
+  const gammaTurnConfirmCountRef = useRef(0);
+  const gammaTurnConfirmDirRef = useRef<1 | -1 | null>(null);
   const betaOffsetRef = useRef(0);
   const screenAngleRef = useRef(0);
   const quaternionRef = useRef(new THREE.Quaternion());
@@ -417,12 +478,40 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     }
 
     const headingFactor = timeSmoothingFactor(headingTau, dt);
-    const pitchRollFactor = timeSmoothingFactor(0.35, dt);
+
+    // Samma extremvärdes-filtrering som giren (se `MAX_PLAUSIBLE_TURN_RATE_DEG_PER_SEC`
+    // ovan), men för pitch/roll var för sig: en enskild avläsning som antyder
+    // en orimligt snabb tiltning hoppas över helt istället för att slå igenom.
+    const prevBetaRaw = betaRef.current;
+    const prevGammaRaw = gammaRef.current;
+    const betaIsOutlier =
+      prevBetaRaw !== null && dt > 0 && Math.abs(event.beta - prevBetaRaw) / dt > MAX_PLAUSIBLE_TILT_RATE_DEG_PER_SEC;
+    const gammaIsOutlier =
+      prevGammaRaw !== null &&
+      dt > 0 &&
+      Math.abs(event.gamma - prevGammaRaw) / dt > MAX_PLAUSIBLE_TILT_RATE_DEG_PER_SEC;
+
+    const betaTau = betaIsOutlier
+      ? PITCH_ROLL_STILL_TAU
+      : computeAdaptiveLinearTau(
+          prevBetaRaw === null ? 0 : event.beta - prevBetaRaw,
+          betaTurnConfirmCountRef,
+          betaTurnConfirmDirRef,
+        );
+    const gammaTau = gammaIsOutlier
+      ? PITCH_ROLL_STILL_TAU
+      : computeAdaptiveLinearTau(
+          prevGammaRaw === null ? 0 : event.gamma - prevGammaRaw,
+          gammaTurnConfirmCountRef,
+          gammaTurnConfirmDirRef,
+        );
+    const betaFactor = betaIsOutlier ? 0 : timeSmoothingFactor(betaTau, dt);
+    const gammaFactor = gammaIsOutlier ? 0 : timeSmoothingFactor(gammaTau, dt);
 
     const prevHeading = headingRef.current;
     const smoothedHeading = smoothCircular(headingRef, heading, headingFactor);
-    const smoothedBeta = smoothLinear(betaRef, event.beta, pitchRollFactor);
-    const smoothedGamma = smoothLinear(gammaRef, event.gamma, pitchRollFactor);
+    const smoothedBeta = smoothLinear(betaRef, event.beta, betaFactor);
+    const smoothedGamma = smoothLinear(gammaRef, event.gamma, gammaFactor);
 
     // Kompass-stabilitet: rullande medel av |Δgir|/s över de senaste ~1.2s.
     // Låg medelhastighet -> stabil (nära 1), hög -> instabil (nära 0).

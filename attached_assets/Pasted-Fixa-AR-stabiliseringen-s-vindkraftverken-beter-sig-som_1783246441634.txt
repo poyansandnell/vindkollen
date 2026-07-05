@@ -1,0 +1,61 @@
+Fixa AR-stabiliseringen så vindkraftverken beter sig som riktiga objekt i världen och inte glider när användaren rör mobilen.
+
+Problem från test:
+- När telefonen rörs upp/ned eller åt sidan flyttar sig vindkraftverken för mycket.
+- Kamerabilden känns stilla men verken glider, vilket gör AR-känslan orealistisk.
+- Vid 1,8 km avstånd hörs rotorljudet alldeles för högt.
+- I kartläge hänger sig appen vid zoom.
+- Knappen “visa underlaget PDF” ger 404.
+- I AR-mode måste kartknappar och PDF-knappar inte störa själva AR-upplevelsen.
+
+Åtgärder:
+
+1. World anchoring / stabilisering
+- Vindkraftverken ska inte följa skärmen.
+- De ska placeras i en stabil world coordinate utifrån GPS-position, kompassriktning, device orientation och avstånd.
+- Använd lågpassfilter/smoothing på kompass och gyroscope så små handrörelser inte gör att verken hoppar.
+- Skilj på kamerarörelse och objektens världposition.
+- Om telefonen flyttas lite i sidled ska verken bara förändras marginellt, inte glida över hela skärmen.
+- Lägg in “anchor smoothing” per verk, exempelvis:
+  - position smoothing 0.92–0.98
+  - heading smoothing 0.90–0.96
+  - max movement per frame
+- Om sensorvärden hoppar onormalt mycket, ignorera hoppet och använd senaste stabila värde.
+
+2. AR-kvalitetsindikator
+Visa en liten indikator:
+- GPS: bra/medel/dålig
+- Kompass: bra/medel/dålig
+- AR-stabilitet: 0–100 %
+Om kompassen är osäker ska appen skriva:
+“Rör mobilen i en åtta för bättre kompasskalibrering.”
+
+3. Ljudet måste bli realistiskt
+Ta bort den tidigare 300 %-förstärkningen som standard.
+Ljudet ska baseras på avstånd:
+- 0–300 m: tydligt/högt
+- 300–800 m: hörbart
+- 800–1500 m: svagt
+- över 1500 m: mycket svagt eller nästan inget ljud
+Vid 1,8 km ska rotorljudet inte vara högt.
+Lägg gärna till en debug-rad:
+“Avstånd: X m – ljudnivå: Y %”
+
+4. Kartläge
+- Fixa att kartan inte hänger sig vid zoom med två fingrar.
+- När användaren vill flytta ett verk: använd klicka-för-att-välja och klicka-på-ny-plats-för-att-flytta.
+- Undvik drag/drop på själva verket eftersom det krockar med kartans pan/zoom.
+- Visa tydligt vilket verk som är markerat.
+
+5. PDF/underlag
+- Fixa 404 på “visa underlaget PDF”.
+- Om filen saknas ska knappen döljas eller visa:
+“Underlag saknas just nu.”
+- Kontrollera att rätt filväg används i production/build.
+
+6. AR UI
+- När användaren är i AR-läge ska kartknappar, PDF-knappar och menyer inte ligga ovanpå viktig information.
+- Lägg dem bakom en tydlig menyknapp eller längst ned med safe-area.
+
+Målet:
+Vindkraftverken ska kännas fast placerade i verkligheten. De får inte glida runt kraftigt när mobilen rör sig. Ljudnivån ska kännas realistisk utifrån avstånd.

@@ -23,6 +23,8 @@ import { SoundLevelPanel, SoundLevelBadge } from "@/components/SoundLevelPanel";
 import { NoiseImpactBadge, NoiseImpactPanel } from "@/components/NoiseImpactMonitor";
 import { LineOfSightStatus } from "@/components/LineOfSightStatus";
 import { CompassStabilityBadge } from "@/components/CompassStabilityBadge";
+import { GpsQualityBadge } from "@/components/GpsQualityBadge";
+import { ArStabilityBadge } from "@/components/ArStabilityBadge";
 import { NearestTurbineArrow } from "@/components/NearestTurbineArrow";
 import { PhotoMontageModal } from "@/components/PhotoMontageModal";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
@@ -108,6 +110,15 @@ export default function Home() {
   const [showMap, setShowMap] = useState(false);
   const [showPetition, setShowPetition] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  // Juli 2026-fix ("AR-vyn känns rörig, knappar överlappar"): "Visa karta",
+  // "Om projektet", "Placera vindkraftverken själv" och
+  // återgå-till-planerad-placering var alla ALLTID synliga knappar staplade
+  // i botten-baren, ovanpå ljudpanelen och petitions-CTA:n — trängde ihop
+  // sig med kompass/GPS/AR-stabilitet-badgarna och pilen mot närmaste verk.
+  // De är sekundära (används sällan mitt i AR-sessionen) och samlas nu bakom
+  // en enda "☰ Meny"-knapp, medan de primära knapparna (petition, foto)
+  // förblir direkt synliga.
+  const [showMenu, setShowMenu] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [showSensorDebug, setShowSensorDebug] = useState(false);
   const [calibrated, setCalibrated] = useState(false);
@@ -877,7 +888,9 @@ export default function Home() {
                   Katrineholm · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
+                <ArStabilityBadge quality={arTracking.debug.combinedQuality} />
                 <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
                 <LineOfSightStatus status={lineOfSightStatus} />
                 <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
@@ -987,35 +1000,76 @@ export default function Home() {
                 📸 Fotomontage
               </button>
             )}
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowMap(true)}
-                className="flex-1 rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
-              >
-                Visa karta
-              </button>
-              <button
-                onClick={() => setShowInfo(true)}
-                className="flex-1 rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
-              >
-                Om projektet
-              </button>
-            </div>
             <button
-              onClick={() => navigate("/placera")}
-              className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
+              onClick={() => setShowMenu(true)}
+              className="w-full rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
             >
-              🗺️ Placera vindkraftverken själv
+              ☰ Meny
             </button>
-            {usingCustomPlacement && (
-              <button
-                onClick={handleClearCustomPlacement}
-                className="w-full rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white/80 hover:bg-white/10"
-              >
-                ↩️ Återgå till planerad placering (29 verk)
-              </button>
-            )}
           </div>
+          )}
+
+          {arSessionVisible && showMenu && (
+            <div
+              className="absolute inset-0 z-[55] flex flex-col justify-end bg-black/60"
+              onClick={() => setShowMenu(false)}
+            >
+              <div
+                className="flex flex-col gap-3 rounded-t-3xl border-t border-white/10 bg-[#111]/95 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-white">Meny</p>
+                  <button
+                    onClick={() => setShowMenu(false)}
+                    aria-label="Stäng meny"
+                    className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/85 hover:bg-white/20"
+                  >
+                    ✕ Stäng
+                  </button>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowMap(true);
+                      setShowMenu(false);
+                    }}
+                    className="flex-1 rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
+                  >
+                    Visa karta
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowInfo(true);
+                      setShowMenu(false);
+                    }}
+                    className="flex-1 rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
+                  >
+                    Om projektet
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowMenu(false);
+                    navigate("/placera");
+                  }}
+                  className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
+                >
+                  🗺️ Placera vindkraftverken själv
+                </button>
+                {usingCustomPlacement && (
+                  <button
+                    onClick={() => {
+                      handleClearCustomPlacement();
+                      setShowMenu(false);
+                    }}
+                    className="w-full rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white/80 hover:bg-white/10"
+                  >
+                    ↩️ Återgå till planerad placering (29 verk)
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </>
       )}
