@@ -476,6 +476,12 @@ export default function Home() {
   // i ett läsbart facit.
   const debugHideReasons = useMemo(() => {
     const reasons: string[] = [];
+    // Vakthunden mot total sensortystnad (se `useDeviceOrientation.ts`)
+    // listas FÖRST — den förklarar direkt varför pilen/verken kan verka
+    // "frusna" trots att andra siffror (FPS, AR-stabilitet) ser bra ut,
+    // eftersom just den siffran annars bara fryser kvar på sitt senaste
+    // goda värde istället för att spegla att sensorn tystnat.
+    if (orientation.orientationStalled) reasons.push("Rörelsesensorn svarar inte — försöker återansluta");
     if (indoorsOrNoSight) reasons.push("Inomhus/ingen fri sikt (kamera-heuristik)");
     if (mlActive && !hasEnoughSky) reasons.push("För lite synlig himmel i bild");
     if (mlActive && confidence.tier === "hide") reasons.push('Outdoor Confidence Index: "hide"');
@@ -483,7 +489,15 @@ export default function Home() {
     if (arTracking.freeze) reasons.push(WEAK_SIGNAL_MESSAGE);
     if (arTracking.fadeFactor < 1) reasons.push("Tonas ut — spårning saknad för länge");
     return reasons;
-  }, [indoorsOrNoSight, mlActive, hasEnoughSky, confidence.tier, arTracking.freeze, arTracking.fadeFactor]);
+  }, [
+    orientation.orientationStalled,
+    indoorsOrNoSight,
+    mlActive,
+    hasEnoughSky,
+    confidence.tier,
+    arTracking.freeze,
+    arTracking.fadeFactor,
+  ]);
 
   // Alltid beräknad med full "ute"-nivå (confidence=1) — den manuella
   // ute/inne-dämpningen appliceras separat, EFTER GPS-jitterutjämningen
@@ -633,6 +647,14 @@ export default function Home() {
     if (nearestOnTarget && nearestTurbineInfo) {
       return { message: `✓ Du tittar mot närmaste verk (${formatDistance(nearestTurbineInfo.distanceM)})`, tone: "green" };
     }
+    // Vakthunden mot total sensortystnad (se `useDeviceOrientation.ts`) går
+    // FÖRE den vanliga "Kompass svag"-varningen — den täcker ett strikt
+    // allvarligare läge (rörelsesensorn har SLUTAT skicka data helt, inte
+    // bara en osäker avläsning), och användaren behöver ett tydligt annat
+    // besked ("försöker återansluta") än den vanliga gyro-fallback-texten.
+    if (orientation.orientationStalled) {
+      return { message: "⚠️ Rörelsesensorn svarar inte – försöker återansluta", tone: "red" };
+    }
     if (orientation.headingFallbackActive) {
       return { message: "⚠️ Kompass svag – använder rörelsedata", tone: "yellow" };
     }
@@ -657,6 +679,7 @@ export default function Home() {
     errors,
     nearestOnTarget,
     nearestTurbineInfo,
+    orientation.orientationStalled,
     orientation.headingFallbackActive,
     arTracking.weakSignalMessage,
     wind.playing,

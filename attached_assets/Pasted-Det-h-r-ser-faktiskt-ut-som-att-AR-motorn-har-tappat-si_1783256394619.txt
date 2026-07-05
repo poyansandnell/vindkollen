@@ -1,0 +1,102 @@
+Det här ser faktiskt ut som att AR-motorn har tappat sin “world anchor” snarare än att vindkraftverken inte finns.
+
+Jag ser några tydliga symptom på bilden:
+
+* Den orange pilen är helt fast i nedre högra hörnet. Den verkar inte längre uppdateras med kompassens heading.
+* Inga vindkraftverk renderas, trots att appen säger:
+    * GPS: bra (±14 m)
+    * AR-stabilitet: 98 %
+    * FPS 60
+* Det betyder att renderingsloopen fortfarande körs, men att positionerna inte längre uppdateras.
+
+Det är därför du kan snurra telefonen hur mycket som helst utan att något händer.
+
+Jag skulle ge Replit den här instruktionen
+
+⸻
+
+KRITISK BUGG – AR fryser efter start
+
+AR-sessionen rapporterar fortfarande hög stabilitet och GPS fungerar, men vindkraftverken renderas inte och riktningspilen fryser helt.
+
+Det ser ut som att world tracking fortfarande är aktiv men att renderings- eller uppdateringsloopen har stannat.
+
+Kontrollera följande:
+
+1. Pilen får ALDRIG vara statisk
+
+Varje animation frame ska den uppdatera:
+
+* device heading
+* bearing till närmaste verk
+* relativ vinkel
+* CSS-position/rotation
+
+Det får inte finnas någon cachead position.
+
+2. Vindkraftverken ska uppdateras varje frame
+
+Varje requestAnimationFrame:
+
+* läs aktuell kamera-pose
+* läs aktuell heading
+* räkna om alla 29 verk
+* uppdatera deras world matrix
+
+Inte bara när GPS ändras.
+
+3. Logga om renderloopen verkligen kör
+
+Lägg in debug:
+
+console.log(
+"FRAME",
+performance.now(),
+camera.heading,
+camera.pitch,
+camera.roll,
+visibleTurbines
+);
+
+Om denna slutar skrivas har loopen dött.
+
+4. Om inga verk är synliga
+
+Logga varför:
+
+Turbine 12:
+distance
+bearing
+relative angle
+screen position
+isVisible
+isBehindCamera
+isClipped
+
+Jag vill se varför de filtreras bort.
+
+5. Tvinga inte bort verk utanför skärmen
+
+Just nu verkar de kunna fastna i ett dolt läge.
+
+Om ett verk precis lämnar synfältet ska det fortsätta uppdateras och komma tillbaka direkt när användaren vrider telefonen.
+
+6. Om heading ändras
+
+När kompassen ändras mer än 1° ska samtliga verk och pilen uppdateras omedelbart.
+
+Ingen debounce.
+
+Ingen throttling.
+
+7. Lägg till watchdog
+
+Om renderloopen inte uppdaterats på 500 ms:
+
+Restart AR render loop
+
+utan att användaren behöver starta om appen.
+
+⸻
+
+Jag tror faktiskt att ni är väldigt nära nu. Det här känns inte som ett problem med GPS eller koordinater längre, utan som ett klassiskt fel där requestAnimationFrame eller den funktion som uppdaterar AR-objekten slutar köra, eller där ett “visible”-filter råkar gömma alla objekt. Det borde gå att hitta ganska snabbt med lite extra loggning.

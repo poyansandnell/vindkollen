@@ -115,6 +115,21 @@ export interface DeviceOrientationApi {
   /** `Date.now()` för senast mottagna orienterings-event, oavsett källa — grund för felsökningsradens "Heading age (ms)". */
   lastOrientationEventAtRef: React.MutableRefObject<number | null>;
   /**
+   * Produktkrav (juli 2026, "vakthund mot total sensortystnad"): sant när
+   * INGA `deviceorientation(absolute)`-event alls har kommit in på över
+   * `ORIENTATION_STALLED_MS`, efter att vi tidigare haft en fix — till
+   * skillnad från `headingFallbackActive` (som bara upptäcker att GIRVÄRDET
+   * står still MEDAN event fortfarande strömmar in). Denna sortens total
+   * sensortystnad observerades i produktion som "pilen och alla verk fryser
+   * helt, trots att FPS/AR-stabilitet fortsatte visa bra värden" — just
+   * eftersom `headingStabilityRef`/`pitchStabilityRef` annars bara muteras
+   * INIFRÅN ett event och därmed fryser kvar på sitt SENASTE (goda) värde.
+   * När detta är sant har hooken redan (1) tvingat ner stabilitetsmåtten så
+   * `useArTrackingStability` ser en genuin försämring, och (2) försökt
+   * återansluta sensorlyssnarna.
+   */
+  orientationStalled: boolean;
+  /**
    * Produktkrav 5: den EN OCH ENDA funktionen för "vilken riktning gäller
    * just nu" — både pilen och AR-scenens bäringsjämförelser ska anropa
    * denna istället för att var för sig läsa `headingDegRef`, så de aldrig
@@ -191,6 +206,17 @@ const MAX_PLAUSIBLE_TILT_RATE_DEG_PER_SEC = 720;
 // ändras (annars är det bara en stillastående telefon, inte en frusen
 // sensor). 500ms enligt produktkravet.
 const HEADING_STALE_MS = 500;
+
+// Produktkrav (juli 2026, "vakthund mot total sensortystnad"): hur länge
+// (ms) det får gå utan att ETT ENDA `deviceorientation(absolute)`-event
+// alls kommer in innan det räknas som att sensorpipelinen helt tystnat —
+// betydligt längre än `HEADING_STALE_MS` (som bara gäller ett stillastående
+// GIRVÄRDE medan event fortfarande strömmar in i normal takt, 15-60 Hz) för
+// att aldrig falskt trigga vid en enstaka kort hicka.
+const ORIENTATION_STALLED_MS = 1200;
+// Hur ofta (ms) vakthunden kollar `lastOrientationEventAtRef` — oberoende
+// av sensorernas egen (varierande) frekvens.
+const ORIENTATION_WATCHDOG_INTERVAL_MS = 400;
 // Hur stor rå förändring (grader) som räknas som "sensorn rör sig alls" —
 // satt klart under de vanliga bruströsklarna ovan eftersom vi bara vill
 // upptäcka att RÅDATAN uppdateras, inte om ändringen är stor nog för att
@@ -395,6 +421,9 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     null,
   );
   const lastOrientationEventAtRef = useRef<number | null>(null);
+  // Se `ORIENTATION_STALLED_MS`-vakthunden i huvudeffekten nedan.
+  const orientationStalledRef = useRef(false);
+  const [orientationStalled, setOrientationStalled] = useState(false);
 
   // Tvåstegskalibreringen (se konstanterna ovan): vilka sektorer som svepts
   // i vardera fasen sedan `startCalibrationTracking()` senast anropades.
@@ -720,7 +749,45 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
     window.addEventListener("deviceorientation", handleOrientation as EventListener, true);
 
+    // Produktkrav (juli 2026, "vakthund mot total sensortystnad"): den
+    // BEFINTLIGA frys-/gyro-fallback-logiken i `handleOrientation` (se
+    // `HEADING_STALE_MS`) upptäcker bara att GIRVÄRDET står still MEDAN
+    // event fortfarande strömmar in — den har ingen möjlighet att upptäcka
+    // att webbläsaren/OS:et helt har SLUTAT leverera event alls (ett känt,
+    // sporadiskt fel på bl.a. Android-webbläsare efter skärmlåsning/
+    // bakgrund-förgrund-växlingar). I produktion visade sig just detta som
+    // "pilen och alla verk fryser helt, trots att FPS/AR-stabilitet
+    // fortsatte visa bra värden" — eftersom `headingStabilityRef`/
+    // `pitchStabilityRef` bara muteras INIFRÅN ett event och därför frös
+    // kvar på sitt SENASTE (goda) värde istället för att spegla att inga
+    // nya avläsningar längre kommer in. Denna vakthund kollar
+    // `lastOrientationEventAtRef` oberoende av om något event kommer in,
+    // och när tystnaden varat längre än `ORIENTATION_STALLED_MS`: (1)
+    // tvingar ner stabilitetsmåtten så `useArTrackingStability` genast ser
+    // en genuin försämring (istället för ett falskt bra läge), och (2)
+    // river och återskapar lyssnarna — ett känt, ofarligt sätt att väcka
+    // liv i en "fastnad" sensorpipeline på flera Android-webbläsare.
+    const watchdog = window.setInterval(() => {
+      const lastAt = lastOrientationEventAtRef.current;
+      if (lastAt === null) return;
+      const stalled = Date.now() - lastAt > ORIENTATION_STALLED_MS;
+      if (stalled && !orientationStalledRef.current) {
+        orientationStalledRef.current = true;
+        setOrientationStalled(true);
+        headingStabilityRef.current = 0;
+        pitchStabilityRef.current = 0;
+        window.removeEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
+        window.removeEventListener("deviceorientation", handleOrientation as EventListener, true);
+        window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
+        window.addEventListener("deviceorientation", handleOrientation as EventListener, true);
+      } else if (!stalled && orientationStalledRef.current) {
+        orientationStalledRef.current = false;
+        setOrientationStalled(false);
+      }
+    }, ORIENTATION_WATCHDOG_INTERVAL_MS);
+
     return () => {
+      window.clearInterval(watchdog);
       window.removeEventListener("orientationchange", updateScreenAngle);
       window.removeEventListener("resize", updateScreenAngle);
       window.removeEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
@@ -795,6 +862,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     headingSourceRef,
     headingFallbackActive,
     lastOrientationEventAtRef,
+    orientationStalled,
     getCurrentHeading,
   };
 }

@@ -471,6 +471,14 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   const fpsRef = useRef(0);
   const fpsWindowStartRef = useRef<number | null>(null);
   const fpsWindowFramesRef = useRef(0);
+  // Juli 2026-fix ("pilen/verken fryser helt trots bra FPS/AR-stabilitet"):
+  // `Date.now()` för senaste `animate()`-anrop, oavsett vad övriga
+  // felsökningstal säger — grunden för den fristående render-loop-
+  // vakthunden nedan OCH för det tidigare hårdkodade (aldrig sanna)
+  // `screenLocked`-fältet i `getDebugStats()`. `false` gav ingen som helst
+  // diagnostisk signal; nu räknas det ut från just denna tidsstämpel.
+  const lastFrameAtRef = useRef<number | null>(null);
+  const renderLoopStalledRef = useRef(false);
 
   userRef.current = { lat: userLat, lon: userLon };
   modeRef.current = {
@@ -504,7 +512,12 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       frameCount: frameCountRef.current,
       worldPositionsUpdated: frameCountRef.current > 0,
       visibleTurbineCount: inFrontOfCameraCountRef.current,
-      screenLocked: false,
+      // `screenLocked` var tidigare hårdkodat `false` — aldrig sant, alltså
+      // ingen diagnostisk signal alls. Räknas nu ut från `lastFrameAtRef`
+      // (satt varje `animate()`-anrop): sant om render-loopen inte kört på
+      // över en halv sekund, oavsett OM webbläsaren råkat pausa rAF (t.ex.
+      // bakom en overlay/annan flik) eller loopen faktiskt kraschat.
+      screenLocked: lastFrameAtRef.current !== null && Date.now() - lastFrameAtRef.current > 500,
     }),
   }));
 
@@ -927,36 +940,28 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     const ndcVec = new THREE.Vector3();
 
     let raf = 0;
-    let lastLayoutLat = userRef.current.lat;
-    let lastLayoutLon = userRef.current.lon;
     let lastTimestamp: number | null = null;
-    let lastMode = modeRef.current.sunMode;
-    let lastRealScale = modeRef.current.realScale;
-    let lastVisibility = modeRef.current.visibility;
 
     function animate(timestamp: number) {
       raf = requestAnimationFrame(animate);
+      lastFrameAtRef.current = Date.now();
       const state = sceneStateRef.current;
       if (!state) return;
 
       const dt = lastTimestamp === null ? 0 : Math.min((timestamp - lastTimestamp) / 1000, 0.25);
       lastTimestamp = timestamp;
 
-      // Räkna bara om placeringen när GPS-positionen faktiskt förflyttat sig
-      // märkbart, eller om ett visualiseringsläge ändrats, istället för varje
-      // bildruta — sparar prestanda.
-      const { lat: uLat, lon: uLon } = userRef.current;
-      const { sunMode: curMode, realScale: curRealScale, visibility: curVisibility } = modeRef.current;
-      const moved = Math.abs(uLat - lastLayoutLat) > 1e-6 || Math.abs(uLon - lastLayoutLon) > 1e-6;
-      const modeChanged = curMode !== lastMode || curRealScale !== lastRealScale || curVisibility !== lastVisibility;
-      if (moved || modeChanged) {
-        lastLayoutLat = uLat;
-        lastLayoutLon = uLon;
-        lastMode = curMode;
-        lastRealScale = curRealScale;
-        lastVisibility = curVisibility;
-        layoutObjects();
-      }
+      // Juli 2026-fix ("pilen/verken fryser helt trots bra FPS/AR-
+      // stabilitet"): placeringen räknades tidigare bara om när GPS-
+      // positionen förflyttat sig märkbart eller ett visualiseringsläge
+      // ändrats — en ren prestandaoptimering. Men om en refresh av
+      // `userRef`/`modeRef` uteblir (t.ex. en overordnad state-uppdatering
+      // som fastnar) frös verkens världsposition kvar helt, oavsett att
+      // kamerarotationen (nedan) fortsatte uppdateras varje bildruta. Att
+      // räkna om placeringen VARJE bildruta är enligt uttrycklig
+      // produktbegäran — trigonometrin för 29 verk är för billig för att
+      // motivera riskkant caching här; se `layoutObjects` för kostnaden.
+      layoutObjects();
 
       // Kamerans riktning styrs helt av enhetens sensorer (gir/pitch/roll),
       // så att verken förblir fast förankrade i verkligheten/horisonten
@@ -988,6 +993,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // låg position). Den rör sig med AR-världen (fast världsposition, bara
       // kameran roterar), så den ligger kvar i rätt kompassriktning när
       // telefonen vrids.
+      const curMode = modeRef.current.sunMode;
       const sunHidden = eveningDim || curMode === "evening";
       state.sunSprite.visible = !sunHidden;
       state.sunGlow.visible = false;
@@ -1175,6 +1181,26 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     }
     raf = requestAnimationFrame(animate);
 
+    // Juli 2026-fix ("pilen/verken fryser helt trots bra FPS/AR-
+    // stabilitet"): en fristående (rAF-oberoende) vakthund som upptäcker om
+    // render-loopen självt har fastnat — t.ex. om `animate` kastar ett fel
+    // eller webbläsaren av någon anledning slutar leverera rAF-callbacks —
+    // vilket varken FPS-siffran (som bara mäts INIFRÅN loopen och därför
+    // fryser kvar på sitt senaste goda värde) eller `useArTrackingStability`
+    // (som mäter sensordata, inte renderingen) kan upptäcka på egen hand.
+    // `setInterval` körs oberoende av rAF och kan därför både upptäcka
+    // stillastående och starta om loopen.
+    const renderLoopWatchdog = window.setInterval(() => {
+      const lastAt = lastFrameAtRef.current;
+      if (lastAt === null) return;
+      const stalled = Date.now() - lastAt > 500;
+      renderLoopStalledRef.current = stalled;
+      if (stalled) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(animate);
+      }
+    }, 250);
+
     function handleResize() {
       if (!mount) return;
       camera.aspect = mount.clientWidth / mount.clientHeight;
@@ -1185,6 +1211,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
 
     return () => {
       cancelAnimationFrame(raf);
+      window.clearInterval(renderLoopWatchdog);
       window.removeEventListener("resize", handleResize);
       renderer.domElement.removeEventListener("webglcontextlost", handleContextLost, false);
       renderer.domElement.removeEventListener("webglcontextrestored", handleContextRestored, false);
