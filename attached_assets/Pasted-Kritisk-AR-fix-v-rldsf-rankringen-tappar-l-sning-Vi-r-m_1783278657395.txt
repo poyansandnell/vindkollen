@@ -1,0 +1,81 @@
+Kritisk AR-fix – världsförankringen tappar låsning
+Vi är mycket nära nu, men en allvarlig bugg återstår.
+Problem
+När användaren tittar rakt mot vindkraftsparken fungerar allt korrekt.
+Om telefonen sedan vrids ungefär 90° åt sidan följer vindkraftverken med kameran istället för att ligga kvar i världen.
+Även efter 5–10 sekunder ligger de kvar i bild.
+Detta får aldrig kunna hända.
+ 
+⸻
+ 
+Vindkraftverken ska vara 100 % world-locked
+Varje verk ska ha en fast världsposition.
+Positionen får endast beräknas från:
+* användarens GPS
+* verkets GPS
+* telefonens heading
+* pitch
+* roll
+* kamerans FOV
+Inte från tidigare skärmposition.
+Ingen smoothing eller cache får göra att objekten “hänger kvar”.
+ 
+⸻
+ 
+Uppdatera varje renderframe
+Varje animation frame (60 FPS):
+1. Läs aktuell heading
+2. Läs aktuell pitch
+3. Läs aktuell roll
+4. Beräkna bearing till varje verk
+5. Beräkna relativ vinkel
+6. Placera om modellen direkt
+Inte bara när GPS förändras.
+ 
+⸻
+ 
+Om objekt hamnar utanför kamerans FOV
+När ett verk hamnar utanför synfältet ska det:
+* direkt försvinna
+* inte ligga kvar ute vid kanten
+* inte glida efter
+När användaren tittar tillbaka ska det dyka upp exakt där det hör hemma.
+ 
+⸻
+ 
+Kontrollera koordinatsystem
+Verifiera att modellerna renderas i world space.
+De får aldrig vara bundna till:
+* screen coordinates
+* viewport coordinates
+* CSS transforms
+* tidigare frame-positioner
+ 
+⸻
+ 
+Debug
+Lägg till loggning:
+Heading
+Camera yaw
+Calculated bearing
+Relative angle
+Screen X
+Visible true/false
+Om heading ändras 90° ska Relative Angle också ändras ungefär 90°.
+Om Relative Angle ligger kvar finns buggen i beräkningen.
+ 
+⸻
+ 
+UI-fix
+Den gröna debug/loggraden högst upp täcker texten “Katrineholm · 29 verk”.
+Flytta debugpanelen så den aldrig kan täcka användargränssnittet.
+Förslag:
+* placera den längst ned ovanför menyknapparna, eller
+* gör den hopfällbar, eller
+* visa den som ett litet flytande debugfönster uppe till höger.
+Debug-information ska aldrig överlappa knappar eller användarinformation.
+ 
+⸻
+ 
+Mål
+Efter denna ändring ska vindkraftverken kännas helt fastlåsta i verkligheten. Om användaren vrider telefonen 90°, 180° eller 360° ska verken alltid ligga kvar exakt där de finns geografiskt och endast synas när de faktiskt ligger inom kamerans synfält. Det ska upplevas som om de verkligen står ute i landskapet – inte som att de följer med mobilen.

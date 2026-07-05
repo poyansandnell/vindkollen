@@ -203,6 +203,21 @@ const HEADING_TURN_CONFIRM_SAMPLES = 2;
 // rörelse — då hoppar vi över just den avläsningen istället för att låta
 // den slå igenom i den utjämnade riktningen.
 const MAX_PLAUSIBLE_TURN_RATE_DEG_PER_SEC = 720;
+// Juli 2026-fix (fjärde kritiska buggrapporten: "verken hänger kvar på
+// skärmen efter en 90°-vridning"): `HEADING_TURN_CONFIRM_SAMPLES` ovan kräver
+// två på varandra följande avläsningar över bruströskeln INNAN den snabba
+// tidskonstanten släpps igenom — ett medvetet skydd mot enstaka handskaknings-
+// spikar. Men en enda avläsning med en SÅ stor delta som denna tröskel kan,
+// per definition av vad magnetometerbrus normalt ger (typiskt enstaka grader
+// per 15-60Hz-avläsning), aldrig rimligen vara brus — den är alltid en
+// verklig, snabb vridning. Utan denna "escape hatch" kunde ett enda sensor-
+// event som råkade komma med en ovanligt stor engångsdelta (t.ex. en
+// tillfällig event-paus följt av en stor hoppande avläsning) tvinga igenom
+// EN extra bekräftelseavläsnings fördröjning innan den snabba tidskonstanten
+// slog till — vilket på vissa enheter/OS-versioner med glesare eventtakt kan
+// upplevas som att verken "hänger kvar" i över en sekund efter en snabb
+// vridning. Nu räknas en så stor delta som direkt bekräftad.
+const HEADING_LARGE_JUMP_DEG = 20;
 
 // Juli 2026-fix ("verken glider vid minsta mobilrörelse"): beta/gamma
 // (pitch/roll) använde tidigare bara en FAST tidskonstant (0.35s) utan
@@ -699,7 +714,13 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
 
       if (rawDelta >= HEADING_NOISE_DELTA_DEG) {
         const direction: 1 | -1 = signedDelta >= 0 ? 1 : -1;
-        if (turnConfirmDirRef.current === direction) {
+        if (rawDelta >= HEADING_LARGE_JUMP_DEG) {
+          // Se `HEADING_LARGE_JUMP_DEG`s kommentar: en så stor engångsdelta
+          // räknas som omedelbart bekräftad, ingen väntan på en andra
+          // avläsning i samma riktning.
+          turnConfirmDirRef.current = direction;
+          turnConfirmCountRef.current = HEADING_TURN_CONFIRM_SAMPLES;
+        } else if (turnConfirmDirRef.current === direction) {
           turnConfirmCountRef.current += 1;
         } else {
           turnConfirmDirRef.current = direction;

@@ -139,20 +139,6 @@ export default function Home() {
   // oavsett hur många badges/rader som visas.
   const topBarRef = useRef<HTMLDivElement | null>(null);
   const [topBarHeight, setTopBarHeight] = useState(0);
-  useEffect(() => {
-    const el = topBarRef.current;
-    if (!el) {
-      setTopBarHeight(0);
-      return;
-    }
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) setTopBarHeight(entry.contentRect.height);
-    });
-    observer.observe(el);
-    setTopBarHeight(el.getBoundingClientRect().height);
-    return () => observer.disconnect();
-  }, [started]);
   const [showSensorDebug, setShowSensorDebug] = useState(false);
   const [calibrated, setCalibrated] = useState(false);
   const [showSoundLevel, setShowSoundLevel] = useState(true);
@@ -229,6 +215,36 @@ export default function Home() {
   // upp". Detta ersätter den tidigare `orientation.hasFix`-spärren (och den
   // nödbroms-knapp den krävde) helt.
   const ready = started && geo.lat !== null && geo.lon !== null && Boolean(camera.stream);
+
+  // Juli 2026-fix (fjärde kritiska buggrapporten, punkt "UI-fix"): denna
+  // effekt (som mäter topp-barens FAKTISKA höjd, se `topBarRef`s kommentar
+  // ovan) berodde tidigare på `[started]`, men `topBarRef`s `<div>` renderas
+  // villkorat på `ready` (`arSessionVisible` nedan är bara ett alias för
+  // `ready`) — vilket ALLTID blir sant EFTER `started` (GPS/kompass/kamera-
+  // fix tar sekunder). Effekten kördes alltså EN gång vid `started`, hittade
+  // `topBarRef.current === null` (elementet fanns ännu inte i DOM:en), satte
+  // `topBarHeight` till 0 och returnerade utan att sätta upp någon
+  // `ResizeObserver` alls — och kördes sedan ALDRIG om, eftersom `started`
+  // inte ändras igen. Resultatet blev att `LiveDebugStrip` permanent trodde
+  // topp-baren hade höjd 0 och därför alltid ritades på `top: 0`, rakt ovanpå
+  // "Katrineholm · N verk". Fixat genom att bero på `ready` istället — samma
+  // flagga som faktiskt styr om `topBarRef`s `<div>` finns i DOM:en eller ej
+  // (effekten flyttad hit, efter `ready`s deklaration, för att undvika en
+  // "used before declaration"-TDZ-fel).
+  useEffect(() => {
+    const el = topBarRef.current;
+    if (!el) {
+      setTopBarHeight(0);
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setTopBarHeight(entry.contentRect.height);
+    });
+    observer.observe(el);
+    setTopBarHeight(el.getBoundingClientRect().height);
+    return () => observer.disconnect();
+  }, [ready]);
 
   // Ren informationstext (blockerar INGET) som visas medan kompassen
   // fortfarande kalibrerar sig i bakgrunden efter att `ready` redan blivit
@@ -1045,6 +1061,7 @@ export default function Home() {
             userLat={smoothedGeo.lat ?? geo.lat ?? KATRINEHOLM_CENTER.lat}
             userLon={smoothedGeo.lon ?? geo.lon ?? KATRINEHOLM_CENTER.lon}
             quaternionRef={orientation.quaternionRef}
+            headingDegRef={orientation.headingDegRef}
             turbines={activeTurbines}
             sunMode={sunMode}
             realScale={realScale}

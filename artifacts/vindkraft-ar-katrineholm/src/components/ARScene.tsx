@@ -12,6 +12,15 @@ interface ARSceneProps {
   userLat: number;
   userLon: number;
   quaternionRef: React.MutableRefObject<THREE.Quaternion>;
+  /**
+   * Juli 2026-fix (FJÄRDE kritiska buggrapporten, punkt 4): den utjämnade
+   * kompassriktningen ("Heading") från `useDeviceOrientation`, enbart för
+   * felsökningsloggen nedan — så "Heading" och "Camera yaw" (utläst direkt
+   * ur `state.camera.quaternion` samma bildruta) kan jämföras sida vid sida.
+   * En `ref` (inte ett reaktivt prop-värde) eftersom den läses inuti
+   * `animate()`-loopen, inte i React-rendercykeln.
+   */
+  headingDegRef: React.MutableRefObject<number | null>;
   turbines: TurbineSweref[];
   sunMode: SunMode;
   realScale: boolean;
@@ -505,6 +514,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     userLat,
     userLon,
     quaternionRef,
+    headingDegRef,
     turbines,
     sunMode,
     realScale,
@@ -1226,6 +1236,18 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     // undviker att allokera nya `THREE.Vector3` varje verk, varje bildruta.
     const camSpaceVec = new THREE.Vector3();
     const ndcVec = new THREE.Vector3();
+    // Juli 2026-fix (FJÄRDE kritiska buggrapporten, punkt 4: efterfrågad
+    // felsökningslogg med exakt fälten "Camera yaw" och "Relative angle").
+    // `cameraYawEuler` extraherar girvinkeln (Y-axeln, samma "YXZ"-ordning
+    // som `computeDeviceQuaternion` bygger kvaternionen i) direkt från
+    // kamerans FAKTISKA, redan applicerade rotation (`state.camera.quaternion`,
+    // satt från `quaternionRef.current` högre upp i denna loop) — INTE från
+    // rå sensordata. Detta är avsiktligt ett separat tal från "Heading"
+    // (`Riktning`/`headingDegRef` i `useDeviceOrientation`/`LiveDebugStrip`):
+    // om de två någonsin divergerar bevisar det direkt att kamerarotationen
+    // inte längre följer den utjämnade riktningen (exakt den typen av bugg
+    // som rapporten beskriver).
+    const cameraYawEuler = new THREE.Euler();
 
     // Juli 2026-fix (kritisk buggrapport punkt 4: "logga avstånd/bäring/
     // cameraForward/isVisible/frustumVisible per verk för att kontrollera
@@ -1416,7 +1438,16 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         isVisible: boolean;
         screenX: number | null;
         screenY: number | null;
+        relativeAngle_deg: number | null;
       }> = [];
+
+      // Juli 2026-fix (FJÄRDE kritiska buggrapporten, punkt 4): "Camera yaw"
+      // — girvinkeln som kameran FAKTISKT applicerade den här bildrutan
+      // (kopierad från `quaternionRef.current` längre upp), omvandlad till
+      // samma 0-360°-konvention som kompassriktningen (`Riktning`) för att
+      // vara direkt jämförbar i loggen.
+      cameraYawEuler.setFromQuaternion(state.camera.quaternion, "YXZ");
+      const cameraYawDeg = ((-cameraYawEuler.y * 180) / Math.PI + 360) % 360;
 
       for (const obj of state.objects) {
         obj.bladesGroup.rotation.z += obj.bladeRadPerSec * dt;
@@ -1534,6 +1565,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
           isVisible,
           screenX,
           screenY,
+          relativeAngle_deg: angleFromOpticalAxisDeg !== null ? Math.round(angleFromOpticalAxisDeg * 10) / 10 : null,
         });
 
         const phase = (now + obj.blinkOffsetMs) % obj.blinkPeriodMs;
@@ -1568,8 +1600,9 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // faktiskt renderingsfel.
       if (timestamp - lastDiagnosticDumpAt >= 3000 && state.objects.length > 0) {
         lastDiagnosticDumpAt = timestamp;
+        const headingForLog = headingDegRef.current;
         console.info(
-          `[AR][diagnostik] ${visibleCountThisFrame}/${state.objects.length} verk synliga denna bildruta. cameraForward=(${cameraForward.x.toFixed(2)}, ${cameraForward.y.toFixed(2)}, ${cameraForward.z.toFixed(2)})`,
+          `[AR][diagnostik] ${visibleCountThisFrame}/${state.objects.length} verk synliga denna bildruta. Heading=${headingForLog === null ? "–" : headingForLog.toFixed(1) + "°"} Camera yaw=${cameraYawDeg.toFixed(1)}° cameraForward=(${cameraForward.x.toFixed(2)}, ${cameraForward.y.toFixed(2)}, ${cameraForward.z.toFixed(2)})`,
         );
         console.table(diagnosticRows);
       }
