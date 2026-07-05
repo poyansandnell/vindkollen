@@ -23,6 +23,17 @@ interface LiveDebugStripProps {
   arVisibleTurbineCount: number;
   screenLocked: boolean;
   /**
+   * Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 4): produktkravets
+   * "Rendering mode: Direkt AR / Stabiliserar / World locked" och
+   * "Synliga verk: antal" — läses direkt från `ARScene.getDebugStats()`s
+   * `renderMode`/`trueVisibleTurbineCount` (se dess jsdoc), inte från de
+   * äldre vinkel-/FOV-baserade talen ovan.
+   */
+  renderMode: "direct" | "stabilizing" | "world-locked";
+  trueVisibleTurbineCount: number;
+  /** Avstånd (m) till närmaste verk — produktkravets "Närmaste verk: avstånd + bearing". */
+  nearestDistanceM: number | null;
+  /**
    * Juli 2026-fix (kritisk buggrapport punkt 5: "felsökningsraden
    * överlappar loggan/statustexten i topp-baren"): den uppmätta, faktiska
    * höjden (px) på topp-baren i `Home.tsx`, uppdaterad live via
@@ -65,8 +76,16 @@ export function LiveDebugStrip({
   worldUpdated,
   arVisibleTurbineCount,
   screenLocked,
+  renderMode,
+  trueVisibleTurbineCount,
+  nearestDistanceM,
   topOffsetPx,
 }: LiveDebugStripProps) {
+  const renderModeLabel: Record<"direct" | "stabilizing" | "world-locked", string> = {
+    direct: "Direkt AR",
+    stabilizing: "Stabiliserar",
+    "world-locked": "World locked",
+  };
   // Juli 2026-fix (kritisk buggrapport punkt 5): låg tidigare fast på
   // `top-0`/z-[60], rakt ovanpå topp-barens logga/statustext (z-[45]) —
   // `topOffsetPx` (topp-barens uppmätta höjd, se `Home.tsx`) flyttar remsan
@@ -85,7 +104,9 @@ export function LiveDebugStrip({
         {fmt(angleDiffToNearestDeg, "°")} · GPS ±{fmt(gpsAccuracyM, "m")} · Kompass ±{fmt(headingAccuracyDeg, "°")} · Verk{" "}
         {visibleTurbineCount}/{renderedTurbineCount} · Riktningsålder {fmt(headingAgeMs, "ms")} · Källa{" "}
         {headingSource === "compass" ? "kompass" : "gyro"} · Världsuppdatering {yesNo(worldUpdated)} · Synliga verk{" "}
-        {arVisibleTurbineCount} · Skärmlåst {yesNo(screenLocked)}
+        {arVisibleTurbineCount} · Skärmlåst {yesNo(screenLocked)} · Rendering mode {renderModeLabel[renderMode]} ·{" "}
+        Synliga verk (faktiskt) {trueVisibleTurbineCount} · Närmaste verk {fmt(nearestDistanceM, "m")}/
+        {fmt(bearingToNearestDeg, "°")}
       </div>
     </div>
   );

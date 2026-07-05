@@ -54,8 +54,20 @@ interface SensorDebugPanelProps {
    */
   disableOcclusion: boolean;
   onToggleDisableOcclusion: () => void;
+  /**
+   * Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 4): produktkravets
+   * "Rendering mode: Direkt AR / Stabiliserar / World locked" — härlett
+   * från `ARScene.getDebugStats()`s `renderMode`, se dess jsdoc.
+   */
+  renderMode: "direct" | "stabilizing" | "world-locked";
   onClose: () => void;
 }
+
+const RENDER_MODE_LABEL: Record<"direct" | "stabilizing" | "world-locked", string> = {
+  direct: "Direkt AR",
+  stabilizing: "Stabiliserar",
+  "world-locked": "World locked",
+};
 
 const TIER_LABEL: Record<ArTrackingTier, string> = {
   initializing: "Initierar…",
@@ -120,6 +132,7 @@ export function SensorDebugPanel({
   onToggleDebugForceNearest,
   disableOcclusion,
   onToggleDisableOcclusion,
+  renderMode,
   onClose,
 }: SensorDebugPanelProps) {
   return (
@@ -135,6 +148,7 @@ export function SensorDebugPanel({
         </button>
       </div>
 
+      <Row label="Rendering mode" value={RENDER_MODE_LABEL[renderMode]} />
       <Row label="GPS-precision" value={fmt(gpsAccuracyM, " m")} />
       <Row label="Heading" value={fmt(headingDeg, "°", 1)} />
       <Row label="Heading updates/sec" value={`${headingUpdatesPerSecond}`} />

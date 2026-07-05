@@ -120,6 +120,25 @@ interface ARSceneProps {
    * synlighetsfiltren ovanpå den. Default `false` (bakåtkompatibelt).
    */
   debugForceNearest?: boolean;
+  /**
+   * Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 1 & 2): epoch-ms
+   * (`Date.now()`) för när DENNA AR-session blev synlig (`Home.tsx`s
+   * `arSessionVisible` slog om till `true`) — startpunkten för den
+   * 5-sekunders "Direkt AR → World locked"-övertoningen (se
+   * `WORLD_LOCK_BLEND_MS`). `null`/utelämnad betyder "redan world-locked"
+   * (bakåtkompatibelt, blend=1 direkt) — används t.ex. innan sessionen
+   * någonsin startat. Läses via `modeRef` inuti `animate()`, INTE ett eget
+   * reaktivt state, eftersom det bara behöver sättas EN gång per session.
+   */
+  arStartedAtMs?: number | null;
+  /**
+   * Produktkrav (SJÄTTE buggrapporten, punkt 3): "Visa/dölj verk"-knappen i
+   * `Home.tsx` — styr ENDAST turbinernas egen synlighet (kropp/etiketter/
+   * ljus/glöd/skugga), aldrig AR-sessionen/kameran/pilen. Tonas mjukt
+   * in/ut över `TURBINES_VISIBLE_FADE_MS` (0.5s) i `animate()`, aldrig ett
+   * omedelbart hopp. Default `true` (bakåtkompatibelt).
+   */
+  turbinesVisible?: boolean;
 }
 
 const DEFAULT_IS_POINT_SKY = () => true;
@@ -139,6 +158,22 @@ const OCCLUSION_THRESHOLD_HIGH = 0.55;
 // allt annat (GPS/kompass/world-position) var friskt. Se kommentaren vid
 // `attachOcclusionShader` nedan.
 const OCCLUSION_MIN_ALPHA = 0.18;
+// Juli 2026-fix (SJÄTTE kritiska buggrapporten, "verken måste ALLTID synas
+// direkt vid AR-start, även inomhus"): under de första `WORLD_LOCK_BLEND_MS`
+// millisekunderna efter att AR-sessionen blivit synlig tvingas samtliga
+// dämpnings-/ocklusionsfaktorer (Outdoor Confidence Index, inomhus-
+// heuristiken, per-pixel-himmelsmasken) mot 1 (fullt synligt, ingen
+// dämpning) — se `worldLockBlendRef`/`applyFinalOpacities`/
+// `attachOcclusionShader` nedan. Därefter blandas de MJUKT (linjärt, ingen
+// tröskel/hopp) in mot sina normala beräknade värden, så övergången från
+// "Direkt AR" (skärmnära, garanterat synligt) till "World locked" (full
+// GPS/kompass/pitch-stabiliserad rendering) aldrig känns som ett hack.
+const WORLD_LOCK_BLEND_MS = 5000;
+// Produktkrav: "Visa/dölj verk"-togglen (Home.tsx) ska tona in/ut verken på
+// 0.5s — helt oberoende av `WORLD_LOCK_BLEND_MS` ovan och av ocklusionen,
+// eftersom det är ett rent manuellt användarval, inte en sensorhärledd
+// dämpning.
+const TURBINES_VISIBLE_FADE_MS = 500;
 
 export interface ARSceneHandle {
   /**
@@ -184,6 +219,23 @@ export interface ARSceneHandle {
     worldPositionsUpdated: boolean;
     visibleTurbineCount: number;
     screenLocked: boolean;
+    /**
+     * Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 1/2/4):
+     * "direct" = "Direkt AR" (precis startad, alla dämpningar tvingade
+     * till 1), "stabilizing" = mitt i den 5s-övertoningen, "world-locked"
+     * = full GPS/kompass/pitch-stabiliserad rendering. Härlett direkt från
+     * `worldLockBlendRef` (0 / 0<x<1 / 1) — se `WORLD_LOCK_BLEND_MS`.
+     */
+    renderMode: "direct" | "stabilizing" | "world-locked";
+    /**
+     * Den FAKTISKA, opacitetsbaserade "Synliga verk"-räkningen
+     * (`currentOpacity > 0.02`, samma test som redan drev `animate()`s
+     * diagnostikloop) — till skillnad från `visibleTurbineCount` ovan
+     * (vinkel-/FOV-baserad, ignorerar faktisk opacitet/ocklusion/"Visa/
+     * dölj verk"-togglen) är detta talet produktkravets "Synliga verk:
+     * antal"-felsökningsfält ska visa.
+     */
+    trueVisibleTurbineCount: number;
   };
 }
 
@@ -530,6 +582,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     visible = true,
     debugForceNearest = false,
     disableOcclusion = false,
+    arStartedAtMs = null,
+    turbinesVisible = true,
   },
   forwardedRef,
 ) {
@@ -557,6 +611,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     forceVisibleIds: forceVisibleIds ?? EMPTY_FORCE_VISIBLE_IDS,
     debugForceNearest,
     disableOcclusion,
+    arStartedAtMs: arStartedAtMs ?? null,
+    turbinesVisible: turbinesVisible ?? true,
   });
   const skyRef = useRef({
     isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
@@ -612,6 +668,24 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   // diagnostisk signal; nu räknas det ut från just denna tidsstämpel.
   const lastFrameAtRef = useRef<number | null>(null);
   const renderLoopStalledRef = useRef(false);
+  // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 1/2/4): 0 = "Direkt
+  // AR" (precis startad, alla dämpningar tvingade till 1), 1 = fullt
+  // "World locked" — uppdateras varje bildruta i `animate()` från
+  // `modeRef.current.arStartedAtMs`, läses både av `applyFinalOpacities`/
+  // `attachOcclusionShader` (för att blanda dämpningsfaktorerna) OCH av
+  // `getDebugStats()` (för felsökningstextens "Rendering mode").
+  const worldLockBlendRef = useRef(1);
+  // "Visa/dölj verk"-togglens EGNA, tidsbaserade 0..1-faktor (0.5s tona in/
+  // ut) — initieras till startvärdet av `turbinesVisible`-propen så det
+  // inte tonar in vid första monteringen om default redan är `true`.
+  const turbinesVisibleFactorRef = useRef(turbinesVisible === false ? 0 : 1);
+  // Den FAKTISKA, opacitetsbaserade "Synliga verk"-räkningen (samma
+  // `currentOpacity > 0.02`-test som redan drev den lokala `isVisible` i
+  // `animate()`s diagnostikloop) — till skillnad från
+  // `inFrontOfCameraCountRef` (vinkel-/FOV-baserad, ignorerar faktisk
+  // opacitet) är detta talet som produktkravets "Synliga verk: antal"-fält
+  // ska visa.
+  const trueVisibleTurbineCountRef = useRef(0);
 
   // "Visible=true": loggas EN gång när `visible`-propen (arSessionVisible i
   // Home.tsx) faktiskt slår om till true — se produktkravets punkt 2.
@@ -639,6 +713,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     forceVisibleIds: forceVisibleIds ?? EMPTY_FORCE_VISIBLE_IDS,
     debugForceNearest,
     disableOcclusion,
+    arStartedAtMs: arStartedAtMs ?? null,
+    turbinesVisible: turbinesVisible ?? true,
   };
   skyRef.current = {
     isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
@@ -666,6 +742,9 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // över en halv sekund, oavsett OM webbläsaren råkat pausa rAF (t.ex.
       // bakom en overlay/annan flik) eller loopen faktiskt kraschat.
       screenLocked: lastFrameAtRef.current !== null && Date.now() - lastFrameAtRef.current > 500,
+      renderMode:
+        worldLockBlendRef.current <= 0 ? "direct" : worldLockBlendRef.current >= 1 ? "world-locked" : "stabilizing",
+      trueVisibleTurbineCount: trueVisibleTurbineCountRef.current,
     }),
   }));
 
@@ -775,6 +854,13 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       material.onBeforeCompile = (shader) => {
         shader.uniforms.uOcclusionMap = { value: occlusionTexture };
         shader.uniforms.uShowHidden = { value: modeRef.current.showHiddenTurbines ? 1 : 0 };
+        // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 1 & 5): under
+        // "Direkt AR" (`worldLockBlendRef` nära 0, se `WORLD_LOCK_BLEND_MS`)
+        // ska ocklusionen INTE dämpa alls — verket ska synas fullt oavsett
+        // vad himmelsmasken tror den ser. `uWorldLockBlend` blandas in i
+        // else-grenen nedan, precis som `applyFinalOpacities` blandar sina
+        // motsvarande faktorer, så övergången är mjuk snarare än ett hopp.
+        shader.uniforms.uWorldLockBlend = { value: worldLockBlendRef.current };
         shader.vertexShader = shader.vertexShader
           .replace("#include <common>", "#include <common>\nvarying vec4 vOcclusionClipPos;")
           .replace("#include <project_vertex>", "#include <project_vertex>\nvOcclusionClipPos = gl_Position;");
@@ -784,7 +870,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
             `#include <common>
             varying vec4 vOcclusionClipPos;
             uniform sampler2D uOcclusionMap;
-            uniform float uShowHidden;`,
+            uniform float uShowHidden;
+            uniform float uWorldLockBlend;`,
           )
           .replace(
             "#include <dithering_fragment>",
@@ -832,7 +919,15 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
                 // nedtonat men aldrig helt osynligt, och en felklassificerad
                 // "falsk ocklusion" kan därför aldrig ensam förklara att ett
                 // verk inte syns alls.
-                gl_FragColor.a *= mix(${OCCLUSION_MIN_ALPHA.toFixed(2)}, 1.0, visMask);
+                //
+                // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 1 & 2):
+                // uWorldLockBlend (0 precis vid AR-start, mjukt mot 1 över
+                // WORLD_LOCK_BLEND_MS) blandas in HÄR — vid blend=0 är
+                // alpha-faktorn tvingad till 1.0 (ingen ocklusionsdämpning
+                // alls, "Direkt AR"), vid blend=1 är den den fulla, normalt
+                // beräknade ocklusionsdämpningen ovan. Aldrig ett hopp.
+                float occlusionAlphaFactor = mix(${OCCLUSION_MIN_ALPHA.toFixed(2)}, 1.0, visMask);
+                gl_FragColor.a *= mix(1.0, occlusionAlphaFactor, uWorldLockBlend);
               }
             }
             #include <dithering_fragment>`,
@@ -1191,28 +1286,45 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // kortsluter BÅDA dämpningsfaktorerna (Outdoor Confidence Index/
       // inomhus-heuristiken OCH himmelsmasken) till 1 — se propens jsdoc.
       const { disableOcclusion: occlusionDisabled } = modeRef.current;
-      const globalFactor = occlusionDisabled
+      const naturalGlobalFactor = occlusionDisabled
         ? 1
         : obj.forceVisible
           ? 1
           : modeRef.current.hideAll
             ? INDOOR_DIM_FACTOR
             : Math.max(modeRef.current.globalVisibilityFactor, MIN_CONFIDENCE_VISIBILITY_FACTOR);
-      const skyFactor = occlusionDisabled ? 1 : (obj.forceVisible ? 1 : obj.skyFactor) * globalFactor;
-      const bodyOpacity = obj.baseOpacity * globalFactor;
+      // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 1 & 2): "Direkt
+      // AR"-övertoningen (`worldLockBlendRef`, 0 precis vid AR-start, mjukt
+      // mot 1 över `WORLD_LOCK_BLEND_MS`) tvingar globalFactor/skyFactor mot
+      // 1 (fullt synligt) i början, oavsett Outdoor Confidence Index/
+      // inomhus-heuristik/himmelsmask, och blandas sedan LINJÄRT (aldrig ett
+      // hopp) mot deras normalt beräknade ("naturliga") värden. `1 + (x-1)*b`
+      // ger exakt 1 vid b=0 och exakt x vid b=1.
+      const worldLockBlend = worldLockBlendRef.current;
+      const globalFactor = 1 + (naturalGlobalFactor - 1) * worldLockBlend;
+      const naturalSkyFactor = occlusionDisabled ? 1 : (obj.forceVisible ? 1 : obj.skyFactor) * naturalGlobalFactor;
+      // "Visa/dölj verk"-togglens egna, oberoende 0..1-tonings-faktor
+      // (`turbinesVisibleFactorRef`, 0.5s in/ut) multipliceras in sist, på
+      // BÅDA kanalerna, så hela verket (kropp + etiketter/ljus/glöd) tonar
+      // enhetligt.
+      const turbinesVisibleFactor = turbinesVisibleFactorRef.current;
+      const skyFactor = (1 + (naturalSkyFactor - 1) * worldLockBlend) * turbinesVisibleFactor;
+      const bodyOpacity = obj.baseOpacity * globalFactor * turbinesVisibleFactor;
       // Grå/blå ton (produktkrav: "gray/blue tint" när verket visas dämpat
       // p.g.a. inomhus-heuristiken) — blandas alltid tillbaka mot
       // `originalColors` när `hideAll`/`forceVisible` inte längre gäller, så
-      // färgen aldrig fastnar tonad.
-      const tintActive = !occlusionDisabled && modeRef.current.hideAll && !obj.forceVisible;
+      // färgen aldrig fastnar tonad. Tonings-ANDELEN skalas också med
+      // `worldLockBlend` så tonen fasas in mjukt istället för att dyka upp
+      // direkt när `hideAll` blir sant strax efter AR-start.
+      const tintFraction =
+        !occlusionDisabled && modeRef.current.hideAll && !obj.forceVisible ? INDOOR_TINT_BLEND * worldLockBlend : 0;
       for (let i = 0; i < obj.materials.length; i++) {
         const mat = obj.materials[i];
         mat.transparent = true;
         mat.opacity = bodyOpacity;
-        if (tintActive) {
-          mat.color.copy(obj.originalColors[i]).lerp(INDOOR_TINT_COLOR, INDOOR_TINT_BLEND);
-        } else {
-          mat.color.copy(obj.originalColors[i]);
+        mat.color.copy(obj.originalColors[i]);
+        if (tintFraction > 0) {
+          mat.color.lerp(INDOOR_TINT_COLOR, tintFraction);
         }
       }
       (obj.label.sprite.material as THREE.SpriteMaterial).opacity = skyFactor;
@@ -1310,6 +1422,29 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       const night = curNightMode;
       const now = Date.now();
 
+      // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 1 & 2): räknar
+      // om "Direkt AR → World locked"-övertoningen varje bildruta från
+      // `modeRef.current.arStartedAtMs` (satt EN gång i Home.tsx när
+      // AR-sessionen blir synlig). `arStartedAtMs === null` betyder "redan
+      // world-locked" (blend=1 direkt, bakåtkompatibelt). Sparas i
+      // `worldLockBlendRef` så `applyFinalOpacities`/`attachOcclusionShader`s
+      // uniform-uppdatering OCH `getDebugStats()` läser exakt samma tal.
+      const arStartedAt = modeRef.current.arStartedAtMs;
+      const worldLockBlend =
+        arStartedAt == null ? 1 : Math.max(0, Math.min(1, (now - arStartedAt) / WORLD_LOCK_BLEND_MS));
+      worldLockBlendRef.current = worldLockBlend;
+
+      // "Visa/dölj verk"-togglen tonas mjukt över `TURBINES_VISIBLE_FADE_MS`
+      // (0.5s) — en enkel linjär närmande-per-sekund, inte en threshold-
+      // snap, så växlingen aldrig känns som ett hopp.
+      const turbinesVisibleTarget = modeRef.current.turbinesVisible ? 1 : 0;
+      const visibilityLerpStep = dt > 0 ? Math.min(dt / (TURBINES_VISIBLE_FADE_MS / 1000), 1) : 1;
+      turbinesVisibleFactorRef.current +=
+        (turbinesVisibleTarget - turbinesVisibleFactorRef.current) * visibilityLerpStep;
+      if (Math.abs(turbinesVisibleFactorRef.current - turbinesVisibleTarget) < 0.002) {
+        turbinesVisibleFactorRef.current = turbinesVisibleTarget;
+      }
+
       // Mörklägg scenen — dämpar omgivningsljus/riktat ljus, vilket gör
       // kameraströmmen och 3D-objekten mörkare tillsammans. Styrs enbart av
       // det manuella Nattläge-valet, oavsett verklig tid på dygnet eller
@@ -1402,6 +1537,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       const showHiddenValue = modeRef.current.showHiddenTurbines || modeRef.current.disableOcclusion ? 1 : 0;
       for (const shader of occlusionShaders) {
         shader.uniforms.uShowHidden.value = showHiddenValue;
+        shader.uniforms.uWorldLockBlend.value = worldLockBlend;
       }
 
       // Juli 2026-fix (kritisk buggrapport punkt 4): kamerans faktiska
@@ -1588,6 +1724,13 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       }
 
       inFrontOfCameraCountRef.current = inFrontOfCameraCount;
+      // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 4): den FAKTISKA
+      // opacitetsbaserade räkningen (`visibleCountThisFrame`, `isVisible =
+      // currentOpacity > 0.02` ovan i denna loop) — till skillnad från
+      // `inFrontOfCameraCountRef` (vinkel-/FOV-baserad, blind för faktisk
+      // opacitet) — exponeras separat för produktkravets "Synliga verk:
+      // antal"-felsökningsfält.
+      trueVisibleTurbineCountRef.current = visibleCountThisFrame;
 
       // Juli 2026-fix (kritisk buggrapport punkt 1 & 4): dumpa en
       // per-verk-diagnostiktabell var 3:e sekund — ALLTID (inte bara på

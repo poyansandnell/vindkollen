@@ -270,6 +270,30 @@ export default function Home() {
   // avsåg — men utan att BLOCKERA den underliggande renderingen.
   const arSessionVisible = ready;
 
+  // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 1/2): tidsstämpeln
+  // för när AR-sessionen FÖRST blev synlig — skickas till `ARScene` som
+  // `arStartedAtMs` och styr dess 5-sekunders "Direkt AR" → "World locked"-
+  // övertoning (se `WORLD_LOCK_BLEND_MS` i `ARScene.tsx`). Sätts EN gång per
+  // session (inte om vid varje omrendering) och nollställs så fort sessionen
+  // slutar vara synlig, så en ny AR-start (t.ex. efter att appen minimerats)
+  // alltid får en ny, egen "Direkt AR"-period istället för att ärva den
+  // gamla övertoningens redan förflutna tid.
+  const [arStartedAtMs, setArStartedAtMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (arSessionVisible) {
+      setArStartedAtMs((prev) => prev ?? Date.now());
+    } else {
+      setArStartedAtMs(null);
+    }
+  }, [arSessionVisible]);
+
+  // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 3): "Visa/dölj
+  // verk"-togglen — påverkar ENDAST turbinernas synlighet (0.5s
+  // in-/uttoning, se `TURBINES_VISIBLE_FADE_MS` i `ARScene.tsx`), aldrig
+  // resten av AR-vyn (kamera, HUD, pilen). Default synlig enligt
+  // produktkravet.
+  const [turbinesVisible, setTurbinesVisible] = useState(true);
+
   // Juli 2026-fix (kritisk buggrapport punkt 2): explicita, engångsloggade
   // brödsmulor för de tidiga pipeline-stegen ("GPS OK", "Compass OK",
   // "Visible=true") — tidigare fanns ENDAST visuell felsökningstext i
@@ -569,6 +593,8 @@ export default function Home() {
     worldPositionsUpdated: false,
     visibleTurbineCount: 0,
     screenLocked: false,
+    renderMode: "direct" as "direct" | "stabilizing" | "world-locked",
+    trueVisibleTurbineCount: 0,
   });
   useEffect(() => {
     if (!started) return;
@@ -580,6 +606,8 @@ export default function Home() {
           worldPositionsUpdated: false,
           visibleTurbineCount: 0,
           screenLocked: false,
+          renderMode: "direct",
+          trueVisibleTurbineCount: 0,
         },
       );
     }, 250);
@@ -813,6 +841,17 @@ export default function Home() {
         tone: "yellow",
       };
     }
+    // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 4): explicit
+    // fallback-text när INGET verk just nu räknas synligt (arDebugStats.
+    // trueVisibleTurbineCount — den faktiska, opacitetsbaserade räkningen
+    // från ARScene, se dess jsdoc) — så användaren aldrig bara möter en tom
+    // skärm utan förklaring/vägledning, oavsett ORSAKEN (utanför FOV,
+    // "Visa/dölj verk" avstängd, etc). Lägre prioriterad än
+    // indoorsOrNoSight-bannern ovan, som redan förklarar det specifika
+    // inomhus-/skymd-fallet.
+    if (turbinesVisible && arDebugStats.trueVisibleTurbineCount === 0) {
+      return { message: "Verken ligger åt pilens riktning – vrid mobilen", tone: "yellow" };
+    }
     if (wind.playing) {
       return { message: "🔊 Vindljud aktivt", tone: "orange" };
     }
@@ -835,6 +874,8 @@ export default function Home() {
     orientation.headingFallbackActive,
     arTracking.weakSignalMessage,
     indoorsOrNoSight,
+    turbinesVisible,
+    arDebugStats.trueVisibleTurbineCount,
     wind.playing,
     calibrated,
     stillCalibrating,
@@ -1111,6 +1152,8 @@ export default function Home() {
             forceVisibleIds={forceVisibleIds}
             debugForceNearest={debugForceNearest}
             disableOcclusion={debugDisableOcclusion}
+            arStartedAtMs={arStartedAtMs}
+            turbinesVisible={turbinesVisible}
           />
 
           {arSessionVisible && (
@@ -1147,6 +1190,9 @@ export default function Home() {
               worldUpdated={arDebugStats.worldPositionsUpdated}
               arVisibleTurbineCount={arDebugStats.visibleTurbineCount}
               screenLocked={arDebugStats.screenLocked}
+              renderMode={arDebugStats.renderMode}
+              trueVisibleTurbineCount={arDebugStats.trueVisibleTurbineCount}
+              nearestDistanceM={nearestTurbineInfo?.distanceM ?? null}
             />
           )}
 
@@ -1398,6 +1444,18 @@ export default function Home() {
               >
                 {soundEnvironment === "ute" ? "🔊 Ljud ute" : "🔈 Ljud inne"}
               </button>
+              {/* Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 3):
+                  "Visa/dölj verk" — påverkar ENDAST `turbinesVisible` (0.5s
+                  in-/uttoning i ARScene, se `TURBINES_VISIBLE_FADE_MS`),
+                  aldrig resten av AR-sessionen (kamera, HUD, pilen förblir
+                  synliga oavsett). Default PÅ (synlig). */}
+              <button
+                onClick={() => setTurbinesVisible((v) => !v)}
+                aria-pressed={turbinesVisible}
+                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
+              >
+                {turbinesVisible ? "🌬️ Dölj verk" : "🌬️ Visa verk"}
+              </button>
             </div>
           </div>
           )}
@@ -1584,6 +1642,7 @@ export default function Home() {
           onToggleDebugForceNearest={() => setDebugForceNearest((v) => !v)}
           disableOcclusion={debugDisableOcclusion}
           onToggleDisableOcclusion={() => setDebugDisableOcclusion((v) => !v)}
+          renderMode={arDebugStats.renderMode}
           onClose={() => setShowSensorDebug(false)}
         />
       )}
