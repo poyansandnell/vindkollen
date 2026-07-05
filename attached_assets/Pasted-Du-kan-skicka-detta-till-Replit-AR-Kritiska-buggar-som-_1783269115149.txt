@@ -1,0 +1,148 @@
+Du kan skicka detta till Replit:
+
+⸻
+
+AR – Kritiska buggar som måste lösas
+
+Det finns fortfarande några allvarliga problem i AR-läget som behöver åtgärdas.
+
+1. Vindkraftverken renderas inte alls (högsta prioritet)
+
+Det viktigaste felet just nu är att inga vindkraftverk visas trots att:
+
+* GPS fungerar.
+* Kompassen fungerar.
+* AR-stabilitet är 98 %.
+* Närmaste verk visas som 3,2 km bort.
+
+Det betyder att renderingssystemet aldrig placerar ut modellerna.
+
+Gör följande:
+
+Lägg in debug-loggar för varje steg.
+
+[AR] GPS position mottagen
+[AR] 29 vindkraftverk laddade
+[AR] Beräknar världskoordinater...
+[AR] Skapar modell för verk #1
+[AR] Modell placerad
+[AR] Modell synlig
+
+Om någon rad inte skrivs vet vi exakt var felet ligger.
+
+Kontrollera även:
+
+* att GLTF-modellen verkligen laddas
+* att den inte får scale = 0
+* att den inte får opacity = 0
+* att den inte hamnar under marken
+* att frustum culling inte gömmer modellen
+* att modellen inte ligger bakom kameran
+* att modellen faktiskt läggs till i scene()
+
+⸻
+
+2. Pilen mot närmaste verk är helt statisk
+
+Pilen ska uppdateras varje frame.
+
+Den ska använda:
+
+deviceHeading
+bearingToNearest
+
+och beräkna
+
+deltaAngle = bearing - heading
+
+sedan roteras med
+
+transform: rotate(...)
+
+via requestAnimationFrame.
+
+Ingen caching.
+
+Ingen uppdatering endast vid GPS-förändring.
+
+Den ska reagera direkt när mobilen vrids bara någon grad.
+
+⸻
+
+3. Tvinga kontinuerlig uppdatering
+
+AR-världen får aldrig “frysa”.
+
+Varje animation frame ska uppdatera:
+
+* kompass
+* bearing
+* pil
+* kamerans riktning
+* världsmatris
+* alla vindkraftverk
+
+Det får inte finnas någon kod som väntar på ny GPS-position innan renderingen sker.
+
+⸻
+
+4. Kontrollera om modellerna blir bortfiltrerade
+
+Logga även:
+
+distance
+bearing
+cameraForward
+isVisible
+frustumVisible
+
+för varje verk.
+
+Det känns som att modellerna filtreras bort trots att de borde vara synliga.
+
+⸻
+
+5. Statusraden längst upp
+
+Den svarta debugraden ligger ovanpå loggan och skymmer även texten längst till höger.
+
+Flytta ner den några pixlar under Safe Area eller ännu bättre:
+
+* gör den mindre
+* ge den 70–80 % transparens
+* låt den automatiskt radbryta vid liten skärm
+* eller flytta den till nederkanten i debug-läge.
+
+Den får aldrig täcka logotyp eller annan UI.
+
+⸻
+
+6. Kontrollera att renderingen verkligen startar
+
+Vid start ska följande ske direkt:
+
+1. Kamera startar
+2. GPS hämtas
+3. Kompass startar
+4. Vindkraftverk laddas
+5. Alla modeller skapas
+6. Första renderingen sker direkt
+
+Ingen väntan på flera GPS-uppdateringar eller extra kalibrering.
+
+⸻
+
+Målet
+
+När appen öppnas ska användaren direkt kunna vrida mobilen och:
+
+* se vindkraftverken på rätt plats
+* se pilen röra sig helt mjukt och kontinuerligt
+* få en stabil AR-rendering utan att något fryser
+* ha ett gränssnitt där ingen information döljs av debugraden.
+
+Lägg inte till några nya funktioner innan dessa tre grundproblem är lösta:
+
+1. Vindkraftverken måste renderas.
+2. Pilen måste uppdateras i realtid.
+3. UI:t högst upp får inte täcka logga eller statusinformation.

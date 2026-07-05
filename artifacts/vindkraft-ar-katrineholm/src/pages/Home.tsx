@@ -128,6 +128,31 @@ export default function Home() {
   // förblir direkt synliga.
   const [showMenu, setShowMenu] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  // Juli 2026-fix (kritisk buggrapport punkt 5: "felsökningsraden överlappar
+  // loggan/statustexten i topp-baren"): `LiveDebugStrip` låg tidigare fast på
+  // `top-0` (z-[60]) rakt ovanpå topp-baren (z-[45]), som själv har en
+  // variabel, innehållsberoende höjd (badge-rad + knapp-rad, olika antal
+  // rader beroende på skärmbredd/aktiva lägen). Ett gissat fast pixelvärde
+  // skulle bara flytta problemet till en annan skärmstorlek/tillstånd. Mäter
+  // istället topp-barens FAKTISKA renderade höjd via `ResizeObserver` och
+  // placerar felsökningsraden precis under den — garanterat överlappsfritt
+  // oavsett hur många badges/rader som visas.
+  const topBarRef = useRef<HTMLDivElement | null>(null);
+  const [topBarHeight, setTopBarHeight] = useState(0);
+  useEffect(() => {
+    const el = topBarRef.current;
+    if (!el) {
+      setTopBarHeight(0);
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setTopBarHeight(entry.contentRect.height);
+    });
+    observer.observe(el);
+    setTopBarHeight(el.getBoundingClientRect().height);
+    return () => observer.disconnect();
+  }, [started]);
   const [showSensorDebug, setShowSensorDebug] = useState(false);
   const [calibrated, setCalibrated] = useState(false);
   const [showSoundLevel, setShowSoundLevel] = useState(true);
@@ -244,6 +269,12 @@ export default function Home() {
   useEffect(() => {
     if (geo.lat !== null && geo.lon !== null && !loggedGpsOkRef.current) {
       loggedGpsOkRef.current = true;
+      // Juli 2026-fix (kritisk buggrapport punkt 1): exakt den loggtexten
+      // felrapporten efterfrågade, så en testare entydigt kan se i konsolen
+      // att GPS-läget faktiskt kom fram till appen (innan AR-scenen ens
+      // hunnit placera/rendera något), och inte behöva gissa utifrån den
+      // mer utförliga "[AR][pipeline] GPS OK"-raden nedan.
+      console.info(`[AR] GPS position mottagen (lat=${geo.lat.toFixed(5)}, lon=${geo.lon.toFixed(5)})`);
       console.info(`[AR][pipeline] GPS OK (lat=${geo.lat.toFixed(5)}, lon=${geo.lon.toFixed(5)}, accuracy=${geo.accuracy ?? "okänd"}m)`);
     }
   }, [geo.lat, geo.lon, geo.accuracy]);
@@ -1042,6 +1073,7 @@ export default function Home() {
               att renderloopen lever. */}
           {arSessionVisible && (
             <LiveDebugStrip
+              topOffsetPx={topBarHeight}
               fps={arDebugStats.fps}
               frameCount={arDebugStats.frameCount}
               headingDeg={headingDegState}
@@ -1221,6 +1253,7 @@ export default function Home() {
               skärm (se `arSessionVisible`s jsdoc ovan). */}
           {arSessionVisible && (
           <div
+            ref={topBarRef}
             className="absolute inset-x-0 top-0 z-[45] flex flex-col gap-2 bg-gradient-to-b from-black/70 to-transparent pb-8 pt-[max(1rem,env(safe-area-inset-top))]"
             style={{
               paddingLeft: "max(1rem, env(safe-area-inset-left))",

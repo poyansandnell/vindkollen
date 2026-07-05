@@ -96,6 +96,14 @@ const DEFAULT_GET_OCCLUSION_GRID = () => DEFAULT_OCCLUSION_GRID;
 // verk snarare än ett tydligt hack mitt i tornet/rotorn.
 const OCCLUSION_THRESHOLD_LOW = 0.35;
 const OCCLUSION_THRESHOLD_HIGH = 0.55;
+// Juli 2026-fix: golv för hur mycket per-pixel-ocklusionen (den lätta
+// himmel-heuristiken i `useSkyDetection`) får dämpa ett verk — ALDRIG ner
+// till 0/`discard`. Heuristiken kan felklassificera en hel bild (disigt
+// ljus, motljus, texturerad himmel) och tidigare gjorde `discard` det till
+// en total, appbrytande osynlighet för samtliga verk samtidigt trots att
+// allt annat (GPS/kompass/world-position) var friskt. Se kommentaren vid
+// `attachOcclusionShader` nedan.
+const OCCLUSION_MIN_ALPHA = 0.18;
 
 export interface ARSceneHandle {
   /**
@@ -186,6 +194,15 @@ interface TurbineObject {
    * `applyFinalOpacities`.
    */
   forceVisible: boolean;
+  /**
+   * Juli 2026-fix (kritisk buggrapport punkt 1/4: exakta, engångsloggade
+   * steg-för-steg-loggar + per-verk synlighetsdiagnostik) — säkerställer att
+   * "[AR] Modell placerad"/"[AR] Modell synlig" bara loggas EN gång per verk
+   * (första gången det faktiskt får en världsposition respektive första
+   * gången det faktiskt renderas synligt), inte varje bildruta.
+   */
+  loggedPlaced: boolean;
+  loggedVisible: boolean;
 }
 
 interface CanvasLabel {
@@ -701,8 +718,32 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
                 gl_FragColor.rgb = mix(hiddenColor, gl_FragColor.rgb, visMask);
                 gl_FragColor.a *= mix(hiddenAlpha, 1.0, visMask);
               } else {
-                if (visMask < 0.02) discard;
-                gl_FragColor.a *= visMask;
+                // Juli 2026-fix (kritisk buggrapport: "vindkraftverken
+                // renderas aldrig, trots att GPS/kompass/AR-stabilitet är
+                // helt friska"): denna gren körde tidigare discard() när
+                // visMask var nära 0, dvs. skar bort fragmentet HELT.
+                // occlusion kommer från useSkyDetection.ts:s lätta
+                // ljusstyrke/textur/mättnad-heuristik (classifyCell) — en
+                // grov kamerabild-klassificering, inte en riktig semantisk
+                // segmentering. Den kan (och gör, på riktiga enheter i t.ex.
+                // disigt/mulet ljus, motljus, eller när kameran råkar peka
+                // mot en ljus men "texturerad" himmel) felklassificera FRI
+                // himmel som "ej himmel" över hela eller stora delar av
+                // bilden samtidigt, vilket tidigare gjorde att discard()
+                // slog till för alla 29 verkens samtliga fragment på en
+                // gång — verken existerade i scenen (scene.add(),
+                // korrekt world-position, korrekt skala) men syntes ändå
+                // aldrig, vilket är exakt symptomet i buggrapporten. Detta
+                // bryter också mot det uttryckliga produktkravet att
+                // ocklusion bara ska DÄMPA (som INDOOR_DIM_FACTOR/
+                // MIN_CONFIDENCE_VISIBILITY_FACTOR gör på annat håll i
+                // denna fil), aldrig ta bort verket helt. Ett golv
+                // (OCCLUSION_MIN_ALPHA) ersätter discard() — ett verk bakom
+                // ett äkta hinder (träd/byggnad) blir alltså kraftigt
+                // nedtonat men aldrig helt osynligt, och en felklassificerad
+                // "falsk ocklusion" kan därför aldrig ensam förklara att ett
+                // verk inte syns alls.
+                gl_FragColor.a *= mix(${OCCLUSION_MIN_ALPHA.toFixed(2)}, 1.0, visMask);
               }
             }
             #include <dithering_fragment>`,
@@ -797,6 +838,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         blinkOffsetMs,
         renderDistM: 0,
         forceVisible: false,
+        loggedPlaced: false,
+        loggedVisible: false,
       };
     });
 
@@ -889,6 +932,18 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         obj.group.lookAt(0, y, 0);
         obj.scaleDamp = scaleDamp;
         obj.renderDistM = dist;
+
+        // Juli 2026-fix (kritisk buggrapport punkt 1): exakt den loggtext
+        // felrapporten efterfrågade, EN gång per verk, precis när
+        // världspositionen (`obj.group.position`) faktiskt satts för första
+        // gången — bevisar att detta steg körs oavsett vad som händer
+        // längre ner i pipelinen (himmelsmask/opacitet/frustum).
+        if (!obj.loggedPlaced && Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+          obj.loggedPlaced = true;
+          console.info(
+            `[AR] Modell placerad (${obj.turbine.name}, avstånd=${dist.toFixed(0)}m, bäring=${bearing.toFixed(1)}°, world=(${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)}), skala=${scaleDamp.toFixed(3)})`,
+          );
+        }
 
         const totalHeightUnits = obj.turbine.heightMeters * METERS_TO_UNITS;
         const hubHeightUnits = obj.turbine.hubHeightMeters * METERS_TO_UNITS;
@@ -1001,6 +1056,18 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     // undviker att allokera nya `THREE.Vector3` varje verk, varje bildruta.
     const camSpaceVec = new THREE.Vector3();
     const ndcVec = new THREE.Vector3();
+
+    // Juli 2026-fix (kritisk buggrapport punkt 4: "logga avstånd/bäring/
+    // cameraForward/isVisible/frustumVisible per verk för att kontrollera
+    // om modellerna filtreras bort av frustum-culling"): återanvänd
+    // frustum/vektor-instanser (samma prestandaresonemang som ovan).
+    // `frustum` byggs om från kamerans faktiska projektions-/världsmatris
+    // varje bildruta (INTE cachat), så `frustumVisible` alltid speglar
+    // kamerans verkliga rotation just nu.
+    const frustum = new THREE.Frustum();
+    const frustumMatrix = new THREE.Matrix4();
+    const cameraForward = new THREE.Vector3();
+    let lastDiagnosticDumpAt = 0;
 
     let raf = 0;
     let lastTimestamp: number | null = null;
@@ -1128,8 +1195,27 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         shader.uniforms.uShowHidden.value = showHiddenValue;
       }
 
+      // Juli 2026-fix (kritisk buggrapport punkt 4): kamerans faktiska
+      // "titta framåt"-vektor och synlighetsfrustum, omräknade varje
+      // bildruta från `state.camera`s FAKTISKA (sensorstyrda) matriser —
+      // används enbart för felsökningsloggningen nedan, aldrig för att
+      // fatta några synlighetsbeslut (det gör redan `angleFromOpticalAxisDeg`/
+      // `applyFinalOpacities`), så loggningen kan aldrig i sig påverka vad
+      // som faktiskt renderas.
+      cameraForward.set(0, 0, -1).applyQuaternion(state.camera.quaternion);
+      frustumMatrix.multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
+      frustum.setFromProjectionMatrix(frustumMatrix);
+
       // Nollställs varje bildruta, se `inFrontOfCameraCountRef`.
       let inFrontOfCameraCount = 0;
+      let visibleCountThisFrame = 0;
+      const diagnosticRows: Array<{
+        namn: string;
+        avstånd_m: number;
+        bäring_deg: number;
+        isVisible: boolean;
+        frustumVisible: boolean;
+      }> = [];
 
       for (const obj of state.objects) {
         obj.bladesGroup.rotation.z += obj.bladeRadPerSec * dt;
@@ -1193,6 +1279,33 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         obj.skyFactor += (skyTarget - obj.skyFactor) * skyLerpRate;
         applyFinalOpacities(obj);
 
+        // Juli 2026-fix (kritisk buggrapport punkt 1 & 4): `isVisible` läser
+        // den FAKTISKA opaciteten som just skrevs till materialet ovan (inte
+        // en separat, egen beräkning som skulle kunna divergera från vad som
+        // verkligen ritas) — och `frustumVisible` testar verkets faktiska
+        // världsposition mot kamerans riktiga frustum. Om `isVisible` är
+        // sant men `frustumVisible` falskt (eller tvärtom) pekar det direkt
+        // ut ROTORSAKEN till "verk renderas inte": antingen döljs det av
+        // opacitet/ocklusion trots att det ligger i bild, eller så ligger
+        // det utanför kamerans synfält trots att opaciteten är hög.
+        const currentOpacity = obj.materials[0]?.opacity ?? 0;
+        const isVisible = currentOpacity > 0.02;
+        const frustumVisible = frustum.containsPoint(obj.group.position);
+        if (isVisible) visibleCountThisFrame++;
+        if (isVisible && !obj.loggedVisible) {
+          obj.loggedVisible = true;
+          console.info(
+            `[AR] Modell synlig (${obj.turbine.name}, opacitet=${currentOpacity.toFixed(2)}, avstånd=${obj.renderDistM.toFixed(0)}m, frustumVisible=${frustumVisible})`,
+          );
+        }
+        diagnosticRows.push({
+          namn: obj.turbine.name,
+          avstånd_m: Math.round(obj.renderDistM),
+          bäring_deg: Math.round(bearingDegrees(userRef.current.lat, userRef.current.lon, obj.lat, obj.lon)),
+          isVisible,
+          frustumVisible,
+        });
+
         const phase = (now + obj.blinkOffsetMs) % obj.blinkPeriodMs;
         const blinkOn = night && phase < obj.blinkOnMs;
         obj.light.visible = blinkOn;
@@ -1213,6 +1326,23 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       }
 
       inFrontOfCameraCountRef.current = inFrontOfCameraCount;
+
+      // Juli 2026-fix (kritisk buggrapport punkt 1 & 4): dumpa en
+      // per-verk-diagnostiktabell var 3:e sekund — ALLTID (inte bara på
+      // fel), men extra viktigt när `visibleCountThisFrame === 0` trots att
+      // `state.objects.length > 0`, eftersom det är exakt symptomet i
+      // felrapporten ("verk renderas inte trots frisk GPS/kompass/AR-
+      // stabilitet"). `cameraForward` visar vart kameran FAKTISKT pekar
+      // just nu (efter gir+pitch+roll), så man kan se om avsaknad av
+      // synliga verk beror på att användaren pekar åt fel håll eller på ett
+      // faktiskt renderingsfel.
+      if (timestamp - lastDiagnosticDumpAt >= 3000 && state.objects.length > 0) {
+        lastDiagnosticDumpAt = timestamp;
+        console.info(
+          `[AR][diagnostik] ${visibleCountThisFrame}/${state.objects.length} verk synliga denna bildruta. cameraForward=(${cameraForward.x.toFixed(2)}, ${cameraForward.y.toFixed(2)}, ${cameraForward.z.toFixed(2)})`,
+        );
+        console.table(diagnosticRows);
+      }
 
       // FPS mäts över ett rullande ~500ms-fönster (inte ett enskilt dt) för
       // en stabil, läsbar siffra i felsökningstexten istället för att

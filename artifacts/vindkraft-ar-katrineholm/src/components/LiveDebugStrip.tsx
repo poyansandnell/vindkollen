@@ -22,6 +22,15 @@ interface LiveDebugStripProps {
   worldUpdated: boolean;
   arVisibleTurbineCount: number;
   screenLocked: boolean;
+  /**
+   * Juli 2026-fix (kritisk buggrapport punkt 5: "felsökningsraden
+   * överlappar loggan/statustexten i topp-baren"): den uppmätta, faktiska
+   * höjden (px) på topp-baren i `Home.tsx`, uppdaterad live via
+   * `ResizeObserver` — så den här remsan alltid hamnar precis UNDER
+   * topp-baren istället för att ligga fast på `top: 0` ovanpå den, oavsett
+   * hur många badge-/knapprader topp-baren råkar rendera just nu.
+   */
+  topOffsetPx: number;
 }
 
 function fmt(value: number | null, unit: string, digits = 0): string {
@@ -56,10 +65,22 @@ export function LiveDebugStrip({
   worldUpdated,
   arVisibleTurbineCount,
   screenLocked,
+  topOffsetPx,
 }: LiveDebugStripProps) {
+  // Juli 2026-fix (kritisk buggrapport punkt 5): låg tidigare fast på
+  // `top-0`/z-[60], rakt ovanpå topp-barens logga/statustext (z-[45]) —
+  // `topOffsetPx` (topp-barens uppmätta höjd, se `Home.tsx`) flyttar remsan
+  // ett litet mellanrum (`+6px`) under den istället, plus `flex-wrap` (inte
+  // `whitespace-nowrap`+scroll) och lägre bakgrundsopacitet/mindre padding
+  // så den är kompakt och diskret nog att aldrig uppfattas som att den
+  // "krockar" med resten av gränssnittet, oavsett skärmbredd.
+  const top = topOffsetPx > 0 ? topOffsetPx + 6 : "max(0.25rem,env(safe-area-inset-top))";
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-[60] flex justify-center px-2 pt-[max(0.25rem,env(safe-area-inset-top))]">
-      <div className="max-w-full overflow-x-auto whitespace-nowrap rounded-md bg-black/60 px-2 py-1 font-mono text-[9px] leading-tight text-lime-300/90 backdrop-blur-sm">
+    <div
+      className="pointer-events-none absolute inset-x-0 z-[60] flex justify-center px-2"
+      style={{ top }}
+    >
+      <div className="max-w-[94vw] flex-wrap rounded-md bg-black/40 px-1.5 py-0.5 font-mono text-[8px] leading-tight text-lime-300/80 backdrop-blur-sm">
         FPS {fps} · Bildruta {frameCount} · Riktning {fmt(headingDeg, "°")} · Bäring {fmt(bearingToNearestDeg, "°")} · Δ{" "}
         {fmt(angleDiffToNearestDeg, "°")} · GPS ±{fmt(gpsAccuracyM, "m")} · Kompass ±{fmt(headingAccuracyDeg, "°")} · Verk{" "}
         {visibleTurbineCount}/{renderedTurbineCount} · Riktningsålder {fmt(headingAgeMs, "ms")} · Källa{" "}
