@@ -1,0 +1,112 @@
+Ja, nu är det mycket närmare. Skicka detta som nästa instruktion:
+
+⸻
+
+Nästa fix: UI + AR-låsning
+
+Det fungerar bättre nu, men två problem kvarstår.
+
+1. Ta bort dubbel kalibreringsinfo
+
+Efter startkalibreringen behövs inte längre texten:
+
+“Kalibrerar visning – rör mobilen långsamt i en åtta”
+
+Ta bort den från AR-vyn.
+
+Visa bara kompassstatus i debug/statusraden:
+
+* Kompass: bra
+* Kompass: okej
+* Kompass: svag
+
+Inga gula kalibreringsrutor ovanpå AR-vyn om användaren redan gjort kalibreringen.
+
+⸻
+
+2. Informationsrutorna överlappar fortfarande
+
+Endast en statusruta/toast får visas åt gången.
+
+Prioritet:
+
+1. Kritiska fel
+2. Du tittar mot närmaste verk
+3. Svag positionering
+4. Ljud aktivt
+
+De ska aldrig ligga ovanpå varandra.
+
+⸻
+
+3. Vindkraftverken fastnar på skärmen
+
+Det ser ut som att vindkraftverken ibland renderas i screen space istället för world space.
+
+De får aldrig vara låsta mot skärmen.
+
+Varje frame måste turbinerna räknas om från:
+
+GPS-position
+telefonens heading
+telefonens pitch
+telefonens roll
+kamera-FOV
+bearing till varje verk
+avstånd till varje verk
+
+Om telefonen vrids ska vindkraftverket flytta sig i bilden direkt.
+
+⸻
+
+4. Lägg in skydd mot frusen heading
+
+Om heading inte ändras trots att gyro/pitch/roll ändras ska appen inte låsa verken.
+
+Fallback:
+
+Om compass heading är stale > 500 ms:
+använd deviceorientation alpha/gyro som temporär heading
+visa "Kompass svag – använder rörelsedata"
+fortsätt rendera
+
+⸻
+
+5. Pilen och verken måste använda samma riktning
+
+Just nu verkar pilen ibland fungera men verken fastnar.
+
+Pilen och turbinerna ska använda exakt samma currentHeading.
+
+En gemensam funktion:
+
+getCurrentHeading()
+
+ska användas av både:
+
+updateNearestArrow()
+updateWindTurbinePositions()
+
+⸻
+
+6. Debug ska visa låsning
+
+Lägg till i debugraden:
+
+Heading age: 120 ms
+Heading source: compass / gyro fallback
+World update: yes
+Visible turbines: X
+Screen locked: no
+
+Om World update inte ändras varje frame har vi hittat felet.
+
+⸻
+
+Målet
+
+* Inga överlappande informationsrutor.
+* Ingen onödig kalibreringstext efter start.
+* Vindkraftverken ska ligga fast i verkligheten, inte på skärmen.
+* Om jag vrider telefonen ska både pil och verk röra sig direkt.
+* Om kompassen tappar precision ska appen fortsätta med gyro-fallback istället för att frysa.

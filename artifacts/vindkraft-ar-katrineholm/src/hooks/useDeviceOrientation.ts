@@ -102,6 +102,25 @@ export interface DeviceOrientationApi {
   calibrationComplete: boolean;
   /** Börjar (om)räkna kalibreringen från steg 1 ("flat"). */
   startCalibrationTracking: () => void;
+  /**
+   * Produktkrav 4/5 (juli 2026, "skydd mot frusen heading"): "compass"
+   * normalt, "gyro" när den beräknade (norr-refererade) girriktningen
+   * bedömts frusen (se `HEADING_STALE_MS`) medan pitch/roll fortsatt
+   * ändras — då räknas en tillfällig riktning istället fram ur den råa
+   * `alpha`-signalen. Muterad varje sensoravläsning, säker i en poll-loop.
+   */
+  headingSourceRef: React.MutableRefObject<"compass" | "gyro">;
+  /** Reaktiv (state) motsvarighet till `headingSourceRef === "gyro"`, för att styra en synlig varningstext. */
+  headingFallbackActive: boolean;
+  /** `Date.now()` för senast mottagna orienterings-event, oavsett källa — grund för felsökningsradens "Heading age (ms)". */
+  lastOrientationEventAtRef: React.MutableRefObject<number | null>;
+  /**
+   * Produktkrav 5: den EN OCH ENDA funktionen för "vilken riktning gäller
+   * just nu" — både pilen och AR-scenens bäringsjämförelser ska anropa
+   * denna istället för att var för sig läsa `headingDegRef`, så de aldrig
+   * kan råka driva isär.
+   */
+  getCurrentHeading: () => number | null;
 }
 
 // Dödzon: sensorbrus på bråkdelar av en grad ska inte alls påverka
@@ -165,6 +184,18 @@ const PITCH_ROLL_TURN_CONFIRM_SAMPLES = 2;
 // pitch/roll: en enskild avläsning som antyder en orimligt snabb tiltning
 // beror nästan alltid på en sensorglitch, inte en verklig rörelse.
 const MAX_PLAUSIBLE_TILT_RATE_DEG_PER_SEC = 720;
+
+// Juli 2026-produktkrav 4 ("skydd mot frusen heading"): hur länge (ms) den
+// RÅA (ej utjämnade) girriktningen får stå still innan den räknas som
+// "frusen" — men bara om pitch/roll UNDER SAMMA TID faktiskt fortsätter
+// ändras (annars är det bara en stillastående telefon, inte en frusen
+// sensor). 500ms enligt produktkravet.
+const HEADING_STALE_MS = 500;
+// Hur stor rå förändring (grader) som räknas som "sensorn rör sig alls" —
+// satt klart under de vanliga bruströsklarna ovan eftersom vi bara vill
+// upptäcka att RÅDATAN uppdateras, inte om ändringen är stor nog för att
+// räknas som en avsiktlig vridning.
+const RAW_CHANGE_EPSILON_DEG = 0.2;
 
 /**
  * Adaptiv tidskonstant för en linjär (icke-cirkulär) vinkel, enligt samma
@@ -346,6 +377,25 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   // fortsätter fungera precis som förut.
   const hasAbsoluteFixRef = useRef(false);
 
+  // Juli 2026-produktkrav 4 ("skydd mot frusen heading"): oberoende
+  // spårning av NÄR den råa girriktningen respektive rå pitch/roll senast
+  // faktiskt ändrades (helt outjämnat) — se `HEADING_STALE_MS`-kommentaren.
+  const rawHeadingLastValueRef = useRef<number | null>(null);
+  const rawHeadingLastChangeAtRef = useRef<number | null>(null);
+  const rawBetaLastValueRef = useRef<number | null>(null);
+  const rawGammaLastValueRef = useRef<number | null>(null);
+  const rawPitchRollLastChangeAtRef = useRef<number | null>(null);
+  const headingSourceRef = useRef<"compass" | "gyro">("compass");
+  const [headingFallbackActive, setHeadingFallbackActive] = useState(false);
+  // Baslinje satt i det ögonblick frysningen upptäcks: reservriktningen
+  // räknas som "senast kända goda utjämnade riktning" + hur mycket den råa
+  // `alpha`-signalen har vridit sig SEDAN dess — inte ett nytt absolut
+  // värde, så det inte blir ett hopp när reservläget slår till.
+  const headingFallbackBaselineRef = useRef<{ baselineAlphaHeadingLike: number; baselineHeading: number } | null>(
+    null,
+  );
+  const lastOrientationEventAtRef = useRef<number | null>(null);
+
   // Tvåstegskalibreringen (se konstanterna ovan): vilka sektorer som svepts
   // i vardera fasen sedan `startCalibrationTracking()` senast anropades.
   // `calibrationPhaseRef` styr vilken fas som just nu räknar avläsningar —
@@ -408,6 +458,75 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
 
     if (heading === null || event.beta === null || event.gamma === null || Number.isNaN(heading)) return;
 
+    const nowMs = Date.now();
+    lastOrientationEventAtRef.current = nowMs;
+
+    // Juli 2026-produktkrav 4 ("skydd mot frusen heading"): jämför den RÅA
+    // (helt outjämnade) girriktningen och rå beta/gamma mot sina egna
+    // föregående råvärden — oberoende av utjämningen nedan, som med AVSIKT
+    // dämpar just den här sortens förändring och därför inte kan användas
+    // för att avgöra om sensorn faktiskt levererar nya värden. Om giren
+    // inte rört sig mer än `RAW_CHANGE_EPSILON_DEG` på över `HEADING_STALE_MS`
+    // MEDAN pitch/roll under samma period faktiskt ändrats, tolkas det som
+    // att girberäkningen (magnetometerfusionen) tillfälligt "kört fast" —
+    // INTE att telefonen ligger stilla (då skulle beta/gamma också stå still).
+    const rawHeadingChanged =
+      rawHeadingLastValueRef.current === null ||
+      Math.abs(circularDiffDeg(heading, rawHeadingLastValueRef.current)) > RAW_CHANGE_EPSILON_DEG;
+    if (rawHeadingChanged) {
+      rawHeadingLastValueRef.current = heading;
+      rawHeadingLastChangeAtRef.current = nowMs;
+    }
+    const rawPitchRollChanged =
+      rawBetaLastValueRef.current === null ||
+      rawGammaLastValueRef.current === null ||
+      Math.abs(event.beta - rawBetaLastValueRef.current) > RAW_CHANGE_EPSILON_DEG ||
+      Math.abs(event.gamma - rawGammaLastValueRef.current) > RAW_CHANGE_EPSILON_DEG;
+    if (rawPitchRollChanged) {
+      rawBetaLastValueRef.current = event.beta;
+      rawGammaLastValueRef.current = event.gamma;
+      rawPitchRollLastChangeAtRef.current = nowMs;
+    }
+    const headingStaleMs = rawHeadingLastChangeAtRef.current === null ? 0 : nowMs - rawHeadingLastChangeAtRef.current;
+    const pitchRollFreshMs =
+      rawPitchRollLastChangeAtRef.current === null ? Infinity : nowMs - rawPitchRollLastChangeAtRef.current;
+    const headingFrozen = headingStaleMs > HEADING_STALE_MS && pitchRollFreshMs < HEADING_STALE_MS;
+
+    // Reservkälla: den råa `event.alpha`-signalen fortsätter i regel
+    // uppdateras av enhetens rotationssensorer även när den beräknade
+    // (norr-refererade) girriktningen ovan har "fastnat" — produktkravets
+    // "falla tillbaka på deviceorientation alpha/gyro". Konverteras till
+    // samma konvention som `heading` ((360-alpha)%360) rent så en cirkulär
+    // diff mot baslinjen ger en heading-liknande delta — det spelar ingen
+    // roll för en REN deltaberäkning om alpha råkar sakna norr-referens.
+    // Nedströms (utjämning/quaternion) används ALLTID `effectiveRawHeading`
+    // istället för `heading`, vilket per produktkrav 3 garanterar att
+    // varken pilen, debugraden eller AR-scenens kamerarotation någonsin
+    // fryser — de bygger alla, indirekt, på samma `headingDegRef`.
+    let effectiveRawHeading = heading;
+    if (headingFrozen && event.alpha !== null) {
+      const alphaHeadingLike = (360 - event.alpha) % 360;
+      if (headingFallbackBaselineRef.current === null) {
+        headingFallbackBaselineRef.current = {
+          baselineAlphaHeadingLike: alphaHeadingLike,
+          baselineHeading: headingRef.current ?? heading,
+        };
+      }
+      const baseline = headingFallbackBaselineRef.current;
+      effectiveRawHeading =
+        (baseline.baselineHeading + circularDiffDeg(alphaHeadingLike, baseline.baselineAlphaHeadingLike) + 360) % 360;
+      if (headingSourceRef.current !== "gyro") {
+        headingSourceRef.current = "gyro";
+        setHeadingFallbackActive(true);
+      }
+    } else {
+      headingFallbackBaselineRef.current = null;
+      if (headingSourceRef.current !== "compass") {
+        headingSourceRef.current = "compass";
+        setHeadingFallbackActive(false);
+      }
+    }
+
     // Tvåstegskalibrering: markera vilken sektor den RÅA (ej utjämnade)
     // girriktningen ligger i just nu, men bara medan telefonens pitch (beta)
     // matchar den fas som pågår — "flat" kräver att telefonen faktiskt hålls
@@ -456,7 +575,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     // (se konstantens kommentar ovan) — dessa är nästan alltid en tillfällig
     // magnetisk störning/sensorglitch, inte en verklig rörelse.
     if (prevHeadingRaw !== null && dt > 0) {
-      const rawTurnRate = Math.abs(circularDiffDeg(heading, prevHeadingRaw)) / dt;
+      const rawTurnRate = Math.abs(circularDiffDeg(effectiveRawHeading, prevHeadingRaw)) / dt;
       if (rawTurnRate > MAX_PLAUSIBLE_TURN_RATE_DEG_PER_SEC) return;
     }
 
@@ -469,7 +588,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     // bruströskeln som brus fram tills den bekräftats.
     let headingTau = HEADING_STILL_TAU;
     if (prevHeadingRaw !== null) {
-      const signedDelta = circularDiffDeg(heading, prevHeadingRaw);
+      const signedDelta = circularDiffDeg(effectiveRawHeading, prevHeadingRaw);
       const rawDelta = Math.abs(signedDelta);
 
       if (rawDelta >= HEADING_NOISE_DELTA_DEG) {
@@ -526,7 +645,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     const gammaFactor = gammaIsOutlier ? 0 : timeSmoothingFactor(gammaTau, dt);
 
     const prevHeading = headingRef.current;
-    const smoothedHeading = smoothCircular(headingRef, heading, headingFactor);
+    const smoothedHeading = smoothCircular(headingRef, effectiveRawHeading, headingFactor);
     const smoothedBeta = smoothLinear(betaRef, event.beta, betaFactor);
     const smoothedGamma = smoothLinear(gammaRef, event.gamma, gammaFactor);
 
@@ -648,6 +767,12 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     horizonOffsetDegRef.current = betaOffsetRef.current;
   }, []);
 
+  // Produktkrav 5: EN delad funktion för "vilken riktning gäller just nu" —
+  // läser bara `headingDegRef`, exakt samma ref som redan driver
+  // `alphaForQuaternion`/kamerarotationen, så pilen och AR-scenen (via
+  // denna funktion, se `ARScene.tsx`) aldrig kan råka bygga på olika värden.
+  const getCurrentHeading = useCallback(() => headingDegRef.current, []);
+
   return {
     supported,
     needsPermission,
@@ -667,5 +792,9 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     calibrationProgress,
     calibrationComplete,
     startCalibrationTracking,
+    headingSourceRef,
+    headingFallbackActive,
+    lastOrientationEventAtRef,
+    getCurrentHeading,
   };
 }

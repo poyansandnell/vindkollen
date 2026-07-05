@@ -31,7 +31,7 @@ import { PhotoMontageModal } from "@/components/PhotoMontageModal";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { TURBINES, type TurbineSweref } from "@/lib/turbines";
-import { distanceMeters, bearingDegrees, isNightTime, normalizeAngle } from "@/lib/geo";
+import { distanceMeters, bearingDegrees, isNightTime, normalizeAngle, formatDistance } from "@/lib/geo";
 import { swerefToWgs84, wgs84ToSweref } from "@/lib/sweref";
 import { getBladeRpm } from "@/lib/turbineAnimation";
 import { estimateSoundLevel, dbaToGain, applyIndoorAttenuation, applyIndoorGain } from "@/lib/soundLevel";
@@ -324,6 +324,11 @@ export default function Home() {
     [preStartPermissionError, geo.error, orientation.error, camera.error],
   );
 
+  // Juli 2026-fix (produktkrav 2, "endast EN statusruta åt gången"): rapporteras
+  // uppåt av `NearestTurbineArrow` via `onTargetChange` istället för att den
+  // komponenten renderar sin egen bekräftelseruta oberoende av alla andra.
+  const [nearestOnTarget, setNearestOnTarget] = useState(false);
+
   // Stabiliserad GPS-position: ignorerar små GPS-studs (<15 m) så att
   // dBA-uppskattningen nedan inte omberäknas för varje litet, naturligt
   // GPS-brus medan användaren i praktiken står still.
@@ -427,11 +432,40 @@ export default function Home() {
   // med FPS/bildrutenummer) — pollas oftare (250ms) än de flesta andra
   // debug-talen ovan, eftersom hela poängen är att SNABBT kunna se att
   // renderloopen fortfarande lever (stigande bildrutenummer, rimlig FPS).
-  const [arDebugStats, setArDebugStats] = useState({ fps: 0, frameCount: 0 });
+  const [arDebugStats, setArDebugStats] = useState({
+    fps: 0,
+    frameCount: 0,
+    worldPositionsUpdated: false,
+    visibleTurbineCount: 0,
+    screenLocked: false,
+  });
   useEffect(() => {
     if (!started) return;
     const id = window.setInterval(() => {
-      setArDebugStats(arSceneRef.current?.getDebugStats() ?? { fps: 0, frameCount: 0 });
+      setArDebugStats(
+        arSceneRef.current?.getDebugStats() ?? {
+          fps: 0,
+          frameCount: 0,
+          worldPositionsUpdated: false,
+          visibleTurbineCount: 0,
+          screenLocked: false,
+        },
+      );
+    }, 250);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [started]);
+
+  // Juli 2026-fix (produktkrav 6, ny omgång): "Heading age (ms)" i
+  // felsökningsraden — tid sedan senaste `deviceorientation`-händelsen,
+  // oavsett om den kom via kompass eller (produktkrav 4) gyro-fallback.
+  // Pollas i samma takt som övriga felsökningstal ovan.
+  const [headingAgeMs, setHeadingAgeMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (!started) return;
+    const id = window.setInterval(() => {
+      const lastAt = orientation.lastOrientationEventAtRef.current;
+      setHeadingAgeMs(lastAt === null ? null : Date.now() - lastAt);
     }, 250);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -579,6 +613,63 @@ export default function Home() {
     if (!calibrationFallbackActive || nearestThreeTurbineIds.length === 0) return undefined;
     return new Set(nearestThreeTurbineIds);
   }, [calibrationFallbackActive, nearestThreeTurbineIds]);
+
+  // Juli 2026-fix (produktkrav 2): "Endast EN statusruta/toast ska visas åt
+  // gången" — tidigare kunde felmeddelanden, målbekräftelsen, svag-signal-
+  // varningen, "Vindljud aktivt"-taggen och kalibreringsbanderollerna alla
+  // vara aktiva SAMTIDIGT och staplas på varandra i samma skärmzon. All den
+  // logiken samlas nu i EN prioriterad statusruta enligt kravets
+  // ordning: kritiska fel > "tittar mot närmaste verk"-bekräftelse >
+  // svag positionering (inkl. produktkrav 4:s "Kompass svag – använder
+  // rörelsedata"-fallback) > ljud aktivt. Kalibreringsmeddelandena delade
+  // redan denna skärmzon innan denna fix, så de hänger med som lägst
+  // prioriterade — annars skulle de kunna dyka upp SAMTIDIGT som t.ex.
+  // ljud-taggen igen.
+  const statusBanner = useMemo<{ message: string; tone: "red" | "green" | "yellow" | "orange" } | null>(() => {
+    if (!arSessionVisible) return null;
+    if (errors.length > 0) {
+      return { message: errors[0], tone: "red" };
+    }
+    if (nearestOnTarget && nearestTurbineInfo) {
+      return { message: `✓ Du tittar mot närmaste verk (${formatDistance(nearestTurbineInfo.distanceM)})`, tone: "green" };
+    }
+    if (orientation.headingFallbackActive) {
+      return { message: "⚠️ Kompass svag – använder rörelsedata", tone: "yellow" };
+    }
+    if (arTracking.weakSignalMessage) {
+      return { message: `⚠️ ${arTracking.weakSignalMessage}`, tone: "yellow" };
+    }
+    if (wind.playing) {
+      return { message: "🔊 Vindljud aktivt", tone: "orange" };
+    }
+    if (calibrated) {
+      return { message: "Horisont kalibrerad!", tone: "orange" };
+    }
+    if (stillCalibrating) {
+      return {
+        message: "Kalibrerar kompass i bakgrunden – fortsätt röra telefonen långsamt för bättre precision.",
+        tone: "yellow",
+      };
+    }
+    return null;
+  }, [
+    arSessionVisible,
+    errors,
+    nearestOnTarget,
+    nearestTurbineInfo,
+    orientation.headingFallbackActive,
+    arTracking.weakSignalMessage,
+    wind.playing,
+    calibrated,
+    stillCalibrating,
+  ]);
+
+  const statusBannerToneClasses: Record<"red" | "green" | "yellow" | "orange", string> = {
+    red: "bg-red-500/90 text-white",
+    green: "bg-emerald-500/90 text-[#062b17]",
+    yellow: "bg-yellow-500/90 text-[#090909]",
+    orange: "bg-[#FF8B01]/90 text-[#090909]",
+  };
 
   const noiseImpact = useMemo(() => {
     const exposureSeconds =
@@ -840,11 +931,12 @@ export default function Home() {
 
           {arSessionVisible && (
             <NearestTurbineArrow
-              headingDegRef={orientation.headingDegRef}
+              getCurrentHeading={orientation.getCurrentHeading}
               bearingDeg={nearestTurbineInfo?.bearingDeg ?? null}
               distanceM={nearestTurbineInfo?.distanceM ?? null}
               indoors={indoorsOrNoSight}
               compassQualityPercent={arTracking.compassQualityPercent}
+              onTargetChange={setNearestOnTarget}
             />
           )}
 
@@ -865,6 +957,11 @@ export default function Home() {
               headingAccuracyDeg={orientation.headingAccuracyDegRef.current}
               renderedTurbineCount={withinRangeTurbineCount}
               visibleTurbineCount={visibleTurbineCount}
+              headingAgeMs={headingAgeMs}
+              headingSource={orientation.headingSourceRef.current}
+              worldUpdated={arDebugStats.worldPositionsUpdated}
+              arVisibleTurbineCount={arDebugStats.visibleTurbineCount}
+              screenLocked={arDebugStats.screenLocked}
             />
           )}
 
@@ -1015,39 +1112,19 @@ export default function Home() {
             </div>
           )}
 
-          {arSessionVisible && calibrated && (
-            <div className="pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center">
-              <span className="rounded-full bg-[#FF8B01]/90 px-4 py-1.5 text-xs font-medium text-[#090909] shadow-lg">
-                Horisont kalibrerad!
-              </span>
-            </div>
-          )}
-
-          {/* Juli 2026-fix (regressionsrapport: "UI ligger ovanpå varandra"):
-              denna banderoll och "Horisont kalibrerad!" ovan delar samma
-              plats (top-32) — utan `&& !calibrated` kunde båda visas
-              SAMTIDIGT under kalibreringens 1.8s-bekräftelsefönster, staplat
-              på varandra. Endast EN statusruta åt gången i denna position. */}
-          {arSessionVisible && stillCalibrating && !calibrated && (
+          {/* Juli 2026-fix (produktkrav 2, "endast EN statusruta åt gången"):
+              denna enda platsen ersätter fyra tidigare oberoende banderoller
+              ("Horisont kalibrerad!", "Kalibrerar kompass...",
+              "Kalibrerar visning – rör mobilen långsamt i en åtta", samt
+              svag-signal-/ljud-meddelanden i topp-baren) som tidigare kunde
+              visas samtidigt och staplas på varandra. `statusBanner` väljer
+              redan ut EXAKT en enligt prioritetsordningen, se dess jsdoc. */}
+          {arSessionVisible && statusBanner && (
             <div className="pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center px-6">
-              <span className="max-w-xs rounded-full bg-yellow-500/90 px-4 py-1.5 text-center text-xs font-medium text-[#090909] shadow-lg">
-                Kalibrerar kompass i bakgrunden – fortsätt röra telefonen långsamt för bättre precision.
-              </span>
-            </div>
-          )}
-
-          {/* Produktkrav 3: 2-sekunders "inga verk i FOV"-fallback — visar de
-              tre närmaste verken som "AR-testobjekt" (`forceVisibleIds` till
-              ARScene) och en icke-blockerande banderoll. Placerad på en egen
-              rad (top-44, under `stillCalibrating`/`calibrated`s top-32) så
-              båda kan synas samtidigt utan att skarva; `pointer-events-none`
-              och ingen egen "läge"-state gör att den ALDRIG kan låsa/blockera
-              resten av appen — den stängs av sig själv så fort minst ett
-              verk hamnar i FOV igen (se `calibrationFallbackActive`s jsdoc). */}
-          {arSessionVisible && calibrationFallbackActive && (
-            <div className="pointer-events-none absolute inset-x-0 top-44 z-30 flex justify-center px-6">
-              <span className="max-w-xs rounded-full bg-yellow-500/90 px-4 py-1.5 text-center text-xs font-medium text-[#090909] shadow-lg">
-                Kalibrerar visning – rör mobilen långsamt i en åtta
+              <span
+                className={`max-w-xs rounded-full px-4 py-1.5 text-center text-xs font-medium shadow-lg ${statusBannerToneClasses[statusBanner.tone]}`}
+              >
+                {statusBanner.message}
               </span>
             </div>
           )}
@@ -1107,20 +1184,12 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            {ready && arTracking.weakSignalMessage && (
-              <div className="flex justify-center">
-                <span className="max-w-xs rounded-full bg-yellow-500/90 px-4 py-1.5 text-center text-xs font-medium text-[#090909] shadow-lg">
-                  ⚠️ {arTracking.weakSignalMessage}
-                </span>
-              </div>
-            )}
+            {/* Juli 2026-fix (produktkrav 2): svag-signal-rutan och
+                "Vindljud aktivt"-taggen som tidigare låg här flyttades in i
+                den enda prioriterade `statusBanner`-rutan ovan, så de aldrig
+                kan visas samtidigt som t.ex. en felruta eller
+                målbekräftelsen. */}
             <div className="flex flex-wrap items-center gap-2">
-              {wind.playing && (
-                <span className="flex items-center gap-1.5 rounded-full bg-[#FF8B01]/20 px-2.5 py-1 text-[11px] text-[#FFB347]">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FFB347]" />
-                  Vindljud aktivt
-                </span>
-              )}
               {nightMode && (
                 <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-2.5 py-1 text-[11px] text-red-200">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />

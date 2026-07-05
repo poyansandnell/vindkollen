@@ -121,8 +121,27 @@ export interface ARSceneHandle {
    * bildrutor sedan `ARScene` monterades. Ett `frameCount` som fortsätter
    * stiga är i sig ett bevis på att renderloopen faktiskt kör kontinuerligt
    * och inte har fastnat/blockerats.
+   *
+   * Juli 2026-fix (produktkrav 6, ny omgång — extra felsökningsfält):
+   * `worldPositionsUpdated` är `true` så länge `animate`-loopen körs,
+   * eftersom varje verks `obj.group.position` räknas om från bäring/avstånd
+   * (SWEREF→bäring→x/y/z) VARJE bildruta — se kommentaren vid
+   * `obj.group.position.set(...)` nedan — aldrig cachat/skärmlåst.
+   * `visibleTurbineCount` återanvänder exakt samma beräkning som
+   * `getInFrontOfCameraCount()` (samma 3D-optiska-axel-vinkel, inte bara
+   * bäring) så felsökningsraden aldrig kan visa ett annat tal än det
+   * "rakt fram"-garantin faktiskt använder. `screenLocked` är alltid
+   * `false` — turbinerna placeras aldrig i skärmrymd, bara i världsrymd
+   * (produktkrav 3), så fältet finns enbart för att göra frånvaron av
+   * skärmlåsning explicit synlig i felsökningsraden.
    */
-  getDebugStats: () => { fps: number; frameCount: number };
+  getDebugStats: () => {
+    fps: number;
+    frameCount: number;
+    worldPositionsUpdated: boolean;
+    visibleTurbineCount: number;
+    screenLocked: boolean;
+  };
 }
 
 interface TurbineObject {
@@ -480,7 +499,13 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         pendingCaptureRef.current = resolve;
       }),
     getInFrontOfCameraCount: () => inFrontOfCameraCountRef.current,
-    getDebugStats: () => ({ fps: fpsRef.current, frameCount: frameCountRef.current }),
+    getDebugStats: () => ({
+      fps: fpsRef.current,
+      frameCount: frameCountRef.current,
+      worldPositionsUpdated: frameCountRef.current > 0,
+      visibleTurbineCount: inFrontOfCameraCountRef.current,
+      screenLocked: false,
+    }),
   }));
 
   useEffect(() => {

@@ -43,8 +43,15 @@ function circularDiffDeg(target: number, current: number): number {
 }
 
 interface NearestTurbineArrowProps {
-  /** Muteras varje sensoravläsning av `useDeviceOrientation` — pollas här istället för att prenumereras på via re-render. */
-  headingDegRef: React.MutableRefObject<number | null>;
+  /**
+   * Produktkrav 5 (juli 2026, ny omgång): läses via `useDeviceOrientation`s
+   * delade `getCurrentHeading()`-funktion istället för att pollas direkt ur
+   * en egen ref-prop — samma funktion som AR-scenens bäringsjämförelser
+   * anropar, så pilen och AR-vyn ALDRIG kan råka bygga på olika riktningar.
+   * Pollas här (inte prenumererat via re-render) av samma prestandaskäl som
+   * tidigare.
+   */
+  getCurrentHeading: () => number | null;
   /** Bäring (grader, 0=norr) från användaren till närmaste verk, eller `null` om GPS-fix saknas. */
   bearingDeg: number | null;
   /** Avstånd i meter till närmaste verk, eller `null` om GPS-fix saknas. */
@@ -61,6 +68,15 @@ interface NearestTurbineArrowProps {
    * `MAX_SETTLE_WAIT_MS`.
    */
   compassQualityPercent?: number;
+  /**
+   * Juli 2026-fix (produktkrav 2, "endast EN statusruta åt gången"): denna
+   * komponent visade tidigare sin egen "✓ Du tittar mot närmaste verk"-
+   * bekräftelseruta oberoende av alla andra statusrutor i `Home.tsx`, vilket
+   * kunde stapla flera rutor samtidigt. `onTarget`-tillståndet lyfts nu upp
+   * hit så `Home.tsx` kan väga in det i EN enda prioriterad statusruta —
+   * denna komponent renderar därför numera BARA själva pilen.
+   */
+  onTargetChange?: (onTarget: boolean) => void;
 }
 
 /**
@@ -77,11 +93,12 @@ interface NearestTurbineArrowProps {
  * hela `Home.tsx` för varje kompassavläsning.
  */
 export function NearestTurbineArrow({
-  headingDegRef,
+  getCurrentHeading,
   bearingDeg,
   distanceM,
   indoors,
   compassQualityPercent,
+  onTargetChange,
 }: NearestTurbineArrowProps) {
   const [diffDeg, setDiffDeg] = useState<number | null>(null);
   const [settled, setSettled] = useState(false);
@@ -92,13 +109,13 @@ export function NearestTurbineArrow({
       return;
     }
     const update = () => {
-      const heading = headingDegRef.current;
+      const heading = getCurrentHeading();
       setDiffDeg(heading === null ? null : circularDiffDeg(bearingDeg, heading));
     };
     update();
     const id = window.setInterval(update, POLL_INTERVAL_MS);
     return () => window.clearInterval(id);
-  }, [bearingDeg, headingDegRef]);
+  }, [bearingDeg, getCurrentHeading]);
 
   // Se `MAX_SETTLE_WAIT_MS`-kommentaren ovan: en enkel timeout-fallback så
   // indikatorn garanterat dyker upp även om kompasskvaliteten aldrig når
@@ -116,13 +133,21 @@ export function NearestTurbineArrow({
     }
   }, [settled, compassQualityPercent]);
 
+  // Verket syns redan i AR-vyn (inom synfältet, och inte inomhus/utan fri
+  // sikt) — rapporteras uppåt så `Home.tsx` kan visa EN enda prioriterad
+  // bekräftelseruta (produktkrav 2) istället för att denna komponent visar
+  // sin egen, oberoende av alla andra statusrutor. Måste beräknas (och
+  // effekten köras) INNAN early-return nedan, annars skulle `onTargetChange`
+  // aldrig få chansen att rapportera "false" när `settled`/`diffDeg`
+  // tillfälligt blir ogiltiga (t.ex. GPS-fix förloras en stund).
+  const onTarget = settled && diffDeg !== null && distanceM !== null && !indoors && Math.abs(diffDeg) <= FOV_DEGREES / 2;
+
+  useEffect(() => {
+    onTargetChange?.(onTarget);
+  }, [onTarget, onTargetChange]);
+
   if (!settled || diffDeg === null || distanceM === null) return null;
 
-  // Verket syns redan i AR-vyn (inom synfältet, och inte inomhus/utan fri
-  // sikt) — då tonas pilen ner och byts mot en bekräftelsetext istället för
-  // att bara försvinna tvärt (produktkrav: pilen ska tona ner/bytas till
-  // text, inte hoppa till att helt sakna feedback).
-  const onTarget = !indoors && Math.abs(diffDeg) <= FOV_DEGREES / 2;
   const pointsRight = diffDeg > 0;
   // Proportionell rotation: nära 0° avvikelse (nästan i mål) ger en liten
   // vinkel, nära/över 180° (målet nästan bakom en) ger den maximala
@@ -132,47 +157,26 @@ export function NearestTurbineArrow({
     (pointsRight ? 1 : -1) * (10 + (MAX_ARROW_ROTATION_DEG - 10) * Math.min(1, Math.abs(diffDeg) / 180));
 
   return (
-    <>
+    <div
+      className={`pointer-events-none absolute top-1/2 z-50 flex -translate-y-1/2 flex-col items-center gap-1.5 transition-opacity duration-500 ${
+        pointsRight ? "right-3" : "left-3"
+      } ${onTarget ? "opacity-0" : "opacity-100"}`}
+    >
       <div
-        className={`pointer-events-none absolute top-1/2 z-50 flex -translate-y-1/2 flex-col items-center gap-1.5 transition-opacity duration-500 ${
-          pointsRight ? "right-3" : "left-3"
-        } ${onTarget ? "opacity-0" : "opacity-100"}`}
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FF8B01]/90 text-xl text-[#090909] shadow-lg shadow-[#FF8B01]/30 transition-transform duration-150 ease-out"
+        style={{ transform: `rotate(${rotationDeg}deg)` }}
       >
-        <div
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FF8B01]/90 text-xl text-[#090909] shadow-lg shadow-[#FF8B01]/30 transition-transform duration-150 ease-out"
-          style={{ transform: `rotate(${rotationDeg}deg)` }}
-        >
-          ➜
-        </div>
-        <div className="max-w-[9.5rem] rounded-xl bg-black/75 px-2.5 py-1.5 text-center text-[11px] text-white shadow-lg">
-          <p className="font-semibold text-[#FFB347]">Närmaste verk</p>
-          <p>{formatDistance(distanceM)} bort</p>
-          <p className="text-white/70">
-            {indoors
-              ? "Vindkraftverket ligger åt detta håll – gå utomhus eller mot fri sikt för att se det."
-              : "Vrid mobilen åt detta håll"}
-          </p>
-        </div>
+        ➜
       </div>
-
-      {/* Bekräftelsetext när mobilen redan pekar rätt — tonas in/ut med
-          samma övergång som pilen ovan så växlingen känns mjuk, inte som
-          att indikatorn plötsligt bara är där eller borta.
-          Juli 2026-fix: flyttad längre ner (från `top-24`/6rem) eftersom
-          `Home.tsx`s topp-bar med statusmärken (kompass/sikt/dBA/infraljud)
-          plus en eventuell radbrytning ("Vindljud aktivt"/"Nattläge"-taggar)
-          ofta blir högre än 6rem, vilket gjorde att bekräftelsen hamnade
-          FRAMFÖR (ovanpå) de märkena. Placeras nu tydligt under hela den
-          zonen istället. */}
-      <div
-        className={`pointer-events-none absolute left-1/2 top-[calc(env(safe-area-inset-top)+9.5rem)] z-50 -translate-x-1/2 transition-opacity duration-500 ${
-          onTarget ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        <div className="rounded-full bg-emerald-500/90 px-4 py-1.5 text-center text-xs font-semibold text-[#062b17] shadow-lg">
-          ✓ Du tittar mot närmaste verk ({formatDistance(distanceM)})
-        </div>
+      <div className="max-w-[9.5rem] rounded-xl bg-black/75 px-2.5 py-1.5 text-center text-[11px] text-white shadow-lg">
+        <p className="font-semibold text-[#FFB347]">Närmaste verk</p>
+        <p>{formatDistance(distanceM)} bort</p>
+        <p className="text-white/70">
+          {indoors
+            ? "Vindkraftverket ligger åt detta håll – gå utomhus eller mot fri sikt för att se det."
+            : "Vrid mobilen åt detta håll"}
+        </p>
       </div>
-    </>
+    </div>
   );
 }
