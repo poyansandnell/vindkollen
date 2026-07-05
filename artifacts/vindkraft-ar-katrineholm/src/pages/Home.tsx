@@ -179,6 +179,11 @@ export default function Home() {
   // (döljer skymda delar helt) finns kvar som en manuell fallback i
   // VisualizationControls.tsx för den som ändå föredrar det.
   const [showHiddenTurbines, setShowHiddenTurbines] = useState(true);
+  // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 1 & 3): rena
+  // felsökningslägen, PÅ-slagna via `SensorDebugPanel` nedan — påverkar
+  // ARScene direkt (se dess jsdoc), aldrig produktinställningarna ovan.
+  const [debugForceNearest, setDebugForceNearest] = useState(false);
+  const [debugDisableOcclusion, setDebugDisableOcclusion] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
@@ -1052,6 +1057,8 @@ export default function Home() {
             globalVisibilityFactor={globalVisibilityFactor}
             hideAll={indoorsOrNoSight}
             forceVisibleIds={forceVisibleIds}
+            debugForceNearest={debugForceNearest}
+            disableOcclusion={debugDisableOcclusion}
           />
 
           {arSessionVisible && (
@@ -1521,6 +1528,10 @@ export default function Home() {
           audioTargetVolume={windTargetVolume}
           audioActualVolume={wind.actualVolumeRef.current}
           audioSource="Huvudhögtalare (MediaStreamAudioDestinationNode → dolt <audio>-element)"
+          debugForceNearest={debugForceNearest}
+          onToggleDebugForceNearest={() => setDebugForceNearest((v) => !v)}
+          disableOcclusion={debugDisableOcclusion}
+          onToggleDisableOcclusion={() => setDebugDisableOcclusion((v) => !v)}
           onClose={() => setShowSensorDebug(false)}
         />
       )}

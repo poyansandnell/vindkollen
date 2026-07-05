@@ -1,0 +1,69 @@
+Nej, molnen är med största sannolikhet inte orsaken.
+
+På din debug-rad ser jag:
+
+* ✅ Verk 12/12 (alla vindkraftverk är laddade)
+* ✅ GPS ±5 m (mycket bra)
+* ✅ Kompass ±10° (helt okej)
+* ✅ Världsuppdatering: ja
+* ❌ Synliga verk: 0
+
+Det sista är nyckeln. Om inga ens blir rödmarkerade betyder det att de aldrig renderas, inte att de skyms av moln.
+
+Det finns egentligen bara några sannolika orsaker:
+
+1. Fel höjd (Y-koordinat). Verken kan ligga under markplanet eller långt ovanför kamerans synfält.
+2. Fel avståndsberäkning. Culling tror att verken ligger utanför kamerans synfält trots att de inte gör det.
+3. Occlusion-masken döljer 100 % av modellen. Om AI:n tror att hela horisonten är byggnader/träd blir hela turbinen bortfiltrerad.
+4. Frustum-felet. Verken hamnar precis utanför kamerans synfält på grund av fel bearing eller koordinattransformering.
+
+Det faktum att inte ens de rödstreckade delarna syns gör att jag nästan utesluter molnen.
+
+⸻
+
+Jag skulle be Replit lägga in ett felsökningsläge:
+
+FELSÖKNING – Visa alltid närmaste verk
+
+Lägg till ett debug-läge där det närmaste vindkraftverket alltid renderas, oavsett:
+
+* occlusion
+* depth
+* moln
+* AI-segmentering
+* culling
+* frustum
+
+Placera det alltid exakt på den beräknade GPS-riktningen.
+
+Rita dessutom:
+
+* en gul lodrät linje från marken upp till navet
+* en röd sfär på navets position
+* koordinater, avstånd och bearing ovanför.
+
+Om detta inte syns är felet i koordinat-/kameraberäkningen, inte i occlusion.
+
+⸻
+
+Jag skulle dessutom logga detta för varje verk:
+
+Verk 5
+GPS: lat/lon
+ENU: x y z
+Bearing:
+Pitch:
+Distance:
+InFrustum: true/false
+Occluded: true/false
+Visible: true/false
+ScreenX:
+ScreenY:
+
+Då ser man direkt om motorn tror att verket ligger t.ex. 8 km bakom kameran eller under marken.
+
+Min gissning
+
+Eftersom pilen pekar mot 3,2 km och du står åt rätt håll, samtidigt som tidigare versioner ibland visade verken, tror jag att problemet inte är molnen utan att något i den senaste uppdateringen gör att alla verk filtreras bort innan de renderas.
+
+Jag skulle faktiskt tillfälligt stänga av all occlusion och AI-segmentering och först få ett enda verk att visas stabilt. När det fungerar kan occlusion aktiveras igen stegvis. Det är betydligt enklare att felsöka än att försöka hitta felet med alla filter aktiva samtidigt.

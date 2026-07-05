@@ -38,6 +38,22 @@ interface SensorDebugPanelProps {
   audioActualVolume: number | null;
   /** Juli 2026-produktkrav: text som beskriver ljudets utsignal/routing. */
   audioSource: string;
+  /**
+   * Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 1): tvingar ARScene
+   * att alltid rita en gul markör (mark→nav) + röd sfär vid det
+   * geometriskt närmaste verkets riktiga världsposition, oavsett
+   * ocklusion/himmelsmask/frustum/vinkel — se `ARScene`s `debugForceNearest`-prop.
+   */
+  debugForceNearest: boolean;
+  onToggleDebugForceNearest: () => void;
+  /**
+   * Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 3): stänger av ALL
+   * ocklusion/himmelsmask/AI-segmentering samtidigt (fullständig opacitet
+   * på alla verk) för att isolera grundorsaken — se `ARScene`s
+   * `disableOcclusion`-prop.
+   */
+  disableOcclusion: boolean;
+  onToggleDisableOcclusion: () => void;
   onClose: () => void;
 }
 
@@ -100,6 +116,10 @@ export function SensorDebugPanel({
   audioTargetVolume,
   audioActualVolume,
   audioSource,
+  debugForceNearest,
+  onToggleDebugForceNearest,
+  disableOcclusion,
+  onToggleDisableOcclusion,
   onClose,
 }: SensorDebugPanelProps) {
   return (
@@ -163,6 +183,37 @@ export function SensorDebugPanel({
             <li key={r}>{r}</li>
           ))}
         </ul>
+      </div>
+
+      {/* Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 1 & 3): rena
+          felsökningsomkopplare, oberoende av alla produktinställningar ovan —
+          se resp. props jsdoc i SensorDebugPanelProps. */}
+      <div className="mt-3 border-t border-white/10 pt-2">
+        <p className="mb-2 text-xs text-white/60">🛠️ Felsökningslägen:</p>
+        <div className="flex items-center justify-between gap-3 border-b border-white/5 py-1.5 text-xs">
+          <span className="text-white/60">Tvinga markör på närmaste verk</span>
+          <button
+            onClick={onToggleDebugForceNearest}
+            aria-pressed={debugForceNearest}
+            className={`rounded-full px-3 py-1 font-mono text-xs ${
+              debugForceNearest ? "bg-yellow-400 text-black" : "bg-white/10 text-white hover:bg-white/20"
+            }`}
+          >
+            {debugForceNearest ? "PÅ" : "AV"}
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-b border-white/5 py-1.5 text-xs">
+          <span className="text-white/60">Stäng av ocklusion/AI-segmentering</span>
+          <button
+            onClick={onToggleDisableOcclusion}
+            aria-pressed={disableOcclusion}
+            className={`rounded-full px-3 py-1 font-mono text-xs ${
+              disableOcclusion ? "bg-yellow-400 text-black" : "bg-white/10 text-white hover:bg-white/20"
+            }`}
+          >
+            {disableOcclusion ? "PÅ" : "AV"}
+          </button>
+        </div>
       </div>
     </div>
   );

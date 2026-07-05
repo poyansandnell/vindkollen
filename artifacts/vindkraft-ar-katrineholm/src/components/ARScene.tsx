@@ -44,6 +44,19 @@ interface ARSceneProps {
    */
   showHiddenTurbines?: boolean;
   /**
+   * Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 3): rent
+   * FELSÖKNINGSläge — till skillnad från `showHiddenTurbines` (som bara
+   * visar en spöklik kontur av den skymda DELEN av ett verk) forcerar detta
+   * ALLA verk till full opacitet och stänger av samtliga
+   * synlighetsdämpningar samtidigt: per-pixel-ocklusionsshadern
+   * (`uShowHidden`), himmelsmasken (`obj.skyFactor`) och Outdoor Confidence
+   * Index/inomhus-heuristiken (`globalVisibilityFactor`/`hideAll`) — så att
+   * man kan avgöra om "verk visas inte" beror på ocklusion/AI-segmentering
+   * eller på ett fel någon annanstans i pipelinen (positionering/frustum).
+   * Default av.
+   */
+  disableOcclusion?: boolean;
+  /**
    * Global styrka (0..1) från "Outdoor Confidence Index"-tröskelvärdet
    * (`useOutdoorConfidenceIndex` i Home.tsx) — appliceras ovanpå per-punkts
    * himmelsmasken (`isPointSky`) som ytterligare en försiktighetsspärr:
@@ -85,6 +98,19 @@ interface ARSceneProps {
    * (bakåtkompatibelt för ev. andra konsumenter).
    */
   visible?: boolean;
+  /**
+   * Juli 2026-fix (TREDJE kritiska buggrapporten: "Synliga verk: 0" trots
+   * frisk GPS/kompass/world-update) — felsökningsläge som användaren själv
+   * kan slå på/av från telefonen (se `SensorDebugPanel`), enligt
+   * felrapportens uttryckliga begäran: tvinga fram EN garanterad markör
+   * (gul lodrät linje mark→nav + röd sfär vid nav + text med koordinater/
+   * avstånd/bäring) för det NÄRMASTE verket, helt OBEROENDE av ocklusion/
+   * djup/AI-segmentering/frustum-/vinkelfilter — se `debugMarker`-logiken i
+   * `animate`. Syftet är att bevisa/motbevisa om `layoutObjects`s
+   * världsposition överhuvudtaget är korrekt, innan man ens tittar på
+   * synlighetsfiltren ovanpå den. Default `false` (bakåtkompatibelt).
+   */
+  debugForceNearest?: boolean;
 }
 
 const DEFAULT_IS_POINT_SKY = () => true;
@@ -203,6 +229,13 @@ interface TurbineObject {
    */
   loggedPlaced: boolean;
   loggedVisible: boolean;
+  /**
+   * Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 2): bäring (grader
+   * från norr) beräknad senast i `layoutObjects`, sparad så den utökade
+   * per-verk-diagnostiktabellen i `animate` slipper räkna om den en andra
+   * gång per bildruta.
+   */
+  lastBearingDeg: number;
 }
 
 interface CanvasLabel {
@@ -350,6 +383,33 @@ function drawLabel(label: CanvasLabel, title: string, subtitle: string) {
   label.texture.needsUpdate = true;
 }
 
+/**
+ * Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 2): flerradig
+ * felsökningsetikett för `debugMarkerRef` — samma per-verk-fält som
+ * felrapporten efterfrågade (GPS lat/lon, ENU x/y/z, bäring, pitch, avstånd),
+ * skrivna rad för rad istället för `drawLabel`s fasta titel+undertext-layout.
+ */
+function drawDebugLabel(label: CanvasLabel, lines: string[]) {
+  const { ctx, canvas } = label;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(20, 15, 0, 0.85)";
+  ctx.strokeStyle = "rgba(255, 221, 0, 0.9)";
+  ctx.lineWidth = 3;
+  ctx.fillRect(4, 4, canvas.width - 8, canvas.height - 8);
+  ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#ffdd00";
+  ctx.font = "600 26px monospace";
+  const lineHeight = 27;
+  const startY = 12;
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], 16, startY + i * lineHeight, canvas.width - 32);
+  }
+  label.texture.needsUpdate = true;
+}
+
 function createGlowTexture(): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 128;
@@ -458,6 +518,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     hideAll,
     forceVisibleIds,
     visible = true,
+    debugForceNearest = false,
+    disableOcclusion = false,
   },
   forwardedRef,
 ) {
@@ -483,6 +545,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     globalVisibilityFactor: globalVisibilityFactor ?? 1,
     hideAll: hideAll ?? false,
     forceVisibleIds: forceVisibleIds ?? EMPTY_FORCE_VISIBLE_IDS,
+    debugForceNearest,
+    disableOcclusion,
   });
   const skyRef = useRef({
     isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
@@ -497,6 +561,19 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   // kameravyn plötsligt försvann bakom en ogenomskinlig canvas (förlorad
   // WebGL-kontext).
   const pendingCaptureRef = useRef<((dataUrl: string | null) => void) | null>(null);
+  // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 1): garanterad
+  // felsökningsmarkör för det NÄRMASTE verket — en gul lodrät linje
+  // (mark→nav) + röd sfär (nav) + textetikett (koordinater/avstånd/bäring),
+  // helt frikopplad från ocklusionsshadern/himmelsmasken/`applyFinalOpacities`
+  // (egna material, `depthTest: false`, `frustumCulled = false`, mycket hög
+  // `renderOrder`) — se användningen i `animate`. Skapas EN gång och
+  // återanvänds/omplaceras varje bildruta istället för att skapas per verk.
+  const debugMarkerRef = useRef<{
+    line: THREE.Line;
+    lineGeo: THREE.BufferGeometry;
+    sphere: THREE.Mesh;
+    label: CanvasLabel;
+  } | null>(null);
   // Juli 2026-fix ("verk fastklistrade på skärmen vid nedåtlutning"): antal
   // verk som just nu ligger inom halva kamerans FOV, beräknat med den
   // FULLSTÄNDIGA 3D-vinkeln (gir OCH pitch, se `angleFromOpticalAxisDeg` i
@@ -550,6 +627,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     globalVisibilityFactor: globalVisibilityFactor ?? 1,
     hideAll: hideAll ?? false,
     forceVisibleIds: forceVisibleIds ?? EMPTY_FORCE_VISIBLE_IDS,
+    debugForceNearest,
+    disableOcclusion,
   };
   skyRef.current = {
     isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
@@ -840,10 +919,45 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         forceVisible: false,
         loggedPlaced: false,
         loggedVisible: false,
+        lastBearingDeg: 0,
       };
     });
 
     sceneStateRef.current = { scene, camera, renderer, objects, ambient, sunLight, sunSprite, sunGlow };
+
+    // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 1): garanterad
+    // felsökningsmarkör för det närmaste verket (se `debugMarkerRef`s jsdoc).
+    // Egna material (INTE `attachOcclusionShader`), `depthTest: false` och
+    // extremt hög `renderOrder` gör att markören alltid ritas ovanpå ALLT
+    // annat i scenen — helt oberoende av ocklusionsrutnätet, himmelsmasken,
+    // frustum-testet och `angleFromOpticalAxisDeg`, precis som efterfrågat.
+    // `frustumCulled = false` säkerställer dessutom att Three.js egna
+    // (bounding-sphere-baserade) frustum-culling aldrig kan dölja den, även
+    // om markören råkar hamna utanför kamerans synfält.
+    const debugLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0)]);
+    const debugLineMat = new THREE.LineBasicMaterial({ color: 0xffdd00, depthTest: false, linewidth: 3 });
+    const debugLine = new THREE.Line(debugLineGeo, debugLineMat);
+    debugLine.frustumCulled = false;
+    debugLine.renderOrder = 10000;
+    debugLine.visible = false;
+    scene.add(debugLine);
+
+    const debugSphereGeo = new THREE.SphereGeometry(3 * METERS_TO_UNITS, 16, 16);
+    const debugSphereMat = new THREE.MeshBasicMaterial({ color: 0xff2020, depthTest: false });
+    const debugSphere = new THREE.Mesh(debugSphereGeo, debugSphereMat);
+    debugSphere.frustumCulled = false;
+    debugSphere.renderOrder = 10001;
+    debugSphere.visible = false;
+    scene.add(debugSphere);
+
+    const debugLabel = createCanvasLabel();
+    debugLabel.sprite.frustumCulled = false;
+    debugLabel.sprite.renderOrder = 10002;
+    debugLabel.sprite.visible = false;
+    debugLabel.sprite.scale.set(60, 24, 1);
+    scene.add(debugLabel.sprite);
+
+    debugMarkerRef.current = { line: debugLine, lineGeo: debugLineGeo, sphere: debugSphere, label: debugLabel };
 
     // Placera varje verk i en fast världsposition utifrån bäring/avstånd.
     // Körs initialt samt varje gång användarens GPS-position uppdateras
@@ -859,6 +973,12 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     // bara för att verkets VÄRLDSPOSITION är fysikaliskt rätt.
     function layoutObjects() {
       const { lat: uLat, lon: uLon } = userRef.current;
+      // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 1): håller reda
+      // på det GEOMETRISKT närmaste verket (rent GPS-avstånd, oberoende av
+      // riktning/synlighet) medan loopen ändå går igenom alla objekt, så
+      // `updateDebugMarker` nedan slipper en egen extra genomgång.
+      let nearestObj: TurbineObject | null = null;
+      let nearestDist = Infinity;
       for (const obj of sceneStateRef.current!.objects) {
         const realDist = Math.max(distanceMeters(uLat, uLon, obj.lat, obj.lon), 1);
         const bearing = bearingDegrees(uLat, uLon, obj.lat, obj.lon);
@@ -964,7 +1084,51 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
 
         layoutShadow(obj, x, y, z, scaleDamp);
         applyVisibility(obj, dist);
+        obj.lastBearingDeg = bearing;
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestObj = obj;
+        }
       }
+      updateDebugMarker(nearestObj);
+    }
+
+    // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 1): omplacerar
+    // felsökningsmarkören på det närmaste verkets FAKTISKA världsposition
+    // (samma `obj.group.position`/`obj.light.position` som allt annat läser)
+    // varje bildruta, och slår av/på dess synlighet ENBART via
+    // `modeRef.current.debugForceNearest` — ingen ocklusion, himmelsmask,
+    // frustum- eller vinkelkontroll rör vid den här funktionen alls.
+    function updateDebugMarker(nearest: TurbineObject | null) {
+      const marker = debugMarkerRef.current;
+      if (!marker) return;
+      const on = modeRef.current.debugForceNearest && nearest !== null;
+      marker.line.visible = on;
+      marker.sphere.visible = on;
+      marker.label.sprite.visible = on;
+      if (!on || !nearest) return;
+
+      const groundPos = nearest.group.position;
+      const hubPos = nearest.light.position;
+      const positions = marker.lineGeo.attributes.position as THREE.BufferAttribute;
+      positions.setXYZ(0, groundPos.x, groundPos.y, groundPos.z);
+      positions.setXYZ(1, hubPos.x, hubPos.y, hubPos.z);
+      positions.needsUpdate = true;
+      marker.lineGeo.computeBoundingSphere();
+
+      marker.sphere.position.copy(hubPos);
+      const labelYOffset = 14 * METERS_TO_UNITS;
+      marker.label.sprite.position.set(hubPos.x, hubPos.y + labelYOffset, hubPos.z);
+
+      const { lat: uLat, lon: uLon } = userRef.current;
+      drawDebugLabel(marker.label, [
+        `FELSÖKNING: ${nearest.turbine.name}`,
+        `GPS mål: ${nearest.lat.toFixed(5)}, ${nearest.lon.toFixed(5)}`,
+        `GPS jag: ${uLat.toFixed(5)}, ${uLon.toFixed(5)}`,
+        `ENU x/y/z: ${groundPos.x.toFixed(1)} / ${groundPos.y.toFixed(1)} / ${groundPos.z.toFixed(1)}`,
+        `Nav x/y/z: ${hubPos.x.toFixed(1)} / ${hubPos.y.toFixed(1)} / ${hubPos.z.toFixed(1)}`,
+        `Bäring: ${nearest.lastBearingDeg.toFixed(1)}°  Avstånd: ${nearest.renderDistM.toFixed(0)} m`,
+      ]);
     }
 
     function layoutShadow(obj: TurbineObject, x: number, y: number, z: number, scaleDamp: number) {
@@ -1013,18 +1177,24 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // över BÅDA — 2-sekunderssäkerhetsnätet ska garantera att användaren
       // ser något på riktigt, inte bara en dämpad skugga, oavsett vad
       // inomhusheuristiken eller Outdoor Confidence Index tycker just då.
-      const globalFactor = obj.forceVisible
+      // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 3): `disableOcclusion`
+      // kortsluter BÅDA dämpningsfaktorerna (Outdoor Confidence Index/
+      // inomhus-heuristiken OCH himmelsmasken) till 1 — se propens jsdoc.
+      const { disableOcclusion: occlusionDisabled } = modeRef.current;
+      const globalFactor = occlusionDisabled
         ? 1
-        : modeRef.current.hideAll
-          ? INDOOR_DIM_FACTOR
-          : Math.max(modeRef.current.globalVisibilityFactor, MIN_CONFIDENCE_VISIBILITY_FACTOR);
-      const skyFactor = (obj.forceVisible ? 1 : obj.skyFactor) * globalFactor;
+        : obj.forceVisible
+          ? 1
+          : modeRef.current.hideAll
+            ? INDOOR_DIM_FACTOR
+            : Math.max(modeRef.current.globalVisibilityFactor, MIN_CONFIDENCE_VISIBILITY_FACTOR);
+      const skyFactor = occlusionDisabled ? 1 : (obj.forceVisible ? 1 : obj.skyFactor) * globalFactor;
       const bodyOpacity = obj.baseOpacity * globalFactor;
       // Grå/blå ton (produktkrav: "gray/blue tint" när verket visas dämpat
       // p.g.a. inomhus-heuristiken) — blandas alltid tillbaka mot
       // `originalColors` när `hideAll`/`forceVisible` inte längre gäller, så
       // färgen aldrig fastnar tonad.
-      const tintActive = modeRef.current.hideAll && !obj.forceVisible;
+      const tintActive = !occlusionDisabled && modeRef.current.hideAll && !obj.forceVisible;
       for (let i = 0; i < obj.materials.length; i++) {
         const mat = obj.materials[i];
         mat.transparent = true;
@@ -1097,6 +1267,19 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // så att verken förblir fast förankrade i verkligheten/horisonten
       // istället för att följa skärmen när telefonen tiltas.
       state.camera.quaternion.copy(quaternionRef.current);
+      // Juli 2026-fix (TREDJE kritiska buggrapporten — trolig rotorsak):
+      // `matrixWorldInverse` uppdateras normalt bara inuti
+      // `WebGLRenderer.render()`, som körs i SLUTET av denna funktion. Utan
+      // detta explicita anrop läste alltså `frustumMatrix`/`camSpaceVec`
+      // nedan förra bildrutans kamerarotation (en bildruta "efter" — worst
+      // case exakt den lagg som gör att "rakt fram"-vinkeltestet aldrig
+      // stabiliserar sig kring 0° om enhetens sensorer levererar events i
+      // en annan takt än rAF). `updateMatrixWorld()` på en kamera utan
+      // förälder (`camera.parent === null`, vilket är fallet här) uppdaterar
+      // BÅDE `matrixWorld` OCH `matrixWorldInverse` synkront, så alla
+      // beräkningar nedan garanterat använder DENNA bildrutas riktiga
+      // kameraorientering.
+      state.camera.updateMatrixWorld(true);
 
       // Blinkande flyghinderljus styrs enbart av det manuella Nattläge-valet
       // (aldrig av den faktiska klockan eller av "Kväll"-visualiseringsläget).
@@ -1190,7 +1373,11 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       if (changed) {
         occlusionTexture.needsUpdate = true;
       }
-      const showHiddenValue = modeRef.current.showHiddenTurbines ? 1 : 0;
+      // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 3): `disableOcclusion`
+      // forcerar `uShowHidden` till 1 precis som "Visa dolda verk", men som
+      // en oberoende FELSÖKNINGS-överstyrning (oavsett vad den vanliga
+      // produktinställningen `showHiddenTurbines` står på).
+      const showHiddenValue = modeRef.current.showHiddenTurbines || modeRef.current.disableOcclusion ? 1 : 0;
       for (const shader of occlusionShaders) {
         shader.uniforms.uShowHidden.value = showHiddenValue;
       }
@@ -1209,12 +1396,26 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // Nollställs varje bildruta, se `inFrontOfCameraCountRef`.
       let inFrontOfCameraCount = 0;
       let visibleCountThisFrame = 0;
+      // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 2): utökad
+      // per-verk-diagnostik med precis de fält felrapporten efterfrågade
+      // (GPS, ENU-koordinater, bäring, pitch, avstånd, InFrustum, Occluded,
+      // Visible, ScreenX/ScreenY) — inga nya beräkningar utöver vad som
+      // redan görs i loopen nedan, bara insamling.
       const diagnosticRows: Array<{
         namn: string;
+        lat: number;
+        lon: number;
+        enu_x: number;
+        enu_y: number;
+        enu_z: number;
         avstånd_m: number;
         bäring_deg: number;
+        pitch_deg: number | null;
+        inFrustum: boolean;
+        occluded: boolean;
         isVisible: boolean;
-        frustumVisible: boolean;
+        screenX: number | null;
+        screenY: number | null;
       }> = [];
 
       for (const obj of state.objects) {
@@ -1268,11 +1469,20 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         }
 
         let skyTarget = obj.skyFactor;
+        let screenX: number | null = null;
+        let screenY: number | null = null;
         if (inFrontOfCamera) {
           ndcVec.copy(obj.light.position).project(state.camera);
           const u = (ndcVec.x + 1) / 2;
           const v = (1 - ndcVec.y) / 2;
           skyTarget = u >= 0 && u <= 1 && v >= 0 && v <= 1 ? (currentIsPointSky(u, v) ? 1 : 0) : obj.skyFactor;
+          // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 2):
+          // ScreenX/ScreenY i faktiska pixlar (canvasens klientstorlek),
+          // beräknat från samma NDC-projektion som redan görs ovan för
+          // himmelsmasken — ingen extra `project()`-kostnad.
+          const canvasEl = state.renderer.domElement;
+          screenX = Math.round(u * canvasEl.clientWidth);
+          screenY = Math.round(v * canvasEl.clientHeight);
         } else {
           skyTarget = 0; // bakom kameran
         }
@@ -1291,6 +1501,17 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         const currentOpacity = obj.materials[0]?.opacity ?? 0;
         const isVisible = currentOpacity > 0.02;
         const frustumVisible = frustum.containsPoint(obj.group.position);
+        // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 2): "Occluded"
+        // = verket är i bild (framför kameran) men himmelsmasken bedömer att
+        // det INTE projiceras mot himmel just nu (`obj.skyFactor` lågt) —
+        // dvs. exakt vad som gör att det tonas bort trots frisk GPS/kompass.
+        const occluded = inFrontOfCamera && obj.skyFactor < 0.5;
+        // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 2): pitch =
+        // vertikal vinkel (grader) mellan navhöjdspunkten och kamerans
+        // optiska axel i kamerarymden — positivt värde betyder att verket
+        // ligger ovanför skärmens mittlinje.
+        const pitchDeg =
+          camSpaceDist > 0 ? (Math.atan2(-camSpaceVec.y, -camSpaceVec.z) * 180) / Math.PI : null;
         if (isVisible) visibleCountThisFrame++;
         if (isVisible && !obj.loggedVisible) {
           obj.loggedVisible = true;
@@ -1300,10 +1521,19 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         }
         diagnosticRows.push({
           namn: obj.turbine.name,
+          lat: Number(obj.lat.toFixed(5)),
+          lon: Number(obj.lon.toFixed(5)),
+          enu_x: Number(obj.group.position.x.toFixed(1)),
+          enu_y: Number(obj.group.position.y.toFixed(1)),
+          enu_z: Number(obj.group.position.z.toFixed(1)),
           avstånd_m: Math.round(obj.renderDistM),
-          bäring_deg: Math.round(bearingDegrees(userRef.current.lat, userRef.current.lon, obj.lat, obj.lon)),
+          bäring_deg: Math.round(obj.lastBearingDeg),
+          pitch_deg: pitchDeg !== null ? Math.round(pitchDeg * 10) / 10 : null,
+          inFrustum: frustumVisible,
+          occluded,
           isVisible,
-          frustumVisible,
+          screenX,
+          screenY,
         });
 
         const phase = (now + obj.blinkOffsetMs) % obj.blinkPeriodMs;
@@ -1429,6 +1659,20 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         obj.shadowMaterial.dispose();
         obj.label.texture.dispose();
         obj.distanceLabel.texture.dispose();
+      }
+      // Juli 2026-fix (TREDJE kritiska buggrapporten, punkt 1): städa upp
+      // felsökningsmarkörens geometrier/material precis som alla andra
+      // scenobjekt ovan, annars läcker en `THREE.BufferGeometry` +
+      // material + canvas-etikett-textur varje gång komponenten monteras om.
+      const debugMarker = debugMarkerRef.current;
+      if (debugMarker) {
+        debugMarker.lineGeo.dispose();
+        (debugMarker.line.material as THREE.Material).dispose();
+        debugMarker.sphere.geometry.dispose();
+        (debugMarker.sphere.material as THREE.Material).dispose();
+        debugMarker.label.texture.dispose();
+        (debugMarker.label.sprite.material as THREE.SpriteMaterial).dispose();
+        debugMarkerRef.current = null;
       }
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
