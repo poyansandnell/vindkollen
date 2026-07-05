@@ -352,6 +352,37 @@ export default function Home() {
   const MIN_SKY_RATIO = 0.15;
   const hasEnoughSky = sky.skyRatio >= MIN_SKY_RATIO;
 
+  // Juli 2026-fix (fjärde buggrapporten): "de försvann direkt" — `sky.indoors`
+  // (kamera-heuristikens hysteresis) kunde tidigare slå om till "inomhus" och
+  // dämpa/rödmarkera verken på samma bildruta som kameran råkade svepa förbi
+  // en mörk yta (t.ex. en TV, ett fönster i skugga), utan att användaren ens
+  // hann se dem. Produktkrav: ge användaren en 5-sekunders "titta-gratis"-
+  // period från det ögonblick kameran FÖRST bedöms vara inomhus/skymd innan
+  // dämpningen/röda statusen slår till — men återgå OMEDELBART (ingen
+  // fördröjning) så fort kameran igen ser fri himmel, så vi aldrig döljer en
+  // faktisk återhämtning. Se `ar-tracking-freeze-vs-fade-tiering`-mönstret i
+  // minnesanteckningarna: samma "instant på bra, fördröjd på dåligt"-princip.
+  const INDOORS_GRACE_MS = 5000;
+  const indoorsSinceRef = useRef<number | null>(null);
+  const [indoorsGracePassed, setIndoorsGracePassed] = useState(false);
+  useEffect(() => {
+    if (!sky.indoors) {
+      indoorsSinceRef.current = null;
+      setIndoorsGracePassed(false);
+      return;
+    }
+    if (indoorsSinceRef.current === null) {
+      indoorsSinceRef.current = Date.now();
+    }
+    const elapsed = Date.now() - indoorsSinceRef.current;
+    if (elapsed >= INDOORS_GRACE_MS) {
+      setIndoorsGracePassed(true);
+      return;
+    }
+    const timeout = window.setTimeout(() => setIndoorsGracePassed(true), INDOORS_GRACE_MS - elapsed);
+    return () => window.clearTimeout(timeout);
+  }, [sky.indoors]);
+
   // Hela detta index (och "Gå utomhus"/"aim"-bannern nedan) förutsätter att
   // ML-segmenteringen faktiskt är igång och därmed levererar en tillförlitlig
   // himmelsandel. Om den fortfarande laddas eller är permanent avstängd
@@ -390,16 +421,20 @@ export default function Home() {
   // en fix) av samma anledning den gamla `shouldHide` gjorde: overlayen får
   // aldrig täcka "Hämtar GPS-position…"-spinnern eller ett GPS-felmeddelande
   // bara för att kameran råkar peka mot ett bord/en vägg under uppstarten.
-  const indoorsOrNoSight = ready && sky.ready && sky.indoors;
+  // Juli 2026-fix (fjärde buggrapporten): använder den 5-sekunders-graderade
+  // `indoorsGracePassed` (se ovan) istället för det råa `sky.indoors` — så
+  // verken hinner visas ett ögonblick innan de dämpas/döljs, men återgår
+  // fortfarande omedelbart så fort kameran ser fri himmel igen.
+  const indoorsOrNoSight = ready && sky.ready && indoorsGracePassed;
 
   // Liten alltid-synlig statusbadge: "Fri sikt" / "Delvis skymt" / "Ingen
-  // fri sikt" — samma underliggande `sky.indoors`/`sky.skyRatio`, men med en
-  // mjukare mellanläge (skymd av t.ex. några träd, men inte "inomhus") så
-  // signalen inte bara är på/av.
+  // fri sikt" — samma graderade inomhus-bedömning som ovan (`indoorsGracePassed`)
+  // plus `sky.skyRatio` för ett mjukare mellanläge (skymd av t.ex. några träd,
+  // men inte "inomhus") så signalen inte bara är på/av.
   const PARTIAL_SKY_RATIO_THRESHOLD = 0.6;
   const lineOfSightStatus: "clear" | "partial" | "indoors" = !sky.ready
     ? "clear"
-    : sky.indoors
+    : indoorsGracePassed
       ? "indoors"
       : sky.skyRatio < PARTIAL_SKY_RATIO_THRESHOLD
         ? "partial"
