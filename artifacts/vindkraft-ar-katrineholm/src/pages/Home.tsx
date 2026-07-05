@@ -34,7 +34,7 @@ import { TURBINES, type TurbineSweref } from "@/lib/turbines";
 import { distanceMeters, bearingDegrees, isNightTime, normalizeAngle, formatDistance } from "@/lib/geo";
 import { swerefToWgs84, wgs84ToSweref } from "@/lib/sweref";
 import { getBladeRpm } from "@/lib/turbineAnimation";
-import { estimateSoundLevel, dbaToGain, applyIndoorAttenuation, applyIndoorGain } from "@/lib/soundLevel";
+import { estimateSoundLevel, dbaToVolume, applyIndoorAttenuation, applyIndoorGain } from "@/lib/soundLevel";
 import { estimateNoiseImpact } from "@/lib/noiseImpact";
 import { useWindDirection } from "@/hooks/useWindDirection";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
@@ -708,25 +708,30 @@ export default function Home() {
   }, [nearestTurbineInfo, soundLevelEstimate, windDirection.windFromDeg, windDirection.windSpeedMs, exposureNowTick]);
 
   // Uppdatera vindljudets volym/svischtakt när GPS-position eller den
-  // beräknade ljudnivån ändras. Utomhusgainen räknas fram från den
-  // icke-dämpade `smoothedOutdoorDba` (exakt samma tal som ligger bakom
-  // panelens "ute"-siffra), och "Ljud inne" appliceras sedan som en direkt,
-  // garanterad multiplikator (`applyIndoorGain`) på den REDAN beräknade
-  // gainen — INTE genom att köra en redan -35 dB-dämpad dBA-siffra genom
-  // `dbaToGain`s golv/tak-klippning igen. Se `applyIndoorGain`s jsdoc: det
-  // gamla sättet klippte "Ljud inne"-volymen till exakt 0 för i praktiken
-  // alla realistiska utomhusnivåer, så om utomhusnivån redan låg nära
-  // `dbaToGain`s golv (vanligt på riktiga GPS-avstånd i Katrineholm) gav
-  // växlingen ingen hörbar skillnad alls — den rapporterade buggen.
-  const windDbaGain = useMemo(
-    () => applyIndoorGain(dbaToGain(smoothedOutdoorDba), soundEnvironment === "inne"),
-    [smoothedOutdoorDba, soundEnvironment],
+  // beräknade ljudnivån ändras. Utomhusvolymen räknas fram från den RÅA,
+  // icke-utjämnade `rawOutdoorEstimate.totalDba` — INTE den flera sekunder
+  // fördröjda `smoothedOutdoorDba` (som bara finns för den VISADE panel-
+  // siffran) — så att `useWindSound`s egen högfrekventa (`AUDIO_TICK_MS`)
+  // EMA-loop är den ENDA utjämningen volymen någonsin går igenom, precis
+  // enligt produktkravet ("räkna om minst 10 ggr/sekund", inte i GPS-takt
+  // och sedan igen i panelens flera-sekunders utjämningsfönster).
+  // "Ljud inne" appliceras sedan som en direkt, garanterad multiplikator
+  // (`applyIndoorGain`) på den REDAN beräknade volymen — INTE genom att köra
+  // en redan -35 dB-dämpad dBA-siffra genom `dbaToVolume`s golv/tak-
+  // klippning igen. Se `applyIndoorGain`s jsdoc: det gamla sättet klippte
+  // "Ljud inne"-volymen till exakt 0 för i praktiken alla realistiska
+  // utomhusnivåer, så om utomhusnivån redan låg nära `dbaToVolume`s golv
+  // (vanligt på riktiga GPS-avstånd i Katrineholm) gav växlingen ingen
+  // hörbar skillnad alls — den rapporterade buggen.
+  const windTargetVolume = useMemo(
+    () => applyIndoorGain(dbaToVolume(rawOutdoorEstimate.totalDba), soundEnvironment === "inne"),
+    [rawOutdoorEstimate.totalDba, soundEnvironment],
   );
   useEffect(() => {
     if (!wind.playing) return;
-    wind.updateProximity(windDbaGain, AVG_RPM);
+    wind.updateProximity(windTargetVolume, AVG_RPM);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wind.playing, windDbaGain]);
+  }, [wind.playing, windTargetVolume]);
 
   const handleStart = useCallback(() => {
     setStarting(true);
@@ -1422,6 +1427,10 @@ export default function Home() {
           bearingToNearestDeg={nearestTurbineInfo?.bearingDeg ?? null}
           angleDiffToNearestDeg={angleDiffToNearestDeg}
           hideReasons={debugHideReasons}
+          audioTargetDba={rawOutdoorEstimate.totalDba}
+          audioTargetVolume={windTargetVolume}
+          audioActualVolume={wind.actualVolumeRef.current}
+          audioSource="Huvudhögtalare (MediaStreamAudioDestinationNode → dolt <audio>-element)"
           onClose={() => setShowSensorDebug(false)}
         />
       )}

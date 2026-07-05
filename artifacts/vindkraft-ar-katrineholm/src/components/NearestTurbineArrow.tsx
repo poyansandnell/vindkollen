@@ -1,24 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDistance } from "@/lib/geo";
 
 // Måste matcha `ARScene.tsx`s kamera-FOV (`FOV_DEGREES`) — annars skulle
 // pilen kunna gömma sig (eller visas i onödan) fel jämfört med vad som
 // faktiskt syns i AR-vyn just nu.
 const FOV_DEGREES = 65;
-// Hur ofta pilens riktning uppdateras. Sänkt (juli 2026 regressionsrapport,
-// produktkrav "pilen ska uppdateras 30-60 ggr/s") från 80ms (~12/s) till
-// 20ms (~50/s) — 80ms upplevdes fortfarande som att pilen "bara beräknades
-// en gång" jämfört med den 30-60Hz-uppdaterade AR-scenen runt omkring den.
-// Fortfarande ett enkelt intervall (inte requestAnimationFrame) eftersom
-// mänsklig handrörelse ändå inte kräver bildruteexakt uppdatering, och
-// undviker att re-rendera `Home.tsx`s stora komponentträd i onödan — men
-// tätt nog att kännas lika responsiv som scenen.
-const POLL_INTERVAL_MS = 20;
-// Vinkeln pilen roterar per grad avvikelse utanför synfältet — ger en
-// proportionell (inte bara binär vänster/höger) rotation, så pilen tydligt
-// "följer med" när man vrider mobilen mot målet istället för att bara peka
-// i en fast ±90°-vinkel oavsett hur nära man redan pekar rätt.
-const MAX_ARROW_ROTATION_DEG = 80;
 
 // Juli 2026-fix: precis vid start (innan kompassen hunnit "sätta sig", se
 // `useDeviceOrientation.ts`s adaptiva utjämning) kan den råa/ännu inte
@@ -48,8 +34,8 @@ interface NearestTurbineArrowProps {
    * delade `getCurrentHeading()`-funktion istället för att pollas direkt ur
    * en egen ref-prop — samma funktion som AR-scenens bäringsjämförelser
    * anropar, så pilen och AR-vyn ALDRIG kan råka bygga på olika riktningar.
-   * Pollas här (inte prenumererat via re-render) av samma prestandaskäl som
-   * tidigare.
+   * Läses varje `requestAnimationFrame`-tick (inte prenumererat via
+   * re-render) av prestandaskäl.
    */
   getCurrentHeading: () => number | null;
   /** Bäring (grader, 0=norr) från användaren till närmaste verk, eller `null` om GPS-fix saknas. */
@@ -87,10 +73,27 @@ interface NearestTurbineArrowProps {
  * av kamerabildens himmel-heuristik, så den fungerar även när den stora
  * inomhus-overlayen täcker skärmen.
  *
- * Pollar `headingDegRef` med ett enkelt `setInterval` (inte varje
- * sensor-event) eftersom pilens rotation bara behöver kännas responsiv för
- * ett öga, inte vara bildrutexakt — och undviker att trigga en re-render av
- * hela `Home.tsx` för varje kompassavläsning.
+ * Juli 2026-fix ("pilen känns fast nere i hörnet, roterar inte med
+ * telefonen"): den gamla versionen hade TVÅ separata buggar som tillsammans
+ * gjorde pilen kännas låst:
+ *  1. Den bytte mellan två FASTA CSS-positioner (`right-3`/`left-3`) istället
+ *     för att rotera fritt runt en enda fast punkt — så ett kast förbi ±90°
+ *     avvikelse hoppade pilen tvärt till andra sidan skärmen istället för att
+ *     svepa dit.
+ *  2. Ikonens egen rotation klipptes till ett ±80°-intervall
+ *     (`MAX_ARROW_ROTATION_DEG`) istället för att visa den FULLA
+ *     `diffDeg`-vinkeln — så en avvikelse på t.ex. 150° visades som samma
+ *     ~80° som en avvikelse på 179°, vilket kändes som att pilen "slutade
+ *     följa med" ju mer man vred bort.
+ *
+ * Fixen: EN fast förankringspunkt (höger kant, mitten), och ikonen roterar
+ * hela vägen 0–360° i realtid utifrån den råa `diffDeg = bearingDeg -
+ * heading`. Rotationen ackumuleras i en ref (`rotationRef`) istället för att
+ * sättas direkt till `diffDeg` varje tick — annars skulle CSS `rotate()`
+ * ta en visuell "genväg" och snurra åt fel håll/hoppa vid ±180°-omslaget
+ * (t.ex. gå från 179° till -179° ser ut som ett minus-358°-hopp om man inte
+ * själv väljer den kortaste vägen och lägger till den på en obruten,
+ * monotont växande/minskande vinkel).
  */
 export function NearestTurbineArrow({
   getCurrentHeading,
@@ -101,20 +104,60 @@ export function NearestTurbineArrow({
   onTargetChange,
 }: NearestTurbineArrowProps) {
   const [diffDeg, setDiffDeg] = useState<number | null>(null);
+  const [rotationDeg, setRotationDeg] = useState(0);
   const [settled, setSettled] = useState(false);
 
+  // Ackumulerad, obruten rotation (kan bli t.ex. 370° eller -25° — inte
+  // klippt till 0–360) som `rotate()`-transformen sätts till. Håller
+  // egen state utanför React (en ref) eftersom den uppdateras varje
+  // animationsruta, inte varje render.
+  const rotationRef = useRef(0);
+  const hasRotationRef = useRef(false);
+
   useEffect(() => {
-    if (bearingDeg === null) {
-      setDiffDeg(null);
-      return;
-    }
-    const update = () => {
+    let rafId: number;
+
+    const tick = () => {
+      if (bearingDeg === null) {
+        setDiffDeg(null);
+        hasRotationRef.current = false;
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+
       const heading = getCurrentHeading();
-      setDiffDeg(heading === null ? null : circularDiffDeg(bearingDeg, heading));
+      if (heading === null) {
+        setDiffDeg(null);
+        hasRotationRef.current = false;
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+
+      const diff = circularDiffDeg(bearingDeg, heading);
+      setDiffDeg(diff);
+
+      // Första giltiga avläsningen: initiera rotationen direkt på `diff`
+      // (ingen ackumulering att göra än) så pilen inte behöver "hinna ikapp"
+      // från 0° vid start.
+      if (!hasRotationRef.current) {
+        rotationRef.current = diff;
+        hasRotationRef.current = true;
+      } else {
+        // Kortaste-vägen-delta mot den ACKUMULERADE rotationen (inte mot
+        // föregående `diff`) — så vi alltid lägger till en liten, korrekt
+        // riktad justering på en obruten vinkel istället för att hoppa
+        // tillbaka in i [-180, 180]-intervallet varje tick.
+        const current = rotationRef.current;
+        const delta = circularDiffDeg(diff, ((current % 360) + 360) % 360);
+        rotationRef.current = current + delta;
+      }
+
+      setRotationDeg(rotationRef.current);
+      rafId = requestAnimationFrame(tick);
     };
-    update();
-    const id = window.setInterval(update, POLL_INTERVAL_MS);
-    return () => window.clearInterval(id);
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, [bearingDeg, getCurrentHeading]);
 
   // Se `MAX_SETTLE_WAIT_MS`-kommentaren ovan: en enkel timeout-fallback så
@@ -148,25 +191,17 @@ export function NearestTurbineArrow({
 
   if (!settled || diffDeg === null || distanceM === null) return null;
 
-  const pointsRight = diffDeg > 0;
-  // Proportionell rotation: nära 0° avvikelse (nästan i mål) ger en liten
-  // vinkel, nära/över 180° (målet nästan bakom en) ger den maximala
-  // vinkeln — så pilen synligt "svänger med" i realtid istället för att
-  // hoppa mellan två fasta lägen (produktkrav: "tydligt rotera åt rätt håll").
-  const rotationDeg =
-    (pointsRight ? 1 : -1) * (10 + (MAX_ARROW_ROTATION_DEG - 10) * Math.min(1, Math.abs(diffDeg) / 180));
-
   return (
     <div
-      className={`pointer-events-none absolute top-1/2 z-50 flex -translate-y-1/2 flex-col items-center gap-1.5 transition-opacity duration-500 ${
-        pointsRight ? "right-3" : "left-3"
-      } ${onTarget ? "opacity-0" : "opacity-100"}`}
+      className={`pointer-events-none absolute right-3 top-1/2 z-50 flex -translate-y-1/2 flex-col items-center gap-1.5 transition-opacity duration-500 ${
+        onTarget ? "opacity-0" : "opacity-100"
+      }`}
     >
       <div
-        className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FF8B01]/90 text-xl text-[#090909] shadow-lg shadow-[#FF8B01]/30 transition-transform duration-150 ease-out"
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FF8B01]/90 text-xl text-[#090909] shadow-lg shadow-[#FF8B01]/30"
         style={{ transform: `rotate(${rotationDeg}deg)` }}
       >
-        ➜
+        ↑
       </div>
       <div className="max-w-[9.5rem] rounded-xl bg-black/75 px-2.5 py-1.5 text-center text-[11px] text-white shadow-lg">
         <p className="font-semibold text-[#FFB347]">Närmaste verk</p>

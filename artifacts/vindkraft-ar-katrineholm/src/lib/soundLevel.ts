@@ -103,11 +103,15 @@ export const SEVERITY_COLORS: Record<SoundLevelSeverity, { text: string; bg: str
 export const SOUND_LEVEL_DISCLAIMER =
   "Denna ljudnivå är en förenklad uppskattning baserad på projektets bullerunderlag och användarens GPS-position. Den ersätter inte en officiell bullerberäkning.";
 
-// Referensnivå (dBA) som anses motsvara "full" spelvolym — ungefär den
-// starkaste totala nivån man rimligen kan uppskattas uppleva alldeles intill
-// vindkraftverksområdet. Inget exakt vetenskapligt tak, bara den övre änden
-// av den skala vindljudets volym mappas mot.
-const REFERENCE_MAX_DBA = 55;
+// Juli 2026-produktkrav ("vindljudets volym ska EXAKT och dynamiskt följa
+// den visade dBA-siffran"): min/max-dBA-fönster samt kurvans exponent för
+// den logaritmiska (power-curve) mappningen mellan dBA och uppspelningsvolym.
+// `VOLUME_MIN_DBA` (25) är AVSIKTLIGT ett annat tal än `AUDIBILITY_FLOOR_DBA`
+// (20 ovan, som bara avgör "hur många verk räknas som bidragande") — de
+// styr olika saker och behöver inte vara samma värde.
+const VOLUME_MIN_DBA = 25;
+const VOLUME_MAX_DBA = 55;
+const VOLUME_CURVE_EXPONENT = 2.2;
 
 /**
  * Omvandlar en beräknad total dBA-nivå (från `estimateSoundLevel`) till en
@@ -117,32 +121,24 @@ const REFERENCE_MAX_DBA = 55;
  * följa den beräknade nivån (låg dBA ⇒ tyst, hög dBA ⇒ högt), inte en separat,
  * fristående av/på-logik.
  *
- * Eftersom `totalDba` redan innehåller ev. manuell "Ljud inne"-dämpning (se
- * `estimateSoundLevel`s `outdoorConfidence`-parameter, som Home.tsx numera
- * styr via den explicita ute/inne-väljaren snarare än kameraheuristiken),
- * faller denna gain naturligt ner mot 0 när användaren valt "Ljud inne" —
- * precis samma siffra som visas i ljudnivåpanelen.
+ * Mappningen normaliserar linjärt mellan `VOLUME_MIN_DBA` och
+ * `VOLUME_MAX_DBA`, och höjer sedan resultatet i `VOLUME_CURVE_EXPONENT`
+ * (2.2) — en power-curve som (till skillnad från en rak linjär rampa) ökar
+ * långsamt vid låga dBA-nivåer och snabbare mot toppen av skalan, vilket
+ * upplevs mer naturligt för örat än en linjär volymrespons.
+ *
+ * Eftersom `totalDba` redan (via `estimateSoundLevel`s `outdoorConfidence`-
+ * parameter) kan innehålla manuell "Ljud inne"-dämpning, faller denna volym
+ * naturligt mot 0 om den redan dämpade siffran matas in direkt — se dock
+ * `applyIndoorGain`s jsdoc nedan för VARFÖR den faktiska ljuduppspelningen
+ * istället multiplicerar en REDAN beräknad utomhusvolym, inte kör den
+ * dämpade dBA-siffran genom den här funktionen igen.
  */
-export function dbaToGain(totalDba: number): number {
-  if (!Number.isFinite(totalDba)) return 0;
-  // Juli 2026-fix ("den visade dBA-nivån matchar inte hur högt det låter"):
-  // en tidigare version normaliserade linjärt mellan golv/tak och sedan
-  // KVADRERADE resultatet (`clamped * clamped`) — en godtycklig kurva, inte
-  // en verklig dB->amplitud-omvandling. Det gav en volym som INTE svarade
-  // logaritmiskt/kontinuerligt på dBA-siffran man faktiskt ser i panelen:
-  // två lika stora dBA-steg gav olika stora hörbara volymskillnader beroende
-  // på var i intervallet man befann sig.
-  //
-  // Den fysikaliskt korrekta relationen mellan en nivå i dB och en linjär
-  // amplitud/gain är EXPONENTIELL: var -20 dB halverar amplituden en tiondel
-  // (10^(-20/20) = 0.1), och varje lika stort dB-steg ger alltid samma
-  // *förhållande* i upplevd volym (ungefär en fördubbling av upplevd
-  // ljudstyrka per +10 dB, i linje med hur mänsklig hörsel fungerar) —
-  // kontinuerligt, utan hopp, och konsekvent med `estimateSoundLevel`s redan
-  // logaritmiska (20*log10(d)) avstånds-/kombineringsformel.
-  if (totalDba <= AUDIBILITY_FLOOR_DBA) return 0;
-  const gain = 10 ** ((totalDba - REFERENCE_MAX_DBA) / 20);
-  return Math.min(Math.max(gain, 0), 1);
+export function dbaToVolume(dba: number): number {
+  if (!Number.isFinite(dba)) return 0;
+  const clamped = Math.min(Math.max(dba, VOLUME_MIN_DBA), VOLUME_MAX_DBA);
+  const normalized = (clamped - VOLUME_MIN_DBA) / (VOLUME_MAX_DBA - VOLUME_MIN_DBA);
+  return Math.pow(normalized, VOLUME_CURVE_EXPONENT);
 }
 
 /**
@@ -170,23 +166,23 @@ export function applyIndoorAttenuation(totalDba: number, indoor: boolean): numbe
  *
  * VIKTIGT: den faktiska ljudvolymen får INTE räknas ut genom att först dra av
  * `MAX_INDOOR_ATTENUATION_DBA` från totalDba och sedan köra resultatet genom
- * `dbaToGain` (dvs. `dbaToGain(applyIndoorAttenuation(totalDba, true))`).
- * `dbaToGain` normaliserar linjärt mellan `AUDIBILITY_FLOOR_DBA` (20) och
- * `REFERENCE_MAX_DBA` (55) och klipper allt under golvet till exakt 0 — och
- * eftersom `MAX_INDOOR_ATTENUATION_DBA` (35) nästan motsvarar HELA det
- * spannet, klipptes "Ljud inne"-volymen till exakt 0 för praktiskt taget
- * alla realistiska utomhusnivåer (~20–55 dBA), OAVSETT hur hög den
- * ursprungliga utomhusnivån faktiskt var. När den beräknade utomhusnivån
- * redan låg nära golvet (vanligt på de faktiska GPS-avstånden i
- * Katrineholm, flera km från Länsterberget) var resultatet redan nästan 0,
- * så växlingen till "Ljud inne" gav ingen hörbar skillnad alls — precis den
- * rapporterade buggen ("volymen ändras inte alls").
+ * `dbaToVolume` (dvs. `dbaToVolume(applyIndoorAttenuation(totalDba, true))`).
+ * `dbaToVolume` normaliserar linjärt mellan `VOLUME_MIN_DBA` (25) och
+ * `VOLUME_MAX_DBA` (55) och klipper allt under golvet till exakt 0 — och
+ * eftersom `MAX_INDOOR_ATTENUATION_DBA` (35) mer än täcker det spannet,
+ * klipptes "Ljud inne"-volymen till exakt 0 för praktiskt taget alla
+ * realistiska utomhusnivåer (~20–55 dBA), OAVSETT hur hög den ursprungliga
+ * utomhusnivån faktiskt var. När den beräknade utomhusnivån redan låg nära
+ * golvet (vanligt på de faktiska GPS-avstånden i Katrineholm, flera km från
+ * Länsterberget) var resultatet redan nästan 0, så växlingen till
+ * "Ljud inne" gav ingen hörbar skillnad alls — precis den rapporterade
+ * buggen ("volymen ändras inte alls").
  *
  * Genom att i stället multiplicera den REDAN beräknade (icke-dämpade)
- * utomhusgainen direkt med denna faktor garanteras en konstant, hörbar,
+ * utomhusvolymen direkt med denna faktor garanteras en konstant, hörbar,
  * proportionell sänkning (~-35 dB) oavsett hur tyst eller hög
  * utomhusnivån råkar vara — aldrig beroende av var den ligger relativt
- * `dbaToGain`s golv/tak.
+ * `dbaToVolume`s golv/tak.
  */
 export const INDOOR_SOUND_GAIN_MULTIPLIER = 10 ** (-MAX_INDOOR_ATTENUATION_DBA / 20);
 

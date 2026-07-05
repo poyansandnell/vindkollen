@@ -31,15 +31,27 @@ interface WindNodes {
 
 // Maxvolymen håller ljudet tydligt kraftigare nära tornen, ungefär som
 // verkens bullerutredning anger (ca 35–40 dBA ekvivalent nivå vid närmaste
-// bostad, som ett tyst kylskåpssus). Volymen skalas LINJÄRT 0..MAX och styrs
-// helt av `updateProximity`s `dbaGain`-parameter — dvs. DIREKT av den
-// beräknade dBA-nivån i `lib/soundLevel.ts` (`dbaToGain(totalDba)`), inte av
-// en egen fristående avståndskurva. Ingen hörbar bottenvolym vid `dbaGain=0`
-// (t.ex. "Ljud inne") — annars matchar inte den faktiska volymen den
-// nästan-noll dBA-siffran som visas i panelen. OBS: webbljud kan ändå inte
-// återge en fysisk dB-nivå exakt (beror på telefonens högtalare/volym) —
-// dBA-uppskattningen är informativ, men den här kopplingen gör att volymen
-// ändå kontinuerligt FÖLJER den.
+// bostad, som ett tyst kylskåpssus). Volymen skalas LINJÄRT 0..MAX från en
+// gemensam, utjämnad "master-volym" (0..1) — som i sin tur styrs helt av
+// `updateProximity`s `targetVolume`-parameter, dvs. DIREKT av den beräknade
+// dBA-nivån via `lib/soundLevel.ts`s `dbaToVolume(totalDba)` (se
+// `Home.tsx`), inte av en egen fristående avståndskurva. Ingen hörbar
+// bottenvolym vid `targetVolume=0` (t.ex. "Ljud inne") — annars matchar inte
+// den faktiska volymen den nästan-noll dBA-siffran som visas i panelen. OBS:
+// webbljud kan ändå inte återge en fysisk dB-nivå exakt (beror på telefonens
+// högtalare/volym) — dBA-uppskattningen är informativ, men den här
+// kopplingen gör att volymen ändå kontinuerligt FÖLJER den.
+//
+// Juli 2026-produktkrav ("volymen måste räknas om minst 10 ggr/sekund, inte
+// bara när React råkar re-rendera"): `updateProximity` sätter numera bara en
+// ref (`targetVolumeRef`) — den faktiska utjämningen/tillämpningen på
+// ljudnoderna sker i en EGEN, oberoende `setInterval`-loop (`AUDIO_TICK_MS`,
+// se `startAudioLoop` nedan) som körs oavsett hur ofta anroparen (Home.tsx)
+// själv re-renderar. Utjämningen är ett enkelt exponentiellt glidande
+// medelvärde (EMA): `smoothed = smoothed*0.85 + target*0.15` per tick,
+// tillämpat direkt på `GainNode.gain.value` — INTE Web Audio-schemalagda
+// `setTargetAtTime`-övertoningar (de har en fast, långsammare tidskonstant
+// och uppdateras bara när metoden anropas, inte kontinuerligt).
 //
 // Hög upplevd ljudstyrka (utan att digitalt klippa) uppnås genom en hårdare
 // kompressor (lägre tröskel/högre ratio) + en makeup-gain-nod efteråt som
@@ -49,6 +61,13 @@ const AMBIENCE_MAX = 0.78;
 const WHOOSH_MAX = 1.25;
 const WHOOSH2_MAX = 0.8;
 const RUMBLE_MAX = 0.42;
+
+// ~20 Hz — klart över produktkravets "minst 10 ggr/sekund", med marginal så
+// utjämningen känns kontinuerlig snarare än stegvis.
+const AUDIO_TICK_MS = 50;
+// Se `smoothed = smoothed*0.85 + target*0.15` i produktkravet — dvs. den nya
+// målvolymen väger in med 15% per tick, den tidigare utjämnade volymen med 85%.
+const VOLUME_EMA_NEW_WEIGHT = 0.15;
 
 /**
  * Genererar ett kraftigt, uppslukande vindkraftsljud helt proceduralt med Web
@@ -63,7 +82,7 @@ const RUMBLE_MAX = 0.42;
  *   ljudet naturligt sväller och avtar lite över tid — som om vindriktningen
  *   ändras — utan att kännas mekaniskt konstant.
  * - Volymen följer kontinuerligt den beräknade dBA-nivån (se `updateProximity`
- *   och `lib/soundLevel.ts`s `dbaToGain`) — högre beräknad nivå (närmare verk,
+ *   och `lib/soundLevel.ts`s `dbaToVolume`) — högre beräknad nivå (närmare verk,
  *   fler bidragande verk, "Ljud ute" valt) ⇒ högre volym.
  * - En hård DynamicsCompressorNode + makeup-gain ger hög upplevd ljudstyrka,
  *   och en avslutande mjuk klippningskurva (WaveShaper) garanterar att inget
@@ -92,8 +111,65 @@ export function useWindSound() {
   const nodesRef = useRef<WindNodes | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
 
+  // Senaste kända målvolym (0..1, redan `dbaToVolume`+ev. inomhus-multiplicerad
+  // av Home.tsx) och medel-RPM — skrivs av `updateProximity`, läses av den
+  // oberoende `AUDIO_TICK_MS`-loopen nedan. Refs (inte state) eftersom loopen
+  // körs helt utanför Reacts renderingscykel.
+  const targetVolumeRef = useRef(0);
+  const avgRpmRef = useRef(0);
+  // Den faktiska, EMA-utjämnade volymen som just nu är applicerad på
+  // ljudnoderna — exponeras för debug-panelen (produktkrav: visa både
+  // mål- och faktisk volym) och dubblar som "senaste värdet" utjämningen
+  // fortsätter räkna ifrån mellan ticks.
+  const actualVolumeRef = useRef(0);
+  const audioLoopIdRef = useRef<number | null>(null);
+
+  function stopAudioLoop() {
+    if (audioLoopIdRef.current !== null) {
+      window.clearInterval(audioLoopIdRef.current);
+      audioLoopIdRef.current = null;
+    }
+  }
+
+  /**
+   * Den oberoende, högfrekventa (`AUDIO_TICK_MS`, ~20Hz) uppdateringsloopen
+   * som faktiskt applicerar volymen på ljudnoderna — se motivering i den
+   * stora kommentaren ovan `AMBIENCE_MAX`. Körs kontinuerligt medan ljudet
+   * spelas, oavsett hur ofta `updateProximity` själv anropas (position/dBA
+   * uppdateras normalt i GPS-takt, klart under 10Hz — men SJÄLVA
+   * utjämnings-/tillämpningssteget måste ändå räknas om minst 10 ggr/sekund
+   * enligt produktkravet, så volymen känns kontinuerlig snarare än stegvis).
+   */
+  function startAudioLoop() {
+    stopAudioLoop();
+    audioLoopIdRef.current = window.setInterval(() => {
+      const nodes = nodesRef.current;
+      if (!nodes) return;
+
+      const target = Math.min(Math.max(targetVolumeRef.current, 0), 1);
+      // Exakt produktkravsformeln: smoothed = smoothed*0.85 + target*0.15.
+      actualVolumeRef.current =
+        actualVolumeRef.current * (1 - VOLUME_EMA_NEW_WEIGHT) + target * VOLUME_EMA_NEW_WEIGHT;
+      const volume = actualVolumeRef.current;
+
+      nodes.windGain.gain.value = volume * AMBIENCE_MAX;
+      nodes.whooshGain.gain.value = volume * WHOOSH_MAX;
+      nodes.whoosh2Gain.gain.value = volume * WHOOSH2_MAX;
+      nodes.rumbleGain.gain.value = volume * RUMBLE_MAX;
+
+      // Bladpassage: 3 blad per varv, omvandlat till Hz och dämpat till ett
+      // hörbart intervall — se motsvarande kommentar i den tidigare
+      // `updateProximity`. Lager 2 körs i en lätt förskjuten takt.
+      const bladePassHz = (Math.max(avgRpmRef.current, 1) / 60) * 3;
+      const clampedHz = Math.min(Math.max(bladePassHz, 0.3), 2.2);
+      nodes.lfo.frequency.value = clampedHz;
+      nodes.lfo2.frequency.value = clampedHz * 0.87;
+    }, AUDIO_TICK_MS);
+  }
+
   useEffect(() => {
     return () => {
+      stopAudioLoop();
       const nodes = nodesRef.current;
       try {
         nodes?.windSource.stop();
@@ -187,6 +263,7 @@ export function useWindSound() {
       const nodes = nodesRef.current;
       const ctx = ctxRef.current;
       if (nodes && ctx) {
+        stopAudioLoop();
         nodes.masterGain.gain.setTargetAtTime(0, ctx.currentTime, 0.3);
         setTimeout(() => {
           stopAllNodes(nodes);
@@ -465,55 +542,36 @@ export function useWindSound() {
       limiter,
       streamDestination,
     };
+    // Nollställ utjämningen för en garanterat ren, tyst insvängning — annars
+    // skulle en gammal `actualVolumeRef` från en tidigare ljudsession kunna
+    // läcka in och ge ett hörbart "hopp" precis vid start.
+    actualVolumeRef.current = 0;
+    startAudioLoop();
     setPlaying(true);
   }
 
   /**
-   * Uppdaterar volym och svischtakt. Anropas löpande när GPS-position eller
-   * den beräknade ljudnivån ändras — påverkar bara befintliga ljudnoder,
-   * startar inget nytt ljud.
+   * Sätter den senaste beräknade målvolymen och medel-RPM:et — läses av den
+   * oberoende `AUDIO_TICK_MS`-loopen (`startAudioLoop` ovan), som applicerar
+   * dem på de faktiska ljudnoderna via EMA-utjämning minst 10 ggr/sekund
+   * (produktkrav). Anropas löpande när GPS-position eller den beräknade
+   * ljudnivån ändras, men själva tillämpningen/utjämningen är INTE beroende
+   * av hur ofta den här funktionen anropas.
    *
-   * `dbaGain` (0..1) kommer från `lib/soundLevel.ts`s `dbaToGain(totalDba)`
-   * och är den ENDA källan till volymens skalning: volymen ska kontinuerligt
-   * följa den beräknade dBA-nivån (låg beräknad nivå ⇒ tyst, hög nivå ⇒
-   * högt), inte en egen, fristående avstånds-/av-på-kurva. Eftersom
-   * `totalDba` redan speglar ev. manuellt vald "Ljud inne" (se Home.tsx),
-   * faller `dbaGain` naturligt mot 0 i det läget — samma logik gäller för
+   * `targetVolume` (0..1) kommer från `lib/soundLevel.ts`s
+   * `dbaToVolume(totalDba)` (se Home.tsx) och är den ENDA källan till
+   * volymens skalning: volymen ska kontinuerligt och exakt följa den
+   * beräknade dBA-nivån (låg beräknad nivå ⇒ tyst, hög nivå ⇒ högt), inte en
+   * egen, fristående avstånds-/av-på-kurva. Eftersom `totalDba` redan
+   * speglar ev. manuellt vald "Ljud inne" (se Home.tsx), faller
+   * `targetVolume` naturligt mot 0 i det läget — samma logik gäller för
    * flera nära verk, som redan kombineras logaritmiskt i `combineLevelsDba`
-   * innan de når hit. De befintliga `setTargetAtTime`-övertoningarna nedan
-   * ger en mjuk, ca 1-sekunders insvängning, inte ett abrupt hopp.
+   * innan de når hit.
    */
-  function updateProximity(dbaGain: number, avgRpm: number) {
-    const nodes = nodesRef.current;
-    const ctx = ctxRef.current;
-    if (!nodes || !ctx) return;
-
-    const gain = Math.min(Math.max(dbaGain, 0), 1);
-
-    // OBS: skalas härifrån hela vägen ner mot 0 (inte BASE..MAX) så att
-    // "Ljud inne" — där `dbaGain` faller till 0 (se dbaToGain/
-    // applyIndoorAttenuation) — faktiskt blir tyst och matchar den nästan
-    // noll-visade dBA-siffran, istället för att fastna på en hörbar
-    // bottenvolym. Utomhus (gain > 0) låter fortfarande ljudet svälla mot
-    // AMBIENCE_MAX/WHOOSH_MAX osv, precis som förut.
-    const windTarget = gain * AMBIENCE_MAX;
-    const whooshTarget = gain * WHOOSH_MAX;
-    const whoosh2Target = gain * WHOOSH2_MAX;
-    const rumbleTarget = gain * RUMBLE_MAX;
-
-    nodes.windGain.gain.setTargetAtTime(windTarget, ctx.currentTime, 1.2);
-    nodes.whooshGain.gain.setTargetAtTime(whooshTarget, ctx.currentTime, 1.2);
-    nodes.whoosh2Gain.gain.setTargetAtTime(whoosh2Target, ctx.currentTime, 1.2);
-    nodes.rumbleGain.gain.setTargetAtTime(rumbleTarget, ctx.currentTime, 1.2);
-
-    // Bladpassage: 3 blad per varv. Omvandlar RPM till Hz och dämpar till ett
-    // hörbart, behagligt intervall. Lager 2 körs i en lätt förskjuten takt
-    // (motsvarande ett närliggande, inte helt synkroniserat verk).
-    const bladePassHz = (Math.max(avgRpm, 1) / 60) * 3;
-    const clampedHz = Math.min(Math.max(bladePassHz, 0.3), 2.2);
-    nodes.lfo.frequency.setTargetAtTime(clampedHz, ctx.currentTime, 1.5);
-    nodes.lfo2.frequency.setTargetAtTime(clampedHz * 0.87, ctx.currentTime, 1.5);
+  function updateProximity(targetVolume: number, avgRpm: number) {
+    targetVolumeRef.current = Math.min(Math.max(targetVolume, 0), 1);
+    avgRpmRef.current = avgRpm;
   }
 
-  return { playing, toggle, updateProximity };
+  return { playing, toggle, updateProximity, actualVolumeRef };
 }

@@ -24,6 +24,14 @@ interface SensorDebugPanelProps {
   /** Produktkrav 2: vinkelskillnad (grader) mellan kompassriktning och närmaste verk. */
   angleDiffToNearestDeg: number | null;
   hideReasons: string[];
+  /** Juli 2026-produktkrav: beräknad ljudnivå (dBA) som volymen ska följa. */
+  audioTargetDba: number | null;
+  /** Juli 2026-produktkrav: mål-volym (0..1), innan EMA-utjämning. */
+  audioTargetVolume: number | null;
+  /** Juli 2026-produktkrav: faktiskt applicerad, EMA-utjämnad volym (0..1). */
+  audioActualVolume: number | null;
+  /** Juli 2026-produktkrav: text som beskriver ljudets utsignal/routing. */
+  audioSource: string;
   onClose: () => void;
 }
 
@@ -79,6 +87,10 @@ export function SensorDebugPanel({
   bearingToNearestDeg,
   angleDiffToNearestDeg,
   hideReasons,
+  audioTargetDba,
+  audioTargetVolume,
+  audioActualVolume,
+  audioSource,
   onClose,
 }: SensorDebugPanelProps) {
   return (
@@ -112,6 +124,20 @@ export function SensorDebugPanel({
       <Row label="Avstånd till närmaste verk" value={fmt(nearestDistanceM, " m", 0)} />
       <Row label="Bäring till närmaste verk" value={fmt(bearingToNearestDeg, "°", 0)} />
       <Row label="Vinkeldiff kamera↔närmaste verk" value={fmt(angleDiffToNearestDeg, "°", 0)} />
+
+      <div className="mt-2 mb-1 border-t border-white/10 pt-2">
+        <p className="mb-1 text-xs text-white/60">🔊 Ljud (juli 2026-fix):</p>
+      </div>
+      <Row label="dBA (mål)" value={fmt(audioTargetDba, " dBA", 1)} />
+      <Row label="Målvolym" value={audioTargetVolume === null ? "–" : `${Math.round(audioTargetVolume * 100)}%`} />
+      <Row
+        label="Faktisk volym (EMA-utjämnad)"
+        value={audioActualVolume === null ? "–" : `${Math.round(audioActualVolume * 100)}%`}
+      />
+      <div className="flex items-baseline justify-between gap-3 border-b border-white/5 py-1.5 text-xs">
+        <span className="text-white/60">Ljudkälla</span>
+        <span className="max-w-[60%] text-right font-mono text-white">{audioSource}</span>
+      </div>
 
       <div className="mt-2">
         <p className="mb-1 text-xs text-white/60">Döljningsanledningar:</p>
