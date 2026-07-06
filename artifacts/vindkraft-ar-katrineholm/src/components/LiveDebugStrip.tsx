@@ -19,6 +19,14 @@ interface LiveDebugStripProps {
    */
   headingAgeMs: number | null;
   headingSource: "compass" | "gyro";
+  /**
+   * Sjunde kritiska buggrapporten (punkt 3, sensorfusion): sant när
+   * gyroskopet (`devicemotion`s `rotationRate`) faktiskt bidrar till hur
+   * snabbt en verklig vridning litas på, INTE bara ren kompass-utjämning.
+   * Helt separat koncept från `headingSource` ovan (som bara gäller det
+   * BEFINTLIGA nödfallback-läget vid en frusen girriktning).
+   */
+  motionFusionActive: boolean;
   worldUpdated: boolean;
   arVisibleTurbineCount: number;
   screenLocked: boolean;
@@ -73,6 +81,7 @@ export function LiveDebugStrip({
   visibleTurbineCount,
   headingAgeMs,
   headingSource,
+  motionFusionActive,
   worldUpdated,
   arVisibleTurbineCount,
   screenLocked,
@@ -103,7 +112,8 @@ export function LiveDebugStrip({
         FPS {fps} · Bildruta {frameCount} · Riktning {fmt(headingDeg, "°")} · Bäring {fmt(bearingToNearestDeg, "°")} · Δ{" "}
         {fmt(angleDiffToNearestDeg, "°")} · GPS ±{fmt(gpsAccuracyM, "m")} · Kompass ±{fmt(headingAccuracyDeg, "°")} · Verk{" "}
         {visibleTurbineCount}/{renderedTurbineCount} · Riktningsålder {fmt(headingAgeMs, "ms")} · Källa{" "}
-        {headingSource === "compass" ? "kompass" : "gyro"} · Världsuppdatering {yesNo(worldUpdated)} · Synliga verk{" "}
+        {headingSource === "compass" ? "kompass" : "gyro"} · Sensorfusion{" "}
+        {motionFusionActive ? "gyro+kompass" : "endast kompass"} · Världsuppdatering {yesNo(worldUpdated)} · Synliga verk{" "}
         {arVisibleTurbineCount} · Skärmlåst {yesNo(screenLocked)} · Rendering mode {renderModeLabel[renderMode]} ·{" "}
         Synliga verk (faktiskt) {trueVisibleTurbineCount} · Närmaste verk {fmt(nearestDistanceM, "m")}/
         {fmt(bearingToNearestDeg, "°")}

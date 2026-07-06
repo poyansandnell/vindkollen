@@ -668,6 +668,11 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   // diagnostisk signal; nu räknas det ut från just denna tidsstämpel.
   const lastFrameAtRef = useRef<number | null>(null);
   const renderLoopStalledRef = useRef(false);
+  // Sjunde kritiska buggrapporten (punkt 2): loggar EN gång, den allra
+  // första gången `animate()` faktiskt körs — beviset (inte bara ett
+  // påstående) att render-loopen kom igång, komplement till
+  // "startAR()"-loggen som bara visar att den BEGÄRDES.
+  const firstRenderFrameLoggedRef = useRef(false);
   // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 1/2/4): 0 = "Direkt
   // AR" (precis startad, alla dämpningar tvingade till 1), 1 = fullt
   // "World locked" — uppdateras varje bildruta i `animate()` från
@@ -1379,6 +1384,10 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     function animate(timestamp: number) {
       raf = requestAnimationFrame(animate);
       lastFrameAtRef.current = Date.now();
+      if (!firstRenderFrameLoggedRef.current) {
+        firstRenderFrameLoggedRef.current = true;
+        console.info("[AR][pipeline] Första renderFrame() kördes");
+      }
       const state = sceneStateRef.current;
       if (!state) return;
 
@@ -1778,6 +1787,22 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         }
       }
     }
+
+    // Sjunde kritiska buggrapporten (punkt 2, "väcks bara av en
+    // skärmdump"): tidigare initierades `lastFrameAtRef` till `null` och
+    // sattes bara INIFRÅN `animate` självt (rad ~1381 ovan) — så OM webbläsaren
+    // av någon anledning aldrig levererar den allra första rAF-callbacken
+    // (t.ex. en flik som öppnas i bakgrunden), stod `lastAt === null` kvar
+    // för alltid och vakthunden nedan (som explicit `return`:ar på `null`)
+    // fick ALDRIG en chans att upptäcka eller åtgärda det — precis det
+    // "tyst fastnad tills något (t.ex. en skärmdump) råkar väcka fliken"-
+    // beteendet som rapporterades. Genom att sätta ett tidsstämpel HÄR,
+    // innan den första `requestAnimationFrame`-anropet överhuvudtaget görs,
+    // har vakthunden alltid ett konkret värde att jämföra mot och kan
+    // riva/återskapa loopen inom sitt vanliga 500ms-fönster även om
+    // `animate` aldrig hunnit köras en enda gång.
+    lastFrameAtRef.current = Date.now();
+    console.info("[AR][pipeline] startAR(): render-loop initierad, väntar på första renderFrame()");
     raf = requestAnimationFrame(animate);
 
     // Juli 2026-fix ("pilen/verken fryser helt trots bra FPS/AR-

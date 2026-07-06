@@ -1,0 +1,78 @@
+Jag tror faktiskt att du har hittat två olika buggar här.
+
+1. Vindkraftverken uppdateras för långsamt (det stora problemet)
+
+Det ser ut som att renderingen inte uppdateras kontinuerligt utan kanske bara 1–2 gånger per sekund, eller bara när någon state ändras. Därför “fastnar” verken på skärmen innan de hoppar till rätt plats.
+
+Be Replit göra ungefär detta:
+
+⸻
+
+AR-renderingen ska uppdateras kontinuerligt i realtid.
+
+Just nu följer vindkraftverken mobilens skärm i ungefär en sekund innan de hoppar tillbaka till rätt position.
+
+Det betyder att world-ankringen eller beräkningen av heading/rotation inte uppdateras tillräckligt ofta.
+
+Ändra så att:
+
+* Kamera-pose (position + rotation) läses varje render-frame.
+* Kompass, gyroscope och device orientation används kontinuerligt.
+* Vindkraftverkens världskoordinater räknas om varje frame.
+* Uppdateringsfrekvens minst 20–30 gånger/sekund (helst 60 fps via requestAnimationFrame).
+* Ingen debounce eller throttling får användas på heading eller AR-position.
+* Vindkraftverken ska aldrig “hänga kvar” på skärmen när telefonen vrids.
+
+Målet är att verken känns helt fast förankrade i verkligheten även vid snabba rörelser.
+
+⸻
+
+2. Print screen fick dem att dyka upp
+
+Det där är faktiskt en väldigt viktig ledtråd.
+
+När en skärmdump tas i iOS händer bland annat:
+
+* layout renderas om
+* viewport uppdateras
+* requestAnimationFrame triggas
+* ibland skickas resize- och visibility-events
+* WebGL kan tvingas rendera om
+
+Det tyder på att render-loopen inte körs förrän något “väcker” den.
+
+Be därför Replit även kontrollera:
+
+Vindkraftverken ska börja renderas direkt när AR-läget öppnas. Om renderingen inte har startat inom 500 ms ska render-loopen startas om automatiskt. Ingen användarinteraktion (touch, screenshot, rotation eller resize) ska krävas för att första renderingen ska ske.
+
+De bör även logga:
+
+* startAR()
+* första renderFrame()
+* första GPS
+* första heading
+* första renderade vindkraftverket
+
+så ser ni exakt var kedjan stannar.
+
+⸻
+
+Jag ser även en tredje sak på bilden
+
+Loggen visar:
+
+Rendering mode: world locked
+
+Det är bra.
+
+Men den visar också:
+
+Källa kompass
+
+Jag hade försökt göra orienteringen mer sensorfusion-baserad:
+
+* gyroscope (hög frekvens)
+* accelerometer
+* magnetometer endast som långsam korrigering
+
+Om de just nu använder magnetometern som huvudkälla blir det alltid en liten eftersläpning. Gyrot ska styra de snabba rörelserna och kompassen bara korrigera långsamt över tid. Då kommer vindkraftverken upplevas som betydligt mer stabila och “fastspikade” i omgivningen.

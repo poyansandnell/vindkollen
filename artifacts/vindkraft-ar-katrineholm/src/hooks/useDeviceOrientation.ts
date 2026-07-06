@@ -6,6 +6,10 @@ interface DeviceOrientationEventiOS {
   requestPermission?: () => Promise<"granted" | "denied">;
 }
 
+interface DeviceMotionEventiOS {
+  requestPermission?: () => Promise<"granted" | "denied">;
+}
+
 export interface DeviceOrientationApi {
   supported: boolean;
   needsPermission: boolean;
@@ -160,6 +164,17 @@ export interface DeviceOrientationApi {
    * kan råka driva isär.
    */
   getCurrentHeading: () => number | null;
+  /**
+   * Sjunde kritiska buggrapporten ("Källa: kompass" borde vara riktig
+   * sensorfusion): sant så fort minst ett `devicemotion`-event med
+   * `rotationRate` faktiskt mottagits — dvs. gyroskopet bidrar just nu till
+   * hur snabbt en verklig vridning litas på (se `GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC`
+   * nedan), inte bara ren kompass-utjämning. Skiljer sig medvetet från
+   * `headingFallbackActive`/`headingSourceRef` ovan, som är ett HELT annat
+   * koncept (nödfallback när giren ser ut att ha frusit) — den här flaggan
+   * beskriver normal drift, inte ett nödläge.
+   */
+  motionFusionActive: boolean;
 }
 
 // Dödzon: sensorbrus på bråkdelar av en grad ska inte alls påverka
@@ -190,8 +205,34 @@ const DEADZONE_DEG = 0.06;
 // "turn" och ger precis den där sidledshoppet.
 const HEADING_NOISE_DELTA_DEG = 5;
 const HEADING_TURN_DELTA_DEG = 14;
-const HEADING_STILL_TAU = 1.3;
+// Sjunde kritiska buggrapporten ("verken hänger kvar ~1s innan de snäpper
+// till rätt läge"): 1.3s still-tidskonstant var satt konservativt för att
+// dämpa magnetometerbrus, men gjorde ÄVEN genuina, långsamma-till-måttliga
+// vridningar (under `HEADING_TURN_DELTA_DEG`, alltså innan den snabba
+// tidskonstanten någonsin nås) märkbart trögare än nödvändigt. Nu när
+// `GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC` nedan ger en oberoende, direkt
+// bekräftelse av verklig rörelse (se `motionFusionActive`) är det säkrare
+// att sänka baslinjen — brusdämpningen tappar inget skydd mot ren
+// handskakning (den filtreringen sker fortfarande via bruströskeln och
+// `DEADZONE_DEG`), men en riktig, om än långsam, vridning känns nu klart
+// snabbare även UTAN gyro (t.ex. på skrivbord/desktop-test där devicemotion
+// saknas).
+const HEADING_STILL_TAU = 0.7;
 const HEADING_TURN_TAU = 0.15;
+// Sjunde kritiska buggrapporten (punkt 3, "gyroskopet ska styra snabba
+// rörelser, magnetometern bara långsam drift-korrigering"): en uppmätt
+// rotationshastighet (grader/sekund, från `devicemotion`s `rotationRate`)
+// över denna tröskel är en FYSISKT DIREKT bevis på att telefonen just nu
+// verkligen roterar snabbt — till skillnad från att behöva vänta på flera
+// bekräftande kompassavläsningar i rad (`HEADING_TURN_CONFIRM_SAMPLES`),
+// vilket är precis den fördröjning som gav upphov till "hänger kvar sedan
+// snäpper till"-upplevelsen. Vi använder MEDVETET bara magnituden (inte
+// tecknet/den integrerade riktningen) av rotationsvektorn — se
+// `handleMotion`s kommentar för varför en riktningsintegrerad gyro-heading
+// är för riskabel att skeppa utan test på riktig hårdvara. Tröskeln (12°/s)
+// är satt klart under vad en avsiktlig, snabb telefonvridning normalt ger
+// (typiskt 60-200°/s) men klart över naturligt handskakningsbrus.
+const GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC = 12;
 // Hur många på varandra följande avläsningar med samma vridningsriktning
 // (och delta över bruströskeln) som krävs innan vi litar på att det är en
 // verklig, avsiktlig vridning och släpper igenom den snabba tidskonstanten —
@@ -231,7 +272,8 @@ const HEADING_LARGE_JUMP_DEG = 20;
 // triggra rolls snabba läge och vice versa).
 const PITCH_ROLL_NOISE_DELTA_DEG = 2.5;
 const PITCH_ROLL_TURN_DELTA_DEG = 9;
-const PITCH_ROLL_STILL_TAU = 0.9;
+// Sjunde kritiska buggrapporten: samma resonemang/sänkning som `HEADING_STILL_TAU` ovan.
+const PITCH_ROLL_STILL_TAU = 0.55;
 const PITCH_ROLL_TURN_TAU = 0.15;
 const PITCH_ROLL_TURN_CONFIRM_SAMPLES = 2;
 // Samma resonemang som `MAX_PLAUSIBLE_TURN_RATE_DEG_PER_SEC` ovan, men för
@@ -280,11 +322,18 @@ function computeAdaptiveLinearTau(
   rawDelta: number,
   turnConfirmCountRef: React.MutableRefObject<number>,
   turnConfirmDirRef: React.MutableRefObject<1 | -1 | null>,
+  gyroConfirmsRealMotion = false,
 ): number {
   const absDelta = Math.abs(rawDelta);
   if (absDelta >= PITCH_ROLL_NOISE_DELTA_DEG) {
     const direction: 1 | -1 = rawDelta >= 0 ? 1 : -1;
-    if (turnConfirmDirRef.current === direction) {
+    // Sjunde kritiska buggrapporten: precis som för giren (se `HEADING_LARGE_JUMP_DEG`),
+    // en oberoende gyro-bekräftad verklig rörelse bekräftar direkt, ingen
+    // väntan på ytterligare en avläsning i samma riktning.
+    if (gyroConfirmsRealMotion) {
+      turnConfirmDirRef.current = direction;
+      turnConfirmCountRef.current = PITCH_ROLL_TURN_CONFIRM_SAMPLES;
+    } else if (turnConfirmDirRef.current === direction) {
       turnConfirmCountRef.current += 1;
     } else {
       turnConfirmDirRef.current = direction;
@@ -436,6 +485,15 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   // inte bara att kompassriktningen inte svänger.
   const pitchStabilityRef = useRef(1);
   const pitchDeltaSamplesRef = useRef<number[]>([]);
+  // Sjunde kritiska buggrapporten (punkt 3, sensorfusion): senaste uppmätta
+  // rotationshastighetens MAGNITUD (grader/sekund) från `devicemotion`s
+  // `rotationRate`, oberoende av kompassen. Läses av `handleOrientation` för
+  // att direkt bekräfta en verklig, snabb vridning (se
+  // `GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC`) istället för att vänta på flera
+  // bekräftande magnetometeravläsningar i rad.
+  const gyroRotationRateDegPerSecRef = useRef(0);
+  const [motionFusionActive, setMotionFusionActive] = useState(false);
+  const motionFusionActiveRef = useRef(false);
   // Sant så fort ett riktigt `deviceorientationabsolute`-event tagits emot.
   // Många Android-webbläsare skickar BÅDE `deviceorientationabsolute` OCH
   // vanliga `deviceorientation`-event för samma sensoravläsning — men den
@@ -515,6 +573,33 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     const orientationApi = (screen as unknown as { orientation?: { angle: number } }).orientation;
     const legacyOrientation = (window as unknown as { orientation?: number }).orientation;
     screenAngleRef.current = orientationApi?.angle ?? (typeof legacyOrientation === "number" ? legacyOrientation : 0);
+  }, []);
+
+  // Sjunde kritiska buggrapporten (punkt 3, "gyroskopet ska styra snabba
+  // rörelser, magnetometern bara långsam drift-korrigering"): läser
+  // `devicemotion`s `rotationRate` och sparar bara MAGNITUDEN av den fulla
+  // rotationsvektorn (grader/sekund) — INTE en integrerad/ackumulerad
+  // riktning. Att integrera `rotationRate.alpha` till en absolut girriktning
+  // skulle kräva att vi litar på tecken-/axelkonventionen för `rotationRate`,
+  // vilken varierar mellan webbläsare/OS-versioner (och kan inte verifieras
+  // utan en riktig enhet i den här miljön) — ett teckenfel där skulle få
+  // giren att drifta åt FEL håll tills kompassen till slut drar tillbaka den,
+  // vilket vore en klart sämre upplevelse än dagens fördröjning. Magnituden
+  // är däremot alltid tillförlitlig oavsett tecken/axelkonvention, och ger
+  // exakt den signal som behövs: "roterar telefonen verkligen snabbt just
+  // nu?" — se `GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC`.
+  const handleMotion = useCallback((event: DeviceMotionEvent) => {
+    const rr = event.rotationRate;
+    if (!rr) return;
+    const alpha = rr.alpha ?? 0;
+    const beta = rr.beta ?? 0;
+    const gamma = rr.gamma ?? 0;
+    gyroRotationRateDegPerSecRef.current = Math.sqrt(alpha * alpha + beta * beta + gamma * gamma);
+    if (!motionFusionActiveRef.current) {
+      motionFusionActiveRef.current = true;
+      setMotionFusionActive(true);
+      console.info("[AR][pipeline] Sensorfusion aktiv (gyroskop + kompass)");
+    }
   }, []);
 
   const handleOrientation = useCallback((event: DeviceOrientationEvent) => {
@@ -714,7 +799,11 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
 
       if (rawDelta >= HEADING_NOISE_DELTA_DEG) {
         const direction: 1 | -1 = signedDelta >= 0 ? 1 : -1;
-        if (rawDelta >= HEADING_LARGE_JUMP_DEG) {
+        // Sjunde kritiska buggrapporten: en gyro-bekräftad verklig rotation
+        // (se `GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC`) är precis som en stor
+        // engångsdelta ett direkt, fysiskt bevis — ingen väntan behövs.
+        const gyroConfirmsRealTurn = gyroRotationRateDegPerSecRef.current >= GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC;
+        if (rawDelta >= HEADING_LARGE_JUMP_DEG || gyroConfirmsRealTurn) {
           // Se `HEADING_LARGE_JUMP_DEG`s kommentar: en så stor engångsdelta
           // räknas som omedelbart bekräftad, ingen väntan på en andra
           // avläsning i samma riktning.
@@ -754,12 +843,16 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
       dt > 0 &&
       Math.abs(event.gamma - prevGammaRaw) / dt > MAX_PLAUSIBLE_TILT_RATE_DEG_PER_SEC;
 
+    // Sjunde kritiska buggrapporten: samma direkta gyro-bekräftelse som
+    // giren använder ovan appliceras här på pitch/roll också.
+    const gyroConfirmsRealTiltMotion = gyroRotationRateDegPerSecRef.current >= GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC;
     const betaTau = betaIsOutlier
       ? PITCH_ROLL_STILL_TAU
       : computeAdaptiveLinearTau(
           prevBetaRaw === null ? 0 : event.beta - prevBetaRaw,
           betaTurnConfirmCountRef,
           betaTurnConfirmDirRef,
+          gyroConfirmsRealTiltMotion,
         );
     const gammaTau = gammaIsOutlier
       ? PITCH_ROLL_STILL_TAU
@@ -767,6 +860,7 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
           prevGammaRaw === null ? 0 : event.gamma - prevGammaRaw,
           gammaTurnConfirmCountRef,
           gammaTurnConfirmDirRef,
+          gyroConfirmsRealTiltMotion,
         );
     const betaFactor = betaIsOutlier ? 0 : timeSmoothingFactor(betaTau, dt);
     const gammaFactor = gammaIsOutlier ? 0 : timeSmoothingFactor(gammaTau, dt);
@@ -847,6 +941,18 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
     window.addEventListener("deviceorientation", handleOrientation as EventListener, true);
 
+    // Sjunde kritiska buggrapporten (punkt 3, sensorfusion): lyssna alltid på
+    // `devicemotion` om webbläsaren stöder det — kräver ingen egen behörighet
+    // på de flesta plattformar (bara iOS 13+ Safari kräver ett separat
+    // `requestPermission()`-anrop, se `requestPermission` nedan). Om
+    // behörighet aldrig beviljas/API:t saknas kommer helt enkelt inga
+    // `devicemotion`-event någonsin in, och `motionFusionActive` förblir
+    // `false` — exakt samma tysta nedgradering till ren kompassavläsning som
+    // redan gällde innan denna fix, ingen extra felhantering behövs här.
+    if (typeof window !== "undefined" && "DeviceMotionEvent" in window) {
+      window.addEventListener("devicemotion", handleMotion as EventListener);
+    }
+
     // Produktkrav (juli 2026, "vakthund mot total sensortystnad"): den
     // BEFINTLIGA frys-/gyro-fallback-logiken i `handleOrientation` (se
     // `HEADING_STALE_MS`) upptäcker bara att GIRVÄRDET står still MEDAN
@@ -910,14 +1016,28 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
       window.removeEventListener("resize", updateScreenAngle);
       window.removeEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
       window.removeEventListener("deviceorientation", handleOrientation as EventListener, true);
+      window.removeEventListener("devicemotion", handleMotion as EventListener);
     };
-  }, [enabled, supported, handleOrientation, updateScreenAngle]);
+  }, [enabled, supported, handleOrientation, handleMotion, updateScreenAngle]);
 
   const requestPermission = useCallback(async (): Promise<boolean> => {
     const DOE = window.DeviceOrientationEvent as unknown as DeviceOrientationEventiOS;
     if (DOE && typeof DOE.requestPermission === "function") {
+      // Sjunde kritiska buggrapporten (sensorfusion): `DeviceMotionEvent`s
+      // egen `requestPermission()` (iOS 13+ Safari) måste triggas HÄR,
+      // synkront innan vi `await`:ar kompassbehörigheten ovanför — annars
+      // hinner den giltiga användargestens fönster stängas innan detta
+      // anrop görs (se `.agents/memory/user-gesture-permission-chaining.md`).
+      // Precis som `useMotionActivity.ts` är gyroskopet en FÖRSTÄRKNING, inte
+      // ett krav: om det nekas eller saknas degraderar hooken tyst till ren
+      // kompassavläsning (exakt som innan denna fix), ingen felyta visas.
+      const DME = window.DeviceMotionEvent as unknown as DeviceMotionEventiOS;
+      const motionPermissionPromise =
+        DME && typeof DME.requestPermission === "function" ? DME.requestPermission().catch(() => "denied" as const) : null;
+
       try {
         const result = await DOE.requestPermission();
+        if (motionPermissionPromise) void motionPermissionPromise;
         if (result === "granted") {
           setNeedsPermission(false);
           setError(null);
@@ -985,5 +1105,6 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     lastUpdateAgeMs,
     valuesFrozen,
     getCurrentHeading,
+    motionFusionActive,
   };
 }

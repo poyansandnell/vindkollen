@@ -928,6 +928,11 @@ export default function Home() {
   }, [wind.playing, windTargetVolume]);
 
   const handleStart = useCallback(() => {
+    // Sjunde kritiska buggrapporten (punkt 2): explicit "startAR()"-logg,
+    // så man i konsolen kan se ATT och NÄR AR-flödet faktiskt begärdes,
+    // fristående från `[AR][pipeline] startAR(): render-loop initierad...`
+    // som loggas senare av `ARScene.tsx` när själva render-loopen startar.
+    console.info("[AR][pipeline] startAR() anropad (knapptryckning)");
     setStarting(true);
     setShowLoadingSequence(true);
     // Ljud på som standard: startas direkt från samma knapptryckning (giltigt
@@ -1187,6 +1192,7 @@ export default function Home() {
               visibleTurbineCount={visibleTurbineCount}
               headingAgeMs={headingAgeMs}
               headingSource={orientation.headingSourceRef.current}
+              motionFusionActive={orientation.motionFusionActive}
               worldUpdated={arDebugStats.worldPositionsUpdated}
               arVisibleTurbineCount={arDebugStats.visibleTurbineCount}
               screenLocked={arDebugStats.screenLocked}
