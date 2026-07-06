@@ -331,8 +331,19 @@ function computeAdaptiveLinearTau(
   gyroConfirmsRealMotion = false,
 ): number {
   const absDelta = Math.abs(rawDelta);
-  if (absDelta >= PITCH_ROLL_NOISE_DELTA_DEG) {
-    const direction: 1 | -1 = rawDelta >= 0 ? 1 : -1;
+  // Åttonde kritiska buggrapporten (andra omgången, "verken fastnar när man
+  // flyttar mobilen"): `gyroConfirmsRealMotion` tidigare kollades bara HÄR
+  // INNE, dvs. bara om `absDelta` (skillnaden mellan just DENNA och FÖREGÅENDE
+  // rå avläsning) redan råkade nå `PITCH_ROLL_NOISE_DELTA_DEG`. Men vid en
+  // normal sensorfrekvens (30-60 Hz) ger även en genuin, måttligt snabb
+  // tiltrörelse (10-30°/s) bara någon enstaka grads skillnad PER AVLÄSNING —
+  // långt under bruströskeln — så gyroskopets oberoende, redan hastighets-
+  // baserade bekräftelse (grader/SEKUND, inte per avläsning) nådde i praktiken
+  // aldrig fram, och rörelsen dämpades hela tiden med den långsamma
+  // still-tidskonstanten trots att telefonen fysiskt rördes. Nu triggar
+  // `gyroConfirmsRealMotion` bekräftelsen OBEROENDE av `absDelta`.
+  if (absDelta >= PITCH_ROLL_NOISE_DELTA_DEG || gyroConfirmsRealMotion) {
+    const direction: 1 | -1 = rawDelta >= 0 ? 1 : turnConfirmDirRef.current ?? 1;
     // Sjunde kritiska buggrapporten: precis som för giren (se `HEADING_LARGE_JUMP_DEG`),
     // en oberoende gyro-bekräftad verklig rörelse bekräftar direkt, ingen
     // väntan på ytterligare en avläsning i samma riktning.
@@ -351,10 +362,16 @@ function computeAdaptiveLinearTau(
   }
 
   if (turnConfirmCountRef.current >= PITCH_ROLL_TURN_CONFIRM_SAMPLES) {
-    const t = Math.min(
-      1,
-      Math.max(0, (absDelta - PITCH_ROLL_NOISE_DELTA_DEG) / (PITCH_ROLL_TURN_DELTA_DEG - PITCH_ROLL_NOISE_DELTA_DEG)),
-    );
+    // Om gyroskopet bekräftar rörelsen men just DENNA avläsnings `absDelta`
+    // ändå är liten (normalt vid hög sensorfrekvens), tvinga fram den
+    // snabbaste tidskonstanten direkt istället för att låta `t`-interpolationen
+    // (som bygger på `absDelta`) felaktigt landa nära 0/still igen.
+    const t = gyroConfirmsRealMotion
+      ? 1
+      : Math.min(
+          1,
+          Math.max(0, (absDelta - PITCH_ROLL_NOISE_DELTA_DEG) / (PITCH_ROLL_TURN_DELTA_DEG - PITCH_ROLL_NOISE_DELTA_DEG)),
+        );
     return PITCH_ROLL_STILL_TAU + (PITCH_ROLL_TURN_TAU - PITCH_ROLL_STILL_TAU) * t;
   }
   return PITCH_ROLL_STILL_TAU;
@@ -845,13 +862,29 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     if (prevHeadingRaw !== null) {
       const signedDelta = circularDiffDeg(effectiveRawHeading, prevHeadingRaw);
       const rawDelta = Math.abs(signedDelta);
+      // Sjunde kritiska buggrapporten: en gyro-bekräftad verklig rotation
+      // (se `GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC`) är precis som en stor
+      // engångsdelta ett direkt, fysiskt bevis — ingen väntan behövs.
+      const gyroConfirmsRealTurn = gyroRotationRateDegPerSecRef.current >= GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC;
 
-      if (rawDelta >= HEADING_NOISE_DELTA_DEG) {
-        const direction: 1 | -1 = signedDelta >= 0 ? 1 : -1;
-        // Sjunde kritiska buggrapporten: en gyro-bekräftad verklig rotation
-        // (se `GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC`) är precis som en stor
-        // engångsdelta ett direkt, fysiskt bevis — ingen väntan behövs.
-        const gyroConfirmsRealTurn = gyroRotationRateDegPerSecRef.current >= GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC;
+      // Åttonde kritiska buggrapporten (andra omgången, "verken fastnar när
+      // man flyttar mobilen"): `gyroConfirmsRealTurn` kollades tidigare bara
+      // HÄR INNE, dvs. bara om `rawDelta` (skillnaden mot FÖREGÅENDE enskilda
+      // avläsning) redan råkade nå `HEADING_NOISE_DELTA_DEG` (5°). Vid en
+      // normal sensorfrekvens (30-60 Hz) ger även en genuin, måttlig
+      // vridning (t.ex. 20-40°/s, den vanliga "titta åt sidan"-hastigheten)
+      // bara en bråkdels grads skillnad PER AVLÄSNING — långt under den
+      // tröskeln — så gyroskopets egen, redan hastighetsbaserade bekräftelse
+      // (grader/SEKUND, inte per avläsning från `GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC`)
+      // nådde i praktiken aldrig fram i det vanligaste fallet. Resultatet:
+      // nästan alla vanliga vridningar dämpades hela tiden med den LÅNGSAMMA
+      // still-tidskonstanten (`HEADING_STILL_TAU`), vilket kändes som att
+      // verken/pilen "fastnade" och släpade efter medan telefonen fysiskt
+      // rördes — bara ovanligt HASTIGA vridningar (som gav en tillräckligt
+      // stor delta redan per avläsning) kom undan. Nu triggar
+      // `gyroConfirmsRealTurn` bekräftelsen OBEROENDE av `rawDelta`.
+      if (rawDelta >= HEADING_NOISE_DELTA_DEG || gyroConfirmsRealTurn) {
+        const direction: 1 | -1 = signedDelta >= 0 ? 1 : signedDelta < 0 ? -1 : turnConfirmDirRef.current ?? 1;
         if (rawDelta >= HEADING_LARGE_JUMP_DEG || gyroConfirmsRealTurn) {
           // Se `HEADING_LARGE_JUMP_DEG`s kommentar: en så stor engångsdelta
           // räknas som omedelbart bekräftad, ingen väntan på en andra
@@ -870,10 +903,17 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
       }
 
       if (turnConfirmCountRef.current >= HEADING_TURN_CONFIRM_SAMPLES) {
-        const t = Math.min(
-          1,
-          Math.max(0, (rawDelta - HEADING_NOISE_DELTA_DEG) / (HEADING_TURN_DELTA_DEG - HEADING_NOISE_DELTA_DEG)),
-        );
+        // Om gyroskopet bekräftar en verklig vridning men just DENNA
+        // avläsnings `rawDelta` ändå är liten (normalt vid hög sensor-
+        // frekvens), tvinga fram den snabbaste tidskonstanten direkt istället
+        // för att låta `t`-interpolationen (som bygger på `rawDelta`)
+        // felaktigt landa nära 0/still igen.
+        const t = gyroConfirmsRealTurn
+          ? 1
+          : Math.min(
+              1,
+              Math.max(0, (rawDelta - HEADING_NOISE_DELTA_DEG) / (HEADING_TURN_DELTA_DEG - HEADING_NOISE_DELTA_DEG)),
+            );
         headingTau = HEADING_STILL_TAU + (HEADING_TURN_TAU - HEADING_STILL_TAU) * t;
       }
     }
