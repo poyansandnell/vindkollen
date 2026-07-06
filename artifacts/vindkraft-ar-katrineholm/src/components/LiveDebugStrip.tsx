@@ -68,6 +68,13 @@ function yesNo(value: boolean): string {
  * lever (stigande `Bildruta`/rimlig FPS) utan att behöva öppna någon panel.
  * Medvetet monospace/kompakt och `pointer-events-none` så den aldrig kan
  * konkurrera om tryck/interaktion med resten av AR-vyn.
+ *
+ * Juli 2026-fix (ny omgång): en tidigare fix gated raden bakom
+ * `showSensorDebug` efter klagomål på "text i vägen", men användaren saknade
+ * sedan den alltid-synliga statusinfon och bad att få tillbaka den, bara
+ * mindre. Raden är därför åter ovillkorad, men typsnittsstorlek/padding är
+ * sänkt ytterligare (se `text-[6.5px]`/`px-1 py-px` i JSX nedan) jämfört med
+ * den ursprungliga versionen, så den tar synligt mindre plats.
  */
 export function LiveDebugStrip({
   fps,
@@ -108,7 +115,7 @@ export function LiveDebugStrip({
       className="pointer-events-none absolute inset-x-0 z-[60] flex justify-center px-2"
       style={{ top }}
     >
-      <div className="max-w-[94vw] flex-wrap rounded-md bg-black/40 px-1.5 py-0.5 font-mono text-[8px] leading-tight text-lime-300/80 backdrop-blur-sm">
+      <div className="max-w-[90vw] flex-wrap rounded bg-black/35 px-1 py-px font-mono text-[6.5px] leading-[1.15] text-lime-300/70 backdrop-blur-sm">
         FPS {fps} · Bildruta {frameCount} · Riktning {fmt(headingDeg, "°")} · Bäring {fmt(bearingToNearestDeg, "°")} · Δ{" "}
         {fmt(angleDiffToNearestDeg, "°")} · GPS ±{fmt(gpsAccuracyM, "m")} · Kompass ±{fmt(headingAccuracyDeg, "°")} · Verk{" "}
         {visibleTurbineCount}/{renderedTurbineCount} · Riktningsålder {fmt(headingAgeMs, "ms")} · Källa{" "}

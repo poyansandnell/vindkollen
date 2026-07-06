@@ -337,6 +337,22 @@ export default function Home() {
   }, [arSessionVisible]);
 
   const wind = useWindSound();
+  // Juli 2026-fix (produktfeedback, ny omgång): "info om ljudet dök upp lite
+  // då och då, räcker med en gång" — `statusBanner` nedan visar "🔊 Vindljud
+  // aktivt" varje gång INGET högre prioriterat meddelande råkar vara aktivt
+  // just då (t.ex. mellan två "Kompass svag"-perioder), vilket ger upprepade
+  // korta blinkningar av samma info under en och samma sammanhängande
+  // ljuduppspelning. `windNoticeShownForThisPlaybackRef` låter bannern visas
+  // EN gång per sammanhängande `wind.playing`-period istället för varje gång
+  // den råkar bli den högst prioriterade statusen — återställs bara när
+  // ljudet stängs av (t.ex. inomhus) så nästa distinkta uppspelning fortfarande
+  // får sin egen enda avisering.
+  const windNoticeShownForThisPlaybackRef = useRef(false);
+  useEffect(() => {
+    if (!wind.playing) {
+      windNoticeShownForThisPlaybackRef.current = false;
+    }
+  }, [wind.playing]);
   // Kamerabaserad himmel/inomhus-heuristik (se `useSkyDetection`s jsdoc för
   // begränsningar) — styr både AR-verkens synlighet (via `isPointSky`,
   // skickas till ARScene) och dämpningen av vindljudet/dBA-uppskattningen
@@ -864,7 +880,15 @@ export default function Home() {
     if (turbinesVisible && arDebugStats.trueVisibleTurbineCount === 0) {
       return { message: "Verken ligger åt pilens riktning – vrid mobilen", tone: "yellow" };
     }
-    if (wind.playing) {
+    // Juli 2026-fix (produktfeedback, ny omgång): visa "Vindljud aktivt"
+    // bara EN gång per sammanhängande uppspelning (se
+    // `windNoticeShownForThisPlaybackRef` ovan), annars blinkar samma info
+    // upp på nytt varje gång inget annat meddelande råkar vara aktivast just
+    // då. Flaggan sätts här (i render) snarare än i en effekt, eftersom den
+    // bara får sättas när bannern FAKTISKT visas för användaren, inte bara
+    // när `wind.playing` blir sant.
+    if (wind.playing && !windNoticeShownForThisPlaybackRef.current) {
+      windNoticeShownForThisPlaybackRef.current = true;
       return { message: "🔊 Vindljud aktivt", tone: "orange" };
     }
     if (calibrated) {
@@ -1184,19 +1208,17 @@ export default function Home() {
             />
           )}
 
-          {/* Juli 2026-fix (produktfeedback: "text ligger i vägen" på den
-              publika, live petitionssidan): den permanenta felsöknings-
-              raden (rå FPS/sensor-/render-telemetri) var tidigare medvetet
-              INTE gated bakom `showSensorDebug`, för att kunna jaga en
-              serie "verk renderas inte"-buggar utan extra tryck. De
-              buggarna är nu åtgärdade och raden gör i praktiken bara skada
-              för en vanlig besökare i en referendum-app — den ligger
-              synligt ovanpå/precis intill kameravyn och ser ut som trasig
-              text. Gated nu bakom samma `showSensorDebug`-växel som
-              `SensorDebugPanel` (togglas via "Felsökning" i menyn), så den
-              fortfarande finns kvar för framtida felsökning men inte visas
-              för allmänheten som standard. */}
-          {arSessionVisible && showSensorDebug && (
+          {/* Juli 2026-fix (produktfeedback, ny omgång): föregående fix gated
+              raden helt bakom `showSensorDebug` efter klagomål på "text i
+              vägen" — men användaren saknade sedan den lilla, alltid synliga
+              statusinfon ("den gröna texten") och bad om att få tillbaka den,
+              bara mindre/kompaktare. Kompromiss: raden är åter alltid synlig
+              (ingen `showSensorDebug`-gate), men storleken (font/padding) är
+              minskad ytterligare jämfört med den ursprungliga versionen, så
+              den tar mindre plats och stör mindre. Den fullständiga,
+              interaktiva `SensorDebugPanel` är fortfarande kvar bakom
+              "Felsökning" för djupare felsökning. */}
+          {arSessionVisible && (
             <LiveDebugStrip
               topOffsetPx={topBarHeight}
               fps={arDebugStats.fps}
@@ -1408,10 +1430,20 @@ export default function Home() {
                   Katrineholm · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}
                 </p>
               </div>
+              {/* Juli 2026-fix (produktfeedback, ny omgång): "man borde ha röd
+                  indikation på kompassen så man ständigt ser status" —
+                  `CompassStabilityBadge` fanns redan och är redan alltid
+                  synlig/live (grön/gul/röd), men låg som TREDJE badge i denna
+                  horisontellt scrollbara rad, så på smala skärmar hamnade den
+                  ofta utanför synligt område (kräver en scroll-gest ingen vet
+                  om) — användaren såg bara GPS/AR-stabilitet och trodde
+                  kompassstatus bara fanns som den tillfälliga gula
+                  "Kompass svag"-bannern. Flyttad till PLATS 2 (direkt efter
+                  GPS) så den nästan alltid ryms inom den synliga bredden. */}
               <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
-                <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
                 <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
+                <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
                 <LineOfSightStatus status={lineOfSightStatus} />
                 <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
                 <NoiseImpactBadge
