@@ -1184,13 +1184,19 @@ export default function Home() {
             />
           )}
 
-          {/* Juli 2026-fix (regressionsrapport punkt 8): persistent,
-              alltid synlig felsökningstext — INTE gated bakom
-              `showSensorDebug` som `SensorDebugPanel` nedan. Visas hela
-              AR-sessionen (även under `LoadingSequence`, som ligger ovanpå
-              den) så man alltid, utan att öppna något extra läge, kan se
-              att renderloopen lever. */}
-          {arSessionVisible && (
+          {/* Juli 2026-fix (produktfeedback: "text ligger i vägen" på den
+              publika, live petitionssidan): den permanenta felsöknings-
+              raden (rå FPS/sensor-/render-telemetri) var tidigare medvetet
+              INTE gated bakom `showSensorDebug`, för att kunna jaga en
+              serie "verk renderas inte"-buggar utan extra tryck. De
+              buggarna är nu åtgärdade och raden gör i praktiken bara skada
+              för en vanlig besökare i en referendum-app — den ligger
+              synligt ovanpå/precis intill kameravyn och ser ut som trasig
+              text. Gated nu bakom samma `showSensorDebug`-växel som
+              `SensorDebugPanel` (togglas via "Felsökning" i menyn), så den
+              fortfarande finns kvar för framtida felsökning men inte visas
+              för allmänheten som standard. */}
+          {arSessionVisible && showSensorDebug && (
             <LiveDebugStrip
               topOffsetPx={topBarHeight}
               fps={arDebugStats.fps}

@@ -24,7 +24,18 @@ const BASE_TAU_SEC = 3.2;
  * verkens position lika snabbt som en bra fix.
  */
 const REFERENCE_ACCURACY_M = 8;
-const MAX_TAU_MULTIPLIER = 5;
+// Sänkt (juli 2026, produktfeedback "tar ca 60 sekunder att få rätt position
+// inomhus") från 5 -> 2.5: vid dålig inomhus-GPS (t.ex. ±40-80m) gav 5x
+// multiplikatorn en effektiv tau på upp till 16s, vilket för ett
+// EMA-filter innebär ~3*tau ≈ 48-60s innan positionen ens hunnit konvergera
+// till 95% av sitt slutgiltiga värde — precis den upplevda väntetiden som
+// rapporterades. Verken sitter flera km bort (se `turbines.ts`), så en
+// kvarstående GPS-osäkerhet på tiotals meter ger bara någon enstaka grads
+// bäringsfel för de flesta verk — risken för synligt "hopp" vid en snabbare
+// konvergens är alltså liten jämfört med den tidigare orimligt långa väntan.
+// 2.5x halverar värsta-fallets tau (~8s, ~24s till 95%) utan att ge upp
+// spik-dämpningen för korta GPS-brusstötar.
+const MAX_TAU_MULTIPLIER = 2.5;
 
 /**
  * En enskild råavläsning som avviker mer än så här många meter från den
