@@ -233,6 +233,12 @@ const HEADING_TURN_TAU = 0.15;
 // är satt klart under vad en avsiktlig, snabb telefonvridning normalt ger
 // (typiskt 60-200°/s) men klart över naturligt handskakningsbrus.
 const GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC = 12;
+// Åttonde kritiska buggrapporten: en MYCKET lägre tröskel än ovan, bara till
+// för att avgöra "rör sig telefonen alls just nu" (för `gyroLastActiveAtRef`)
+// — inte "är detta en avsiktlig snabb vridning". Måste vara klart över
+// sensorbrus i vila (typiskt <1°/s) men klart under en avsiktlig långsam
+// vridning, så den fångar även en lugn, kontrollerad rörelse mot pilen.
+const GYRO_ACTIVITY_THRESHOLD_DEG_PER_SEC = 3;
 // Hur många på varandra följande avläsningar med samma vridningsriktning
 // (och delta över bruströskeln) som krävs innan vi litar på att det är en
 // verklig, avsiktlig vridning och släpper igenom den snabba tidskonstanten —
@@ -517,6 +523,25 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
   const rawBetaLastValueRef = useRef<number | null>(null);
   const rawGammaLastValueRef = useRef<number | null>(null);
   const rawPitchRollLastChangeAtRef = useRef<number | null>(null);
+  // Åttonde kritiska buggrapporten ("pilen roterar inte när telefonen
+  // fysiskt vrids"): `headingFrozen`/`allValuesStuck` ovan litade ENDAST på
+  // att pitch/roll (`event.beta`/`event.gamma`) förändrades som bevis på att
+  // sensor-pipelinen fortfarande lever. Men en ren horisontell vridning
+  // (exakt gesten "vrid mobilen mot pilen" som denna app ber om) håller
+  // pitch/roll i princip OFÖRÄNDRAT per definition — bara girriktningen
+  // (`alpha`) ska ändras. Om just `alpha`-värdet fastnat pga ett OS-/
+  // webbläsarfel i sensorfusionen (känt Android-problem, se vakthunden
+  // nedan) fanns alltså INGEN korroborerande signal som kunde bevisa att
+  // "sensorerna lever men headingen är fast" under precis detta scenario —
+  // reservläget till gyroskopet triggades aldrig, och pilen/verken förblev
+  // synligt fastfrusna trots att användaren fysiskt vred telefonen.
+  // `gyroLastActiveAtRef` spårar separat NÄR gyroskopets egen
+  // `rotationRate` (oberoende av kompassens `alpha`) senast visade verklig
+  // rörelse över en låg brusnivå (`GYRO_ACTIVITY_THRESHOLD_DEG_PER_SEC`,
+  // klart lägre än `GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC` som bara gäller
+  // SNABBA vridningar) — och används nedan som ett ALTERNATIVT bevis, sida
+  // vid sida med pitch/roll, på att telefonen faktiskt rör sig just nu.
+  const gyroLastActiveAtRef = useRef<number | null>(null);
   const headingSourceRef = useRef<"compass" | "gyro">("compass");
   const [headingFallbackActive, setHeadingFallbackActive] = useState(false);
   // Baslinje satt i det ögonblick frysningen upptäcks: reservriktningen
@@ -595,6 +620,15 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     const beta = rr.beta ?? 0;
     const gamma = rr.gamma ?? 0;
     gyroRotationRateDegPerSecRef.current = Math.sqrt(alpha * alpha + beta * beta + gamma * gamma);
+    // Åttonde kritiska buggrapporten: se `gyroLastActiveAtRef`-kommentaren
+    // ovanför dess deklaration — detta är den oberoende "telefonen rör sig
+    // fysiskt just nu"-signalen som `headingFrozen`/`allValuesStuck` i
+    // `handleOrientation` behöver för att kunna upptäcka en fastnad
+    // girriktning UNDER EN REN HORISONTELL VRIDNING (då pitch/roll normalt
+    // inte ändras alls).
+    if (gyroRotationRateDegPerSecRef.current >= GYRO_ACTIVITY_THRESHOLD_DEG_PER_SEC) {
+      gyroLastActiveAtRef.current = Date.now();
+    }
     if (!motionFusionActiveRef.current) {
       motionFusionActiveRef.current = true;
       setMotionFusionActive(true);
@@ -680,7 +714,14 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     const headingStaleMs = rawHeadingLastChangeAtRef.current === null ? 0 : nowMs - rawHeadingLastChangeAtRef.current;
     const pitchRollFreshMs =
       rawPitchRollLastChangeAtRef.current === null ? Infinity : nowMs - rawPitchRollLastChangeAtRef.current;
-    const headingFrozen = headingStaleMs > HEADING_STALE_MS && pitchRollFreshMs < HEADING_STALE_MS;
+    // Åttonde kritiska buggrapporten: se `gyroLastActiveAtRef`-kommentaren.
+    // En ren horisontell vridning (den vanligaste "vrid mot pilen"-gesten)
+    // håller pitch/roll i princip stilla, så `pitchRollFreshMs` ensam kunde
+    // aldrig bevisa "sensorerna lever" i just det fallet — gyroskopets egen
+    // rörelsesignal är ett likvärdigt, oberoende bevis på samma sak.
+    const gyroFreshMs = gyroLastActiveAtRef.current === null ? Infinity : nowMs - gyroLastActiveAtRef.current;
+    const headingFrozen =
+      headingStaleMs > HEADING_STALE_MS && (pitchRollFreshMs < HEADING_STALE_MS || gyroFreshMs < HEADING_STALE_MS);
 
     // Se `STUCK_VALUES_MS`-kommentaren ovan: till skillnad från `headingFrozen`
     // (som kräver att pitch/roll FORTSÄTTER röra sig) upptäcker detta det
@@ -692,7 +733,15 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     // signalera nedströms och trigga en lyssnar-återanslutning i vakthunden.
     const pitchRollStaleMs =
       rawPitchRollLastChangeAtRef.current === null ? 0 : nowMs - rawPitchRollLastChangeAtRef.current;
-    const allValuesStuck = headingStaleMs > STUCK_VALUES_MS && pitchRollStaleMs > STUCK_VALUES_MS;
+    const gyroStaleMs = gyroLastActiveAtRef.current === null ? 0 : nowMs - gyroLastActiveAtRef.current;
+    // Åttonde kritiska buggrapporten: kräv ÄVEN att gyroskopet inte visat
+    // någon rörelse nyligen — annars skulle en ren horisontell vridning (där
+    // pitch/roll legitimt står still) felaktigt klassas som "allt har
+    // fastnat" trots att `headingFrozen` ovan redan hanterar det fallet via
+    // reservkällan, och denna striktare flagga bara ska trigga en
+    // återanslutning när ABSOLUT ingen rörelse alls syns i rådatan.
+    const allValuesStuck =
+      headingStaleMs > STUCK_VALUES_MS && pitchRollStaleMs > STUCK_VALUES_MS && gyroStaleMs > STUCK_VALUES_MS;
     if (allValuesStuck !== valuesFrozenRef.current) {
       valuesFrozenRef.current = allValuesStuck;
       setValuesFrozen(allValuesStuck);

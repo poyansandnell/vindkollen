@@ -389,8 +389,20 @@ export default function Home() {
   const INDOORS_GRACE_MS = 5000;
   const indoorsSinceRef = useRef<number | null>(null);
   const [indoorsGracePassed, setIndoorsGracePassed] = useState(false);
+  // Åttonde kritiska buggrapporten (punkt 1, "verken visas aldrig, inte ens
+  // några sekunder inomhus"): denna klocka startades TIDIGARE direkt av rå
+  // `sky.indoors` — men `useSkyDetection` körs redan så fort kameran är igång
+  // (`started`), LÅNGT innan GPS+kompass hunnit få sin fix och
+  // `arSessionVisible`/`ready` blir sant. Om lägesbestämningen tar t.ex.
+  // 10-15s (vanligt inomhus/dåligt GPS-läge, se debug-panelens "GPS dålig"),
+  // hann femsekundersklockan redan räknas ut helt I BAKGRUNDEN — så i samma
+  // ögonblick AR-vyn FAKTISKT blev synlig för användaren var
+  // `indoorsGracePassed` redan `true`, och "titta-gratis"-perioden kändes som
+  // att den aldrig fanns. Kräver nu ÄVEN `arSessionVisible` innan klockan
+  // börjar räkna, så de utlovade 5 sekunderna alltid räknas från det
+  // ögonblick användaren verkligen kan se AR-vyn, aldrig i förväg.
   useEffect(() => {
-    if (!sky.indoors) {
+    if (!sky.indoors || !arSessionVisible) {
       indoorsSinceRef.current = null;
       setIndoorsGracePassed(false);
       return;
@@ -405,7 +417,7 @@ export default function Home() {
     }
     const timeout = window.setTimeout(() => setIndoorsGracePassed(true), INDOORS_GRACE_MS - elapsed);
     return () => window.clearTimeout(timeout);
-  }, [sky.indoors]);
+  }, [sky.indoors, arSessionVisible]);
 
   // Hela detta index (och "Gå utomhus"/"aim"-bannern nedan) förutsätter att
   // ML-segmenteringen faktiskt är igång och därmed levererar en tillförlitlig
