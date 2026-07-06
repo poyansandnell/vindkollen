@@ -42,14 +42,18 @@ interface LiveDebugStripProps {
   /** Avstånd (m) till närmaste verk — produktkravets "Närmaste verk: avstånd + bearing". */
   nearestDistanceM: number | null;
   /**
-   * Juli 2026-fix (kritisk buggrapport punkt 5: "felsökningsraden
-   * överlappar loggan/statustexten i topp-baren"): den uppmätta, faktiska
-   * höjden (px) på topp-baren i `Home.tsx`, uppdaterad live via
-   * `ResizeObserver` — så den här remsan alltid hamnar precis UNDER
-   * topp-baren istället för att ligga fast på `top: 0` ovanpå den, oavsett
-   * hur många badge-/knapprader topp-baren råkar rendera just nu.
+   * Juli 2026-fix (produktfeedback, ny omgång: "flytta den gröna texten
+   * högst upp och flytta ner allt annat"): remsan ligger nu ALLTID överst
+   * (precis under `env(safe-area-inset-top)`), och `Home.tsx` mäter i
+   * stället DENNA remsans egen höjd via `measureRef` för att skjuta ner
+   * topp-baren (logga/badges/knappar) och statusbannern under den — dvs.
+   * motsatt riktning mot den tidigare lösningen (som mätte topp-baren och
+   * placerade remsan under DEN). `measureRef` sätts på det inre,
+   * faktiskt synliga textkortet (inte den yttre `absolute`-positionerade
+   * behållaren, som alltid har höjd 0 för en `ResizeObserver` eftersom
+   * `position: absolute` tar bort den ur normala flödet).
    */
-  topOffsetPx: number;
+  measureRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 function fmt(value: number | null, unit: string, digits = 0): string {
@@ -95,27 +99,26 @@ export function LiveDebugStrip({
   renderMode,
   trueVisibleTurbineCount,
   nearestDistanceM,
-  topOffsetPx,
+  measureRef,
 }: LiveDebugStripProps) {
   const renderModeLabel: Record<"direct" | "stabilizing" | "world-locked", string> = {
     direct: "Direkt AR",
     stabilizing: "Stabiliserar",
     "world-locked": "World locked",
   };
-  // Juli 2026-fix (kritisk buggrapport punkt 5): låg tidigare fast på
-  // `top-0`/z-[60], rakt ovanpå topp-barens logga/statustext (z-[45]) —
-  // `topOffsetPx` (topp-barens uppmätta höjd, se `Home.tsx`) flyttar remsan
-  // ett litet mellanrum (`+6px`) under den istället, plus `flex-wrap` (inte
-  // `whitespace-nowrap`+scroll) och lägre bakgrundsopacitet/mindre padding
-  // så den är kompakt och diskret nog att aldrig uppfattas som att den
-  // "krockar" med resten av gränssnittet, oavsett skärmbredd.
-  const top = topOffsetPx > 0 ? topOffsetPx + 6 : "max(0.25rem,env(safe-area-inset-top))";
+  // Juli 2026-fix (produktfeedback, ny omgång): remsan ligger nu alltid
+  // överst, precis under den säkra zonen — `Home.tsx` skjuter i stället ner
+  // allt ANNAT (topp-bar, statusbanner) baserat på den här remsans mätta
+  // höjd (se `measureRef`s jsdoc i interfacet ovan).
   return (
     <div
       className="pointer-events-none absolute inset-x-0 z-[60] flex justify-center px-2"
-      style={{ top }}
+      style={{ top: "max(0.25rem,env(safe-area-inset-top))" }}
     >
-      <div className="max-w-[90vw] flex-wrap rounded bg-black/35 px-1 py-px font-mono text-[6.5px] leading-[1.15] text-lime-300/70 backdrop-blur-sm">
+      <div
+        ref={measureRef}
+        className="max-w-[90vw] flex-wrap rounded bg-black/35 px-1 py-px font-mono text-[6.5px] leading-[1.15] text-lime-300/70 backdrop-blur-sm"
+      >
         FPS {fps} · Bildruta {frameCount} · Riktning {fmt(headingDeg, "°")} · Bäring {fmt(bearingToNearestDeg, "°")} · Δ{" "}
         {fmt(angleDiffToNearestDeg, "°")} · GPS ±{fmt(gpsAccuracyM, "m")} · Kompass ±{fmt(headingAccuracyDeg, "°")} · Verk{" "}
         {visibleTurbineCount}/{renderedTurbineCount} · Riktningsålder {fmt(headingAgeMs, "ms")} · Källa{" "}

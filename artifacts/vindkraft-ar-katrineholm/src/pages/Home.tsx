@@ -139,6 +139,15 @@ export default function Home() {
   // oavsett hur många badges/rader som visas.
   const topBarRef = useRef<HTMLDivElement | null>(null);
   const [topBarHeight, setTopBarHeight] = useState(0);
+  // Juli 2026-fix (produktfeedback, ny omgång: "flytta den gröna texten
+  // högst upp och flytta ner allt annat lite"): omvänd riktning mot fixen
+  // ovan — `LiveDebugStrip` ligger nu fast överst, och topp-baren (samt
+  // statusbannern nedanför) skjuts i stället ner med den HÄR mätta höjden
+  // (remsans eget innehåll, se `debugStripHeightEffect` nedan) så de aldrig
+  // hamnar bakom/överlappar varandra, oavsett hur bred skärmen är (remsan
+  // radbryts på smala skärmar och blir därmed högre).
+  const debugStripRef = useRef<HTMLDivElement | null>(null);
+  const [debugStripHeight, setDebugStripHeight] = useState(0);
   const [showSensorDebug, setShowSensorDebug] = useState(false);
   const [calibrated, setCalibrated] = useState(false);
   const [showSoundLevel, setShowSoundLevel] = useState(true);
@@ -269,6 +278,27 @@ export default function Home() {
   // HUD:en snyggt utan att blöda igenom, precis som den ursprungliga fixen
   // avsåg — men utan att BLOCKERA den underliggande renderingen.
   const arSessionVisible = ready;
+
+  // Juli 2026-fix (produktfeedback, ny omgång): samma mönster som
+  // topp-barens höjd-effekt ovan (samma TDZ-/monteringsordning-fälla —
+  // `debugStripRef`s `<div>` renderas villkorat på `arSessionVisible`, inte
+  // `started`, därför placerad HÄR efter `arSessionVisible`s deklaration),
+  // men mäter i stället `LiveDebugStrip`s EGNA renderade höjd, för att
+  // skjuta ner topp-baren/statusbannern med rätt mellanrum.
+  useEffect(() => {
+    const el = debugStripRef.current;
+    if (!el) {
+      setDebugStripHeight(0);
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setDebugStripHeight(entry.contentRect.height);
+    });
+    observer.observe(el);
+    setDebugStripHeight(el.getBoundingClientRect().height);
+    return () => observer.disconnect();
+  }, [arSessionVisible]);
 
   // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 1/2): tidsstämpeln
   // för när AR-sessionen FÖRST blev synlig — skickas till `ARScene` som
@@ -1220,7 +1250,7 @@ export default function Home() {
               "Felsökning" för djupare felsökning. */}
           {arSessionVisible && (
             <LiveDebugStrip
-              topOffsetPx={topBarHeight}
+              measureRef={debugStripRef}
               fps={arDebugStats.fps}
               frameCount={arDebugStats.frameCount}
               headingDeg={headingDegState}
@@ -1384,8 +1414,17 @@ export default function Home() {
               svag-signal-/ljud-meddelanden i topp-baren) som tidigare kunde
               visas samtidigt och staplas på varandra. `statusBanner` väljer
               redan ut EXAKT en enligt prioritetsordningen, se dess jsdoc. */}
+          {/* Juli 2026-fix (produktfeedback, ny omgång): `top-32` var ett
+              gissat fast värde som antog att topp-baren alltid tog exakt
+              den höjden — men topp-baren skjuts nu ner med
+              `debugStripHeight` (se `topBarRef`s kommentar nedan), så den
+              här bannern måste flytta med den, annars hinner den ikapp och
+              krockar med knapparna igen på breda felsökningsrader. */}
           {arSessionVisible && statusBanner && (
-            <div className="pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center px-6">
+            <div
+              className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-6"
+              style={{ top: `calc(8rem + ${debugStripHeight}px)` }}
+            >
               <span
                 className={`max-w-xs rounded-full px-4 py-1.5 text-center text-xs font-medium shadow-lg ${statusBannerToneClasses[statusBanner.tone]}`}
               >
@@ -1405,8 +1444,19 @@ export default function Home() {
           {arSessionVisible && (
           <div
             ref={topBarRef}
-            className="absolute inset-x-0 top-0 z-[45] flex flex-col gap-2 bg-gradient-to-b from-black/70 to-transparent pb-8 pt-[max(1rem,env(safe-area-inset-top))]"
+            className="absolute inset-x-0 top-0 z-[45] flex flex-col gap-2 bg-gradient-to-b from-black/70 to-transparent pb-8"
             style={{
+              // Juli 2026-fix (produktfeedback, ny omgång: "flytta den gröna
+              // texten högst upp och flytta ner allt annat lite"):
+              // `LiveDebugStrip` ligger nu fast överst (se dess jsdoc), så
+              // topp-baren måste själv skjutas ner med remsans FAKTISKA
+              // renderade höjd (`debugStripHeight`, plus ett litet
+              // mellanrum) ovanpå den befintliga säkra-zon-paddingen —
+              // annars hamnar remsan ovanpå loggan/badges igen.
+              paddingTop:
+                debugStripHeight > 0
+                  ? `calc(max(1rem, env(safe-area-inset-top)) + ${debugStripHeight + 6}px)`
+                  : "max(1rem, env(safe-area-inset-top))",
               paddingLeft: "max(1rem, env(safe-area-inset-left))",
               paddingRight: "max(1rem, env(safe-area-inset-right))",
             }}
@@ -1516,8 +1566,15 @@ export default function Home() {
           </div>
           )}
 
+          {/* Juli 2026-fix (produktfeedback, ny omgång): samma dynamiska
+              förskjutning som statusbannern ovan, av samma anledning — annars
+              hinner topp-baren/felsökningsraden ikapp och krocka med den här
+              banderollen igen när `debugStripHeight` växer. */}
           {arSessionVisible && photoError && (
-            <div className="pointer-events-none absolute inset-x-0 top-[7.5rem] z-30 flex justify-center px-4">
+            <div
+              className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-4"
+              style={{ top: `calc(7.5rem + ${debugStripHeight}px)` }}
+            >
               <span className="rounded-full bg-red-500/20 px-4 py-1.5 text-xs text-red-200 shadow-lg">{photoError}</span>
             </div>
           )}
