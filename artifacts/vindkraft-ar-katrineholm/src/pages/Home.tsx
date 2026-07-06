@@ -1534,13 +1534,27 @@ export default function Home() {
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 pb-0.5">
                 <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
                 <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
+                {/* Juli 2026-fix (produktfeedback, ännu en omgång: "nu har vi
+                    glömt informationen om infraljudet"): dBA-badgen och
+                    Infraljud-badgen är HÄLSO-/säkerhetsrelaterad information
+                    (ljudnivå + infraljudspåverkan), inte teknisk
+                    sensordebug-status — de hör hemma i den alltid synliga
+                    raden, inte gömda bakom "Mer status". Bara de rent
+                    tekniska trackingbadgarna (AR-stabilitet%, Fri sikt) är
+                    kvar bakom den hopfällda knappen, se raden nedan. */}
+                <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
+                <NoiseImpactBadge
+                  result={noiseImpact}
+                  expanded={showNoiseImpact}
+                  onToggle={() => setShowNoiseImpact((v) => !v)}
+                />
                 {/* Juli 2026-fix (produktfeedback, ny omgång: "gör det
-                    smartare, tar för mycket plats"): de fyra minst akuta
-                    statusbadgarna (AR-stabilitet%, Fri sikt, dBA, Infraljud)
-                    flyttades bakom denna hopfällda knapp istället för att
-                    alltid rendera 2-3 extra rader. GPS och kompass (de två
-                    som produktfeedback specifikt efterfrågat, se kommentaren
-                    ovan) förblir alltid synliga. */}
+                    smartare, tar för mycket plats"): de två rent tekniska
+                    trackingbadgarna (AR-stabilitet%, Fri sikt) flyttades
+                    bakom denna hopfällda knapp istället för att alltid
+                    rendera en extra rad. GPS/Kompass/dBA/Infraljud (de fyra
+                    som är antingen kritiska för sensorstatus eller hälso-/
+                    säkerhetsrelevanta) förblir alltid synliga. */}
                 <button
                   onClick={() => setShowStatusDetails((v) => !v)}
                   aria-pressed={showStatusDetails}
@@ -1563,12 +1577,6 @@ export default function Home() {
               <div className="flex flex-wrap items-center gap-1.5 pl-0.5">
                 <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
                 <LineOfSightStatus status={lineOfSightStatus} />
-                <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
-                <NoiseImpactBadge
-                  result={noiseImpact}
-                  expanded={showNoiseImpact}
-                  onToggle={() => setShowNoiseImpact((v) => !v)}
-                />
               </div>
             )}
             {/* Juli 2026-fix (produktkrav 2): svag-signal-rutan och
