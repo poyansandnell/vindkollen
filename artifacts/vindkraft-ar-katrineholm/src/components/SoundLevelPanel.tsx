@@ -11,13 +11,21 @@ export function SoundLevelBadge({ estimate, indoors = false }: { estimate: Sound
   const hasSignal = Number.isFinite(estimate.totalDba);
   const severity = hasSignal ? soundLevelSeverity(estimate.totalDba) : "green";
   const colors = SEVERITY_COLORS[severity];
+  // Juli 2026-fix (produktfeedback: "ljudnivån inne kan aldrig bli minus,
+  // så det borde vara 0"): `estimate.totalDba` är en matematisk
+  // spridningsformel som kan ge negativa tal på stora avstånd/vid kraftig
+  // inomhusdämpning, men en faktisk ljudnivå (dBA) kan per definition
+  // aldrig vara negativ — 0 dBA är hörseltröskeln. Klipp bara i
+  // VISNINGEN, inte i den underliggande beräkningen (severity/volym
+  // fortsätter använda den råa siffran där det är relevant).
+  const displayDba = hasSignal ? Math.max(estimate.totalDba, 0) : estimate.totalDba;
 
   return (
     <span className="pointer-events-none flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[10px] font-medium text-white/90 backdrop-blur-sm">
       {hasSignal ? (
         <>
           <span className={colors.text}>
-            {colors.emoji} {estimate.totalDba.toFixed(0)} dBA
+            {colors.emoji} {displayDba.toFixed(0)} dBA
           </span>
           <span className="text-white/50">· {estimate.contributingCount} verk</span>
           {indoors && <span className="text-white/50">· 🏠 dämpat</span>}
@@ -48,6 +56,10 @@ export function SoundLevelPanel({
   const hasSignal = Number.isFinite(estimate.totalDba);
   const severity = hasSignal ? soundLevelSeverity(estimate.totalDba) : "green";
   const colors = SEVERITY_COLORS[severity];
+  // Se motsvarande kommentar i `SoundLevelBadge` ovan — visningen klipps
+  // till 0 dBA nedåt, den underliggande siffran (severity/volym) förblir
+  // orörd.
+  const displayDba = hasSignal ? Math.max(estimate.totalDba, 0) : estimate.totalDba;
 
   return (
     <div
@@ -68,7 +80,7 @@ export function SoundLevelPanel({
         <>
           <div className="mt-1.5 flex items-center justify-between gap-2">
             <div className="flex items-baseline gap-1.5">
-              <span className={`text-2xl font-bold ${colors.text}`}>{colors.emoji} {estimate.totalDba.toFixed(1)}</span>
+              <span className={`text-2xl font-bold ${colors.text}`}>{colors.emoji} {displayDba.toFixed(1)}</span>
               <span className="text-xs text-white/70">dBA</span>
               {indoors && <span className="text-[11px] text-white/50">· 🏠 dämpat</span>}
             </div>

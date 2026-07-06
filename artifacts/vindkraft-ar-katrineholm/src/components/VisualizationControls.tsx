@@ -87,7 +87,14 @@ export function VisualizationControls({
   const [shadowFlickerInfoOpen, setShadowFlickerInfoOpen] = useState(false);
   const flickerActive = shadowFlickerActive(shadowFlicker, sunMode);
   return (
-    <div className="absolute inset-0 z-40 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    // Juli 2026-fix (produktfeedback: "när man trycker på inställningar
+    // måste den gamla informationen försvinna, annars blir det omöjligt
+    // att se något och man kan inte komma tillbaka"): den här panelen låg
+    // på z-40, UNDER topp-/bottenraden och Ljudnivå/Infraljud-panelerna
+    // (z-[45]) — så de blödde igenom bakgrundens blur och gick varken att
+    // se förbi eller stänga. z-[70] lägger panelen ovanför ALLT annat i
+    // AR-vyn (inkl. ☰ Meny på z-[55] och pilen/målbekräftelsen på z-50).
+    <div className="absolute inset-0 z-[70] flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
         className="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border-t border-[#FF8B01]/30 bg-[#141210] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4 text-white shadow-2xl"
