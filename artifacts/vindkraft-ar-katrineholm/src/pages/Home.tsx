@@ -1489,8 +1489,27 @@ export default function Home() {
                   om) — användaren såg bara GPS/AR-stabilitet och trodde
                   kompassstatus bara fanns som den tillfälliga gula
                   "Kompass svag"-bannern. Flyttad till PLATS 2 (direkt efter
-                  GPS) så den nästan alltid ryms inom den synliga bredden. */}
-              <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  GPS) så den nästan alltid ryms inom den synliga bredden.
+
+                  Juli 2026-fix (ny omgång, produktfeedback: "en liten grön
+                  ruta syns inte helt uppe till höger"): badge-raden var
+                  fortfarande `overflow-x-auto`/`whitespace-nowrap` — dvs.
+                  badges som inte fick plats krävde en osynlig, ovetad
+                  scroll-gest för att nås, och visades i praktiken bara som
+                  en avklippt, förvirrande färgsliver (`ArStabilityBadge`,
+                  fjärde badgen) i högerkanten. Den ursprungliga oron kring
+                  `flex-wrap` (se den gamla kommentaren ovan, kvar för
+                  historik) gällde en tidigare version där topp-baren låg i
+                  en höjdbegränsad, klippt behållare — men `topBarRef`s
+                  `<div>` (se `Home.tsx`s `topBarHeight`-effekt) mäter och
+                  anpassar sig redan efter sin FAKTISKA innehållshöjd, och
+                  sitter som ett `position: absolute`-lager ovanpå resten av
+                  vyn (inte i ett höjdbegränsat flöde), så ett extra
+                  radbrott där badges inte får plats kostar bara några extra
+                  pixlar högst upp — helt synligt, ingen gissad scroll
+                  krävs. Bytt till `flex-wrap` (ingen `overflow-x-auto`/
+                  `whitespace-nowrap`/dold scrollbar längre). */}
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 pb-0.5">
                 <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
                 <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
                 <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
