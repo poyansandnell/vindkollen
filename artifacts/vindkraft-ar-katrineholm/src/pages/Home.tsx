@@ -149,6 +149,22 @@ export default function Home() {
   const debugStripRef = useRef<HTMLDivElement | null>(null);
   const [debugStripHeight, setDebugStripHeight] = useState(0);
   const [showSensorDebug, setShowSensorDebug] = useState(false);
+  // Juli 2026-fix (produktfeedback, ny omgång: "gör informationen smartare
+  // så den inte tar upp lika mycket plats och inte skymmer varandra"):
+  // föregående fix bytte badge-raden till `flex-wrap` för att lösa den
+  // avklippta badgen, men det gjorde topp-baren MYCKET högre (upp till 4
+  // rader: titel, GPS/Kompass, AR-stabilitet/Fri sikt, dBA/Infraljud) —
+  // vilket i sin tur exponerade en separat, redan existerande bugg: den
+  // fasta, gissade `top-32`/`top-[7.5rem]` på statusbannern/felbannern
+  // hann inte alls med topp-barens nya, dynamiska höjd och hamnade mitt i
+  // knapparna. `showStatusDetails` döljer nu de FYRA minst akuta
+  // statusbadgarna (AR-stabilitet%, Fri sikt, dBA, Infraljud) bakom en
+  // liten "▾ Mer status"-knapp, default hopfälld — bara GPS/Kompass (de
+  // två som redan visats vara mest efterfrågade, se `CompassStabilityBadge`
+  // platsflytt ovan) syns per default. Se även `topBarRef`s stil nedan
+  // (statusbanner/felbanner beräknar nu sin position FRÅN topp-barens
+  // faktiska mätta höjd istället för en gissning).
+  const [showStatusDetails, setShowStatusDetails] = useState(false);
   const [calibrated, setCalibrated] = useState(false);
   const [showSoundLevel, setShowSoundLevel] = useState(true);
   const [showNoiseImpact, setShowNoiseImpact] = useState(false);
@@ -1414,16 +1430,22 @@ export default function Home() {
               svag-signal-/ljud-meddelanden i topp-baren) som tidigare kunde
               visas samtidigt och staplas på varandra. `statusBanner` väljer
               redan ut EXAKT en enligt prioritetsordningen, se dess jsdoc. */}
-          {/* Juli 2026-fix (produktfeedback, ny omgång): `top-32` var ett
-              gissat fast värde som antog att topp-baren alltid tog exakt
-              den höjden — men topp-baren skjuts nu ner med
-              `debugStripHeight` (se `topBarRef`s kommentar nedan), så den
-              här bannern måste flytta med den, annars hinner den ikapp och
-              krockar med knapparna igen på breda felsökningsrader. */}
+          {/* Juli 2026-fix (produktfeedback, ny omgång: "gör det smartare,
+              tar för mycket plats och skymmer varandra"): `top-32`/`8rem`
+              var fortfarande ett GISSAT fast värde som antog att topp-baren
+              alltid tog exakt den höjden — men badge-raden radbryter numera
+              (`flex-wrap`) beroende på hur många statusbadgar/knappar som
+              råkar visas, så topp-barens verkliga höjd varierar. Ett gissat
+              tal hann aldrig ikapp det och bannern hamnade mitt i knapparna
+              (se skärmdump i produktfeedbacken). Använder nu `topBarHeight`
+              — samma verkligt uppmätta höjd (via `ResizeObserver` på
+              `topBarRef`) som redan används för att placera felsöknings-
+              raden ovanför — så bannern ALLTID hamnar precis under topp-
+              baren, oavsett hur många rader den råkar rendera just nu. */}
           {arSessionVisible && statusBanner && (
             <div
               className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-6"
-              style={{ top: `calc(8rem + ${debugStripHeight}px)` }}
+              style={{ top: `${topBarHeight + debugStripHeight + 10}px` }}
             >
               <span
                 className={`max-w-xs rounded-full px-4 py-1.5 text-center text-xs font-medium shadow-lg ${statusBannerToneClasses[statusBanner.tone]}`}
@@ -1512,6 +1534,33 @@ export default function Home() {
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 pb-0.5">
                 <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
                 <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
+                {/* Juli 2026-fix (produktfeedback, ny omgång: "gör det
+                    smartare, tar för mycket plats"): de fyra minst akuta
+                    statusbadgarna (AR-stabilitet%, Fri sikt, dBA, Infraljud)
+                    flyttades bakom denna hopfällda knapp istället för att
+                    alltid rendera 2-3 extra rader. GPS och kompass (de två
+                    som produktfeedback specifikt efterfrågat, se kommentaren
+                    ovan) förblir alltid synliga. */}
+                <button
+                  onClick={() => setShowStatusDetails((v) => !v)}
+                  aria-pressed={showStatusDetails}
+                  aria-label={showStatusDetails ? "Dölj fler statusdetaljer" : "Visa fler statusdetaljer"}
+                  className="shrink-0 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-white/20"
+                >
+                  {showStatusDetails ? "▴ Mindre" : "▾ Mer status"}
+                </button>
+                <button
+                  onClick={() => setShowControls(true)}
+                  aria-pressed={showControls}
+                  aria-label="Visningsinställningar"
+                  className="shrink-0 rounded-full bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+                >
+                  ⚙️
+                </button>
+              </div>
+            </div>
+            {showStatusDetails && (
+              <div className="flex flex-wrap items-center gap-1.5 pl-0.5">
                 <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
                 <LineOfSightStatus status={lineOfSightStatus} />
                 <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
@@ -1520,34 +1569,27 @@ export default function Home() {
                   expanded={showNoiseImpact}
                   onToggle={() => setShowNoiseImpact((v) => !v)}
                 />
-                <button
-                  onClick={() => setShowControls(true)}
-                  aria-pressed={showControls}
-                  className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
-                >
-                  ⚙️ Visning
-                </button>
               </div>
-            </div>
+            )}
             {/* Juli 2026-fix (produktkrav 2): svag-signal-rutan och
                 "Vindljud aktivt"-taggen som tidigare låg här flyttades in i
                 den enda prioriterade `statusBanner`-rutan ovan, så de aldrig
                 kan visas samtidigt som t.ex. en felruta eller
                 målbekräftelsen. */}
+            {/* Juli 2026-fix (produktfeedback, ny omgång: "gör det smartare,
+                tar för mycket plats"): "Kalibrera horisont" och "Visa/dölj
+                verk" är sällananvända engångs-/inställningsåtgärder, inte
+                löpande status — flyttade till "☰ Meny"-bottensheeten
+                (samma mönster som "Visa karta"/"Om projektet") så att bara
+                de två knapparna som är direkt kopplade till den redan
+                synliga ljudnivå-panelen (dBA-siffran nedtill) blir kvar
+                här och får plats på EN rad. */}
             <div className="flex flex-wrap items-center gap-2">
               {nightMode && (
                 <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-2.5 py-1 text-[11px] text-red-200">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
                   Nattläge
                 </span>
-              )}
-              {ready && (
-                <button
-                  onClick={handleCalibrate}
-                  className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
-                >
-                  Kalibrera horisont
-                </button>
               )}
               {ready && (
                 <button
@@ -1569,30 +1611,18 @@ export default function Home() {
               >
                 {soundEnvironment === "ute" ? "🔊 Ljud ute" : "🔈 Ljud inne"}
               </button>
-              {/* Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 3):
-                  "Visa/dölj verk" — påverkar ENDAST `turbinesVisible` (0.5s
-                  in-/uttoning i ARScene, se `TURBINES_VISIBLE_FADE_MS`),
-                  aldrig resten av AR-sessionen (kamera, HUD, pilen förblir
-                  synliga oavsett). Default PÅ (synlig). */}
-              <button
-                onClick={() => setTurbinesVisible((v) => !v)}
-                aria-pressed={turbinesVisible}
-                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
-              >
-                {turbinesVisible ? "🌬️ Dölj verk" : "🌬️ Visa verk"}
-              </button>
             </div>
           </div>
           )}
 
-          {/* Juli 2026-fix (produktfeedback, ny omgång): samma dynamiska
-              förskjutning som statusbannern ovan, av samma anledning — annars
-              hinner topp-baren/felsökningsraden ikapp och krocka med den här
-              banderollen igen när `debugStripHeight` växer. */}
+          {/* Juli 2026-fix (produktfeedback, ny omgång): samma fix som
+              statusbannern ovan — byt gissat `7.5rem` mot det verkligt
+              uppmätta `topBarHeight`, annars krockar den här banderollen med
+              knapparna varje gång topp-baren radbryter till fler rader. */}
           {arSessionVisible && photoError && (
             <div
               className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-4"
-              style={{ top: `calc(7.5rem + ${debugStripHeight}px)` }}
+              style={{ top: `${topBarHeight + debugStripHeight + 10}px` }}
             >
               <span className="rounded-full bg-red-500/20 px-4 py-1.5 text-xs text-red-200 shadow-lg">{photoError}</span>
             </div>
@@ -1678,6 +1708,33 @@ export default function Home() {
                     className="flex-1 rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
                   >
                     Om projektet
+                  </button>
+                </div>
+                {/* Juli 2026-fix (produktfeedback, ny omgång: "gör det
+                    smartare, tar för mycket plats"): flyttade hit från
+                    topp-baren — sällananvända engångsåtgärder, inte löpande
+                    status som behöver synas hela tiden. Se kommentaren vid
+                    knapparnas gamla plats i topp-baren ovan. */}
+                <div className="flex gap-3">
+                  {ready && (
+                    <button
+                      onClick={() => {
+                        handleCalibrate();
+                        setShowMenu(false);
+                      }}
+                      className="flex-1 rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
+                    >
+                      🧭 Kalibrera horisont
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setTurbinesVisible((v) => !v);
+                      setShowMenu(false);
+                    }}
+                    className="flex-1 rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
+                  >
+                    {turbinesVisible ? "🌬️ Dölj verk" : "🌬️ Visa verk"}
                   </button>
                 </div>
                 <button
