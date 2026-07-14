@@ -71,7 +71,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,ico}"],
-        navigateFallbackDenylist: [/^\/api/],
+        navigateFallbackDenylist: [/^\/api/, /^\/vindkraft-karta/],
         // TensorFlow.js (för himmel-segmenteringen i useSkyDetection) gör
         // huvudbundeln större än standardgränsen på 2 MiB.
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
