@@ -13,10 +13,19 @@ import type { MapSelection } from "@/components/MapCanvas";
 import type { UseQueryOptions } from "@tanstack/react-query";
 import { sourceLabel, sourceUrl } from "@/lib/sourceMeta";
 
+const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
+
+function openInAr(turbines: { id: string; lat: number; lon: number }[]) {
+  if (turbines.length === 0) return;
+  localStorage.setItem(AR_HANDOFF_KEY, JSON.stringify({ turbines, savedAt: Date.now() }));
+  window.location.href = "/";
+}
+
 interface DetailPanelProps {
   selection: MapSelection;
   onClose: () => void;
   focusPoint?: { lat: number; lng: number } | null;
+  turbines?: WindTurbine[];
 }
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -29,7 +38,7 @@ function Field({ label, value }: { label: string; value: string | number | null 
   );
 }
 
-export default function DetailPanel({ selection, onClose, focusPoint }: DetailPanelProps) {
+export default function DetailPanel({ selection, onClose, focusPoint, turbines }: DetailPanelProps) {
   const pointParams = focusPoint ? { lat: focusPoint.lat, lng: focusPoint.lng } : undefined;
   const turbineQuery = useGetWindTurbine(selection.id, pointParams, {
     query: { enabled: selection.kind === "turbine" } as UseQueryOptions<WindTurbine>,
@@ -99,6 +108,20 @@ export default function DetailPanel({ selection, onClose, focusPoint }: DetailPa
                 />
                 <Field label="Senast uppdaterad" value={turbineQuery.data.lastUpdated ? String(turbineQuery.data.lastUpdated).slice(0, 10) : null} />
               </div>
+              {turbineQuery.data.lat != null && turbineQuery.data.lng != null && (
+                <Button
+                  className="w-full mt-4 bg-[#FF8B01] hover:bg-[#FFB347] text-[#090909] font-semibold"
+                  onClick={() =>
+                    openInAr([{
+                      id: String(turbineQuery.data!.id),
+                      lat: turbineQuery.data!.lat!,
+                      lon: turbineQuery.data!.lng!,
+                    }])
+                  }
+                >
+                  📱 Visa i AR
+                </Button>
+              )}
               {sourceLabel(turbineQuery.data.source) && (
                 <div className="text-xs text-muted-foreground mt-3 pt-3 border-t">
                   Källa:{" "}
@@ -169,6 +192,19 @@ export default function DetailPanel({ selection, onClose, focusPoint }: DetailPa
                 />
                 <Field label="Senast uppdaterad" value={projectAreaQuery.data.lastUpdated ? String(projectAreaQuery.data.lastUpdated).slice(0, 10) : null} />
               </div>
+              {(() => {
+                const projectTurbines = (turbines ?? [])
+                  .filter((t) => t.projectAreaId === selection.id && t.lat != null && t.lng != null)
+                  .map((t) => ({ id: String(t.id), lat: t.lat!, lon: t.lng! }));
+                return projectTurbines.length > 0 ? (
+                  <Button
+                    className="w-full mt-4 bg-[#FF8B01] hover:bg-[#FFB347] text-[#090909] font-semibold"
+                    onClick={() => openInAr(projectTurbines)}
+                  >
+                    📱 Visa {projectTurbines.length} verk i AR
+                  </Button>
+                ) : null;
+              })()}
               {sourceLabel(projectAreaQuery.data.source) && (
                 <div className="text-xs text-muted-foreground mt-3 pt-3 border-t">
                   Källa:{" "}

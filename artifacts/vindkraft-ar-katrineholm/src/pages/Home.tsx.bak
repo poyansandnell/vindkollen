@@ -1497,9 +1497,9 @@ export default function Home() {
                 vänster om den synliga rutan helt onåbart via scroll. */}
             <div className="flex items-start gap-2">
               <div className="shrink-0">
-                <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKOLLEN AR</p>
+                <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKRAFT AR</p>
                 <p className="text-sm text-white/90">
-                  {usingCustomPlacement ? "Vindkollen" : "Katrineholm"} · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}
+                  Katrineholm · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}
                 </p>
               </div>
               {/* Juli 2026-fix (produktfeedback, ny omgång): "man borde ha röd
@@ -1704,12 +1704,6 @@ export default function Home() {
                     Om projektet
                   </button>
                 </div>
-                <button
-                  onClick={() => { window.location.href = "/vindkraft-karta/"; }}
-                  className="w-full rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
-                >
-                  ← Sverigekartan
-                </button>
                 {/* Juli 2026-fix (produktfeedback, ny omgång: "gör det
                     smartare, tar för mycket plats"): flyttade hit från
                     topp-baren — sällananvända engångsåtgärder, inte löpande

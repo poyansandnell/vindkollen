@@ -1,0 +1,536 @@
+Jag utgår från att varumärket ska heta Vindkollen. Kontrollera bara en sista gång om domänen du köper är vindkollen.com med d. vinkollen.com utan d låter som en tjänst om vin.
+
+Kopiera detta till Replit Agent:
+
+Vi ska nu vidareutveckla och slå ihop de två befintliga publicerade versionerna i detta Replit-projekt:
+1. Vindkraft AR Katrineholm
+2. Vindkraft Karta Sverige
+Målet är att skapa en enda sammanhållen, nationell och framtida internationell webbapp.
+NYTT VARUMÄRKE
+Produktnamn:
+Vindkollen
+Huvuddomän:
+vindkollen.com
+Om domänen ännu inte är ansluten ska appen förberedas för den, men nuvarande replit.app-adresser ska fortsätta fungera tills domänen är aktiv.
+Svensk undertitel:
+Se befintliga och planerade vindkraftverk på karta och i verklig skala.
+Engelsk produkttext:
+Explore existing and planned wind turbines on the map and visualize them in augmented reality.
+VIKTIGA REGLER
+- Behåll all nuvarande fungerande funktionalitet.
+- Gör inga destruktiva ändringar i produktionsdatabasen.
+- Ta backup eller skapa en tydlig återställningspunkt innan större förändringar.
+- Återanvänd befintliga komponenter, kartdata, koordinater och AR-funktioner.
+- Befintliga länkar ska fortsätta fungera eller omdirigeras till motsvarande sida i den nya appen.
+- Katrineholmsinformationen får inte tas bort.
+- Testa varje förändring på mobil och desktop.
+- Publicera inte ofärdiga eller trasiga funktioner till produktion.
+ÖVERGRIPANDE MÅL
+Skapa en enda webbapp där användaren kan:
+- se befintliga och planerade vindkraftverk i hela Sverige,
+- söka efter kommun, ort, adress eller vindkraftsprojekt,
+- använda sin aktuella position,
+- se närliggande vindkraftsprojekt,
+- öppna ett projekt på kartan,
+- växla från karta till AR,
+- se valda vindkraftverk i AR från användarens position,
+- gå tillbaka till kartan utan att förlora valt projekt,
+- se projektinformation, status, höjd, antal verk och källor,
+- se om koordinater är exakta eller ungefärliga,
+- ladda ner lokala underlag,
+- skicka in handlingar och koordinater,
+- bidra ekonomiskt till fortsatt utveckling.
+Appen ska lanseras med Sverige som huvudmarknad, men datamodellen och tekniken ska förberedas för fler länder.
+EN APP – INTE TVÅ SEPARATA PRODUKTER
+Sverigekartan och AR-funktionen ska bli två vyer i samma app.
+När användaren väljer ett projekt eller en grupp vindkraftverk på kartan ska samma urval följa med till AR-vyn.
+Gemensam state ska minst innehålla:
+- vald kommun,
+- vald ort,
+- valt projekt,
+- valda vindkraftverk,
+- användarens position,
+- kartposition,
+- zoomnivå,
+- valda filter.
+Knappar:
+På kartan:
+“Visa i AR”
+I AR-vyn:
+“Tillbaka till kartan”
+När användaren går tillbaka ska kartan öppnas på samma plats och med samma projekt valt.
+STARTSIDA
+Förstasidan ska inte längre bara handla om Katrineholm.
+Skapa en nationell startsida med följande innehåll.
+Huvudrubrik:
+Se vindkraften innan den byggs
+Ingress:
+Utforska befintliga och planerade vindkraftverk i hela Sverige. Sök efter en plats, studera projekten på kartan och använd AR för att se hur verken kan upplevas från marknivå.
+Primära knappar:
+- Öppna Sverigekartan
+- Använd min position
+Sekundär funktion:
+- Sök kommun, ort, adress eller projekt
+Sökfältet ska ha autocomplete där det är tekniskt möjligt.
+Begär inte GPS-behörighet direkt när sidan öppnas. GPS-behörighet ska efterfrågas först när användaren klickar på “Använd min position” eller öppnar en funktion som kräver position.
+Visa tre huvudsakliga funktioner:
+- Hela Sverige på karta
+- Visualisering i AR
+- Lokala projekt och underlag
+Om användaren delar sin position ska startsidan kunna visa:
+- närmaste projekt,
+- ungefärligt avstånd,
+- antal registrerade verk i närheten,
+- knapp för att visa projektet på kartan,
+- knapp för att öppna projektet i AR.
+KATRINEHOLM FRAMÅT SOM AVSÄNDARE
+Katrineholm Framåts logotyp ska finnas kvar, men inte dominera produktnamnet.
+Visa exempelvis texten:
+“Vindkollen är ett initiativ utvecklat av Katrineholm Framåt.”
+Logotypen kan visas i sidfoten, på sidan Om Vindkollen och diskret på startsidan.
+Katrineholm ska vara en kommun i systemet med mer komplett lokalt innehåll, inte hela appens identitet.
+SPRÅK
+Implementera minst:
+- svenska, kod sv
+- engelska, kod en
+Första besöket:
+- använd webbläsarens språk,
+- visa svenska om webbläsarspråket börjar med sv,
+- visa engelska för övriga användare.
+Använd inte GPS-positionen som enda grund för språkval.
+Visa alltid en tydlig språkväxlare:
+SV | EN
+Det kan även finnas svenska och brittiska flaggor som visuellt stöd, men skriv alltid också SV och EN så att språkvalet är tydligt.
+Spara användarens manuella språkval i local storage eller motsvarande.
+Alla användartexter ska flyttas till separata översättningsfiler. Hårdkoda inte svenska texter direkt i komponenterna.
+Engelsk startsida:
+Rubrik:
+See wind power before it is built
+Ingress:
+Explore existing and planned wind turbines. Search for a location, view projects on the map and use augmented reality to understand how the turbines may appear from ground level.
+Knappar:
+- Open the map
+- Use my location
+- Search for a place or project
+DOMÄN OCH ROUTING
+Förbered appen för:
+https://vindkollen.com
+Föreslagen routing:
+/
+Startsida
+/karta
+Sverigekarta
+/ar
+AR-vy
+/projekt
+Projektlista
+/projekt/:slug
+Projektsida
+/kommun/:slug
+Kommuninformation
+/underlag
+Lokala underlag
+/skicka-in
+Skicka in information
+/stod
+Stöd utvecklingen
+/om
+Om Vindkollen och datakällorna
+/en
+Engelsk startsida om nuvarande routinglösning kräver språkprefix
+Alternativt kan språk hanteras med:
+/sv/...
+/en/...
+Välj den lösning som passar befintligt ramverk bäst, men språket ska också kunna växlas utan att användaren förlorar aktuell sida eller valt projekt.
+SVERIGEKARTAN
+Använd befintlig data som redan finns inlagd för Sverige.
+Lägg till eller behåll filter för:
+- befintliga verk,
+- planerade verk,
+- projektstatus,
+- län,
+- kommun,
+- projektnamn,
+- exakta positioner,
+- ungefärliga positioner.
+Använd marker clustering när många vindkraftverk visas samtidigt.
+Data ska laddas utifrån kartans synliga område, bounding box, om nuvarande teknik och databas medger det.
+Ladda inte alla framtida globala datapunkter i webbläsaren samtidigt.
+När användaren klickar på ett verk eller projekt ska informationspanelen visa:
+- projektnamn,
+- kommun,
+- projektstatus,
+- antal verk,
+- uppskattad eller beslutad totalhöjd,
+- koordinaternas säkerhetsnivå,
+- källa,
+- datum för senaste kontroll,
+- knapp “Visa i AR”,
+- knapp “Läs mer”,
+- knapp “Rapportera fel”.
+AR-FUNKTIONEN
+Behåll och förbättra befintlig AR-funktion.
+AR-vyn ska:
+- använda användarens GPS-position,
+- använda kompass och gyroskop där det finns,
+- visa valda vindkraftverk i rätt riktning,
+- använda verkliga eller uppskattade koordinater,
+- visa tydligt om positionerna är ungefärliga,
+- kunna öppnas för projekt i hela Sverige,
+- inte vara hårdkodad till Katrineholm,
+- ha tydlig kalibreringsfunktion,
+- förklara hur användaren ska hålla och röra mobilen,
+- visa ett tydligt felmeddelande om sensorer eller behörigheter saknas,
+- ha en knapp tillbaka till samma projekt på kartan.
+AR-vyn ska inte låtsas att osäkra koordinater är exakta.
+Visa exempelvis:
+“Visualiseringen bygger på ungefärliga positioner. De slutliga placeringarna kan ändras.”
+DATAMODELL
+Granska först den nuvarande databasen och anpassa varsamt.
+Varje land ska kunna innehålla:
+- id
+- country_code
+- country_name
+- default_language
+Varje region eller län ska kunna innehålla:
+- id
+- country_id
+- name
+- slug
+Varje kommun eller lokalt område ska kunna innehålla:
+- id
+- region_id
+- name
+- slug
+- description
+- contact_information
+- last_updated_at
+Varje projekt ska minst kunna innehålla:
+- id
+- name
+- slug
+- country_id
+- region_id
+- municipality_id
+- locality
+- latitude
+- longitude
+- project_area_geometry
+- project_status
+- description
+- number_of_turbines
+- maximum_total_height
+- hub_height
+- rotor_diameter
+- developer
+- source_name
+- source_url
+- last_verified_at
+- publication_status
+Projektstatus ska minst stödja:
+- early_planning
+- consultation
+- application_submitted
+- under_review
+- approved
+- rejected
+- appealed
+- construction
+- operational
+- cancelled
+- unknown
+Visa svenska och engelska översättningar av statusarna i gränssnittet.
+Varje vindkraftverk ska minst kunna innehålla:
+- id
+- project_id
+- latitude
+- longitude
+- total_height
+- hub_height
+- rotor_diameter
+- turbine_status
+- coordinate_accuracy
+- source_name
+- source_url
+- source_document
+- last_verified_at
+coordinate_accuracy ska stödja:
+- exact
+- approximate
+- project_area_only
+- unverified
+Visa användarvänliga etiketter:
+- Exakt position enligt offentlig handling
+- Ungefärlig position
+- Endast projektområde
+- Position ännu inte verifierad
+Engelska motsvarigheter:
+- Exact position from an official document
+- Approximate position
+- Project area only
+- Position not yet verified
+FRAMTIDA GLOBAL VERSION
+Implementera inte hela världens vindkraftsdata nu.
+Förbered däremot systemet för att kunna lägga till fler länder utan att koden behöver byggas om.
+All geografisk data ska kopplas till land.
+Undvik svenska hårdkodade fältnamn och antaganden i databasen.
+Förbered:
+- server-side geografisk filtrering,
+- spatial indexering om databasen stödjer det,
+- marker clustering,
+- lazy loading,
+- caching,
+- laddning per kartområde,
+- import av GeoJSON och CSV.
+Världsdata ska senare kunna läggas till land för land.
+LOKALA UNDERLAG
+Skapa sidan:
+Lokala underlag
+Användaren ska kunna välja:
+1. Län
+2. Kommun
+3. Projekt, om det finns flera projekt
+Visa därefter tillgängliga:
+- kartor,
+- ansökningshandlingar,
+- samrådsunderlag,
+- miljökonsekvensbeskrivningar,
+- koordinatfiler,
+- beslutsunderlag,
+- informationsblad,
+- myndighetsdokument,
+- externa länkar.
+Varje dokument ska kunna innehålla:
+- titel,
+- dokumenttyp,
+- län,
+- kommun,
+- projekt,
+- dokumentdatum,
+- publiceringsdatum,
+- källa,
+- fil eller extern länk,
+- kort beskrivning,
+- språk.
+Visa knappen:
+“Ladda ner underlag”
+Om inget underlag finns:
+“Vi har ännu inte publicerat något kvalitetssäkrat underlag för den här kommunen.”
+Visa även knappen:
+“Skicka in underlag”
+SKICKA IN UNDERLAG OCH KOORDINATER
+Skapa ett formulär där användaren kan:
+- välja land,
+- välja län,
+- välja kommun,
+- ange projekt,
+- skriva ett meddelande,
+- ange namn frivilligt,
+- ange e-postadress,
+- bifoga PDF,
+- bifoga bild,
+- bifoga CSV,
+- bifoga GeoJSON,
+- bifoga koordinater,
+- ange källa,
+- godkänna behandling av uppgifterna.
+Text:
+“Hjälp oss förbättra Vindkollen genom att skicka in offentliga handlingar, koordinater eller information om befintliga och planerade vindkraftsprojekt.”
+Alla inskick ska sparas som ej granskade och får aldrig publiceras automatiskt.
+Adminstatus:
+- nytt,
+- under granskning,
+- godkänt,
+- avslaget,
+- implementerat.
+STÖD UTVECKLINGEN
+Skapa en tydlig sida och en mindre sektion på startsidan.
+Rubrik:
+Hjälp oss göra Vindkollen mer exakt
+Text:
+“Vi arbetar med att samla in och kvalitetssäkra positioner för planerade vindkraftverk i hela Sverige. För vissa projekt finns exakta koordinater i offentliga handlingar, medan andra behöver begäras ut och bearbetas manuellt.
+Du kan hjälpa till genom att skicka in offentliga handlingar eller exakta koordinater, tipsa oss om planerade projekt eller bidra ekonomiskt till fortsatt utveckling och inhämtning av underlag.
+Att ta fram, kontrollera och implementera ett fullständigt kommununderlag kostar normalt omkring 5 000 kronor per kommun, oavsett antalet vindkraftverk.”
+Visa tydligt:
+Swish: 076-144 09 39
+Frågor och underlag:
+info@katrineholmframat.se
+Telefonnumret ska vara klickbart på mobil.
+E-postadressen ska vara en klickbar mailto-länk.
+Skapa inte någon påhittad Swish-länk.
+Förbered en plats för en riktig Swish-QR-kod som kan läggas in senare.
+Skapa även en kortare engelsk version:
+“Help us improve the accuracy of Vindkollen”
+Förklara att finansieringen används till att inhämta, kvalitetssäkra och implementera offentliga handlingar och koordinater.
+Eftersom Swish primärt är en svensk betalmetod ska engelska användare även kunna se kontaktadressen för frågor om andra sätt att stödja projektet.
+TRANSPARENS OCH KÄLLOR
+Skapa sidan:
+Om informationen
+Förklara:
+- var uppgifterna kommer ifrån,
+- att uppgifter kan komma från myndigheter, kommuner, projektörer och offentliga handlingar,
+- skillnaden mellan exakta och uppskattade positioner,
+- att planerade projekt kan förändras,
+- att antal verk och placeringar kan ändras under processen,
+- datum för senaste uppdatering,
+- hur användaren rapporterar fel,
+- att ursprungliga handlingar bör kontrolleras inför formella beslut.
+Varje projekt ska visa:
+- källa,
+- länk till källa när sådan finns,
+- datum då informationen senast kontrollerades,
+- koordinaternas säkerhetsnivå.
+Lägg till knappen:
+“Rapportera fel”
+ADMINVY
+Behåll befintlig adminfunktionalitet och utöka den säkert.
+Administratören ska kunna:
+- skapa och redigera länder,
+- skapa och redigera regioner och län,
+- skapa och redigera kommuner,
+- skapa och redigera projekt,
+- skapa och redigera vindkraftverk,
+- importera CSV,
+- importera GeoJSON,
+- ange koordinatsäkerhet,
+- lägga till källor,
+- ladda upp dokument,
+- koppla dokument till kommun och projekt,
+- hantera inkomna tips,
+- hantera inskickade dokument,
+- godkänna eller avslå material,
+- publicera eller avpublicera projekt,
+- markera uppgifter som verifierade,
+- se datum för senaste uppdatering.
+Importer ska alltid visas i en förhandsgranskning innan data sparas.
+Visa:
+- antal nya poster,
+- antal uppdaterade poster,
+- antal dubletter,
+- antal felaktiga rader.
+Import får inte automatiskt skriva över befintlig verifierad data utan administratörens bekräftelse.
+PRESTANDA
+Appen ska fungera snabbt även när datamängden växer.
+Implementera eller förbered:
+- marker clustering,
+- server-side filtrering,
+- bounding-box-laddning,
+- debounce när kartan flyttas,
+- cache för vanliga områden,
+- pagination,
+- optimerad AR-rendering,
+- lazy loading,
+- felhantering,
+- laddningsindikatorer,
+- spatial indexering om databasen stödjer det.
+SEO OCH DELNING
+Skapa dynamiska sidtitlar och metadata.
+Exempel:
+“Planerad vindkraft i Katrineholms kommun | Vindkollen”
+“Vindkraftsprojekt i Sverige | Vindkollen”
+“Wind power projects in Sweden | Vindkollen”
+Skapa delningsbara länkar till:
+- vald kommun,
+- valt projekt,
+- vald kartposition,
+- valt vindkraftverk,
+- AR-vy för ett projekt.
+När en delad länk öppnas ska rätt projekt och kartområde laddas.
+NAVIGATION
+Svenska:
+- Start
+- Karta
+- AR
+- Projekt
+- Lokala underlag
+- Skicka in information
+- Stöd utvecklingen
+- Om Vindkollen
+- SV | EN
+Engelska:
+- Home
+- Map
+- AR
+- Projects
+- Local documents
+- Submit information
+- Support development
+- About Vindkollen
+- SV | EN
+MOBILANPASSNING
+Majoriteten av användarna kommer sannolikt använda mobiltelefon.
+Prioritera därför:
+- stora tryckytor,
+- tydliga knappar,
+- enkel navigation,
+- snabb laddning,
+- bra kartkontroller,
+- tydlig instruktion för AR,
+- stöd för stående och liggande läge,
+- safe areas på iPhone,
+- bra felmeddelanden vid nekad GPS- eller kamerabehörighet.
+PWA
+Granska om appen kan göras till en Progressive Web App utan att skada nuvarande funktionalitet.
+Förbered i så fall:
+- appikon,
+- manifest,
+- namn “Vindkollen”,
+- möjlighet att lägga till på hemskärmen,
+- korrekt start-URL,
+- fullskärmsläge,
+- grundläggande offline-sida.
+Gör inte avancerad offline-lagring av kartdata i första versionen.
+GENOMFÖRANDEORDNING
+FAS 1 – ANALYS OCH SÄKERHET
+1. Inspektera hela kodbasen.
+2. Identifiera vilka komponenter som används av respektive publicerad app.
+3. Dokumentera nuvarande routing.
+4. Dokumentera databasstrukturen.
+5. Identifiera eventuella hårdkodningar till Katrineholm.
+6. Skapa backup eller återställningspunkt.
+7. Lista risker för brutna länkar och dataförlust.
+8. Presentera en kort implementeringsplan.
+FAS 2 – GEMENSAM APP
+1. Skapa gemensam navigation.
+2. Skapa den nya nationella startsidan.
+3. Gör Sverigekartan till huvudkarta.
+4. Koppla samman karta och AR med gemensam state.
+5. Behåll Katrineholmsinformationen.
+6. Säkerställ att gamla länkar fungerar.
+FAS 3 – SPRÅK OCH INNEHÅLL
+1. Implementera svenska och engelska.
+2. Flytta texter till översättningsfiler.
+3. Skapa kommun- och projektsidor.
+4. Skapa sidan Lokala underlag.
+5. Skapa sidan Om informationen.
+FAS 4 – INSAMLANDE OCH STÖD
+1. Skapa formuläret för inskick.
+2. Skapa stödsidan.
+3. Utöka adminvyn.
+4. Lägg till säker dokumenthantering.
+FAS 5 – PRESTANDA OCH KVALITET
+1. Optimera kartladdning.
+2. Implementera clustering.
+3. Testa stora datamängder.
+4. Testa GPS, kamera, kompass och AR.
+5. Testa svenska och engelska.
+6. Testa mobil och desktop.
+7. Testa gamla och nya länkar.
+8. Kontrollera SEO och metadata.
+9. Kontrollera att inga hemligheter eller API-nycklar exponeras i klientkoden.
+BÖRJA NU
+Börja med att inspektera projektet och skapa filen:
+VINDKOLLEN_MIGRATION_PLAN.md
+Dokumentera där:
+- nuvarande struktur,
+- databastabeller,
+- publicerade versioner,
+- gemensamma komponenter,
+- komponenter som endast används i Katrineholmsversionen,
+- komponenter som endast används i Sverigekartan,
+- risker,
+- backupstrategi,
+- föreslagen routing,
+- föreslagen migrationsordning.
+Fortsätt därefter med Fas 1 och Fas 2.
+Arbeta stegvis och bevara fungerande produktionsfunktioner. Gör inte om hela appen från grunden om befintliga komponenter kan återanvändas.

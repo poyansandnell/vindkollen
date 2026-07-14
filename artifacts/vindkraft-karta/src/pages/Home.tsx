@@ -316,7 +316,7 @@ export default function Home() {
       </div>
 
       {selection && (
-        <DetailPanel selection={selection} onClose={() => setSelection(null)} focusPoint={focusPoint} />
+        <DetailPanel selection={selection} onClose={() => setSelection(null)} focusPoint={focusPoint} turbines={turbines} />
       )}
 
       {showBestPlaces && (
