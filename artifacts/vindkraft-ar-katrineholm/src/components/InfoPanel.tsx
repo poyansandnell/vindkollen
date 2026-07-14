@@ -1,6 +1,6 @@
 export function InfoPanel({ onClose }: { onClose: () => void }) {
   return (
-    <div className="absolute inset-0 z-40 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">
+    <div className="absolute inset-0 z-[60] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">
       <div className="w-full max-w-md rounded-t-3xl bg-[#111111] p-6 shadow-2xl sm:rounded-3xl">
         <div className="mb-4 flex items-start justify-between">
           <h2 className="text-xl font-semibold text-white">Bakgrund om planerna</h2>

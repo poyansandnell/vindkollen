@@ -1555,22 +1555,6 @@ export default function Home() {
                     rendera en extra rad. GPS/Kompass/dBA/Infraljud (de fyra
                     som är antingen kritiska för sensorstatus eller hälso-/
                     säkerhetsrelevanta) förblir alltid synliga. */}
-                <button
-                  onClick={() => setShowStatusDetails((v) => !v)}
-                  aria-pressed={showStatusDetails}
-                  aria-label={showStatusDetails ? "Dölj fler statusdetaljer" : "Visa fler statusdetaljer"}
-                  className="shrink-0 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-white/20"
-                >
-                  {showStatusDetails ? "▴ Mindre" : "▾ Mer status"}
-                </button>
-                <button
-                  onClick={() => setShowControls(true)}
-                  aria-pressed={showControls}
-                  aria-label="Visningsinställningar"
-                  className="shrink-0 rounded-full bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
-                >
-                  ⚙️
-                </button>
               </div>
             </div>
             {showStatusDetails && (
@@ -1579,45 +1563,47 @@ export default function Home() {
                 <LineOfSightStatus status={lineOfSightStatus} />
               </div>
             )}
-            {/* Juli 2026-fix (produktkrav 2): svag-signal-rutan och
-                "Vindljud aktivt"-taggen som tidigare låg här flyttades in i
-                den enda prioriterade `statusBanner`-rutan ovan, så de aldrig
-                kan visas samtidigt som t.ex. en felruta eller
-                målbekräftelsen. */}
-            {/* Juli 2026-fix (produktfeedback, ny omgång: "gör det smartare,
-                tar för mycket plats"): "Kalibrera horisont" och "Visa/dölj
-                verk" är sällananvända engångs-/inställningsåtgärder, inte
-                löpande status — flyttade till "☰ Meny"-bottensheeten
-                (samma mönster som "Visa karta"/"Om projektet") så att bara
-                de två knapparna som är direkt kopplade till den redan
-                synliga ljudnivå-panelen (dBA-siffran nedtill) blir kvar
-                här och får plats på EN rad. */}
-            <div className="flex flex-wrap items-center gap-2">
-              {nightMode && (
-                <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-2.5 py-1 text-[11px] text-red-200">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-                  Nattläge
-                </span>
-              )}
-              {ready && (
+            {/* Nattläge/Ljudnivå/Ljud ute + Mer status + gear på SAMMA rad */}
+            <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                {nightMode && (
+                  <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-2.5 py-1 text-[11px] text-red-200">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                    Nattläge
+                  </span>
+                )}
+                {ready && (
+                  <button
+                    onClick={() => setShowSoundLevel((v) => !v)}
+                    aria-pressed={showSoundLevel}
+                    className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
+                  >
+                    🔊 Ljudnivå
+                  </button>
+                )}
                 <button
-                  onClick={() => setShowSoundLevel((v) => !v)}
-                  aria-pressed={showSoundLevel}
+                  onClick={() => setSoundEnvironment((v) => (v === "ute" ? "inne" : "ute"))}
+                  aria-pressed={soundEnvironment === "inne"}
                   className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
                 >
-                  🔊 Ljudnivå
+                  {soundEnvironment === "ute" ? "🔊 Ljud ute" : "🔈 Ljud inne"}
                 </button>
-              )}
-              {/* Explicit, alltid synlig ute/inne-väljare för ljudet — ersätter
-                  det gamla automatiska (kamerastyrda) beteendet. Startar alltid
-                  på "Ljud ute" enligt produktkravet, se `soundEnvironment`s
-                  useState ovan. */}
+              </div>
               <button
-                onClick={() => setSoundEnvironment((v) => (v === "ute" ? "inne" : "ute"))}
-                aria-pressed={soundEnvironment === "inne"}
-                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
+                onClick={() => setShowStatusDetails((v) => !v)}
+                aria-pressed={showStatusDetails}
+                aria-label={showStatusDetails ? "Dölj fler statusdetaljer" : "Visa fler statusdetaljer"}
+                className="shrink-0 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-white/20"
               >
-                {soundEnvironment === "ute" ? "🔊 Ljud ute" : "🔈 Ljud inne"}
+                {showStatusDetails ? "▴ Mindre" : "▾ Mer status"}
+              </button>
+              <button
+                onClick={() => setShowControls(true)}
+                aria-pressed={showControls}
+                aria-label="Visningsinställningar"
+                className="shrink-0 rounded-full bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+              >
+                ⚙️
               </button>
             </div>
           </div>
