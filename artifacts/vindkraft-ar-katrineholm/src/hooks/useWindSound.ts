@@ -53,14 +53,22 @@ interface WindNodes {
 // `setTargetAtTime`-övertoningar (de har en fast, långsammare tidskonstant
 // och uppdateras bara när metoden anropas, inte kontinuerligt).
 //
-// Hög upplevd ljudstyrka (utan att digitalt klippa) uppnås genom en hårdare
-// kompressor (lägre tröskel/högre ratio) + en makeup-gain-nod efteråt som
-// lyfter den komprimerade signalen tillbaka upp mot fullt utslag, och en
-// sista mjuk klippnings- (WaveShaper-)nod som säkerhetsnät.
-const AMBIENCE_MAX = 0.78;
-const WHOOSH_MAX = 1.25;
-const WHOOSH2_MAX = 0.8;
-const RUMBLE_MAX = 0.42;
+// Juli 2026-fix (produktfeedback: "minska ljudet från 300% påslag till
+// naturligt ljud exakt enligt den decibel som visas i appen"): de fyra
+// per-lagrets MAX-konstanter summerade till 3,25 (AMBIENCE 0,78 + WHOOSH
+// 1,25 + WHOOSH2 0,80 + RUMBLE 0,42), vilket innebar att signalen in till
+// masterGain var ca 3× högre än vad `dbaToVolume`s 0..1-utdata representerar
+// — dvs. ett konstgjort ~300%-påslag ovanpå den dBA-kalibrerade kurvan. Nu
+// är konstanterna normaliserade så att deras summa är ≈ 1,0, vilket gör att
+// den kombinerade nivån vid `targetVolume=1` producerar ≈ 1,0-amplitud
+// in i masterbussen — och vid t.ex. 30 dBA (targetVolume ≈ 0,02) hörs
+// ljudet proportionellt tyst, precis som siffran indikerar.
+// Kompressorn och makeupGain (1,1) finns kvar som säkerhetsnät mot
+// klippning, men de boostear inte längre medvetet.
+const AMBIENCE_MAX = 0.25;
+const WHOOSH_MAX = 0.40;
+const WHOOSH2_MAX = 0.25;
+const RUMBLE_MAX = 0.10;
 
 // ~20 Hz — klart över produktkravets "minst 10 ggr/sekund", med marginal så
 // utjämningen känns kontinuerlig snarare än stegvis.
