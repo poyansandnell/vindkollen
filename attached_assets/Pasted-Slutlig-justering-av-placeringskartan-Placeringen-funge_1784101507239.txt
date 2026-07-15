@@ -1,0 +1,85 @@
+Slutlig justering av placeringskartan
+
+Placeringen fungerar bra, men följande behöver ändras utan att någon befintlig funktion för placering, beräkningar eller AR påverkas:
+
+1. Gör kartan helt responsiv
+
+Kartan får aldrig sträckas eller pressas ihop i sidled.
+
+* Anpassa kartans bredd och höjd dynamiskt efter skärmstorleken.
+* Behåll korrekta geografiska proportioner.
+* Kartan ska fylla tillgängligt utrymme utan att förvrängas.
+* På breda skärmar ska kartan bli högre, inte bara bredare.
+* På mobil och surfplatta ska panelerna flyttas under kartan eller visas som utfällbara lager.
+* Kör kartans resize-/invalidateSize-funktion när:
+    * fönstret ändrar storlek
+    * sidopanelen öppnas eller stängs
+    * helskärmsläge aktiveras
+    * enheten roteras
+
+2. Förbättra zoomningen
+
+Det ska vara mycket lätt att zooma in och ut.
+
+Lägg till:
+
+* tydliga + och –-knappar direkt på kartan
+* zoomning med mushjul
+* pinch-zoom på mobil
+* dubbelklick för att zooma in
+* knapp för att återställa kartan till Katrineholm
+* gärna en helskärmsknapp
+* mjuk zoomning utan att kartan hoppar
+
+Zoomknapparna ska vara tillräckligt stora och synliga även på mobil.
+
+3. Visa inte Ericsbergs gräns hela tiden
+
+Ericsbergs markgräns tar nu mycket uppmärksamhet och gör kartan rörigare.
+
+Gör i stället så här:
+
+* Visa en tydlig markör för Ericsbergs slott.
+* När användaren klickar på markören visas en liten informationsruta:
+    * Ericsbergs slott
+    * knapp: Visa Ericsbergs marker
+* Först när användaren trycker på knappen visas markgränsen med en mjuk animation.
+* Knappen ändras då till Dölj Ericsbergs marker.
+* Markgränsen ska vara diskret och halvtransparent.
+* Den får inte automatiskt påverka placeringen om användaren inte uttryckligen aktiverat det som ett villkor.
+
+Det går även att behålla en mindre knapp ovanför kartan: Visa Ericsbergs marker, men den ska vara avstängd som standard.
+
+4. Gör gränser och etiketter tydligare
+
+När man zoomar ut ska inte alla ortsnamn, etiketter och områden ligga ovanpå varandra.
+
+* Visa färre etiketter vid låg zoom.
+* Visa fler detaljer först när användaren zoomar in.
+* Anpassa storleken på verkens markeringar efter zoomnivån.
+* Verkens cirklar får inte bli enorma när kartan zoomas ut.
+* Informationspanelerna får inte minska själva kartans bredd så mycket att kartan förvrängs.
+
+5. Bättre layout på desktop
+
+På en bred datorskärm:
+
+* kartan ska vara huvudfokus och använda större delen av skärmen
+* poängpanelen till höger kan ligga som en flytande panel ovanpå kartan
+* panelen ska kunna minimeras
+* resultatdelen under kartan ska inte göra kartan onödigt låg
+* kartan bör ha en minsta höjd på cirka 55–65vh
+
+6. Viktigt
+
+Ändra inte:
+
+* placerade vindkraftverk
+* poängberäkningen
+* avståndsberäkningarna
+* hushålls- eller invånardata
+* befintliga gränsvillkor
+* kopplingen till AR-vyn
+* sparade placeringar
+
+Detta är en ren förbättring av kartans responsivitet, zoomning, gränsvisning och användargränssnitt.

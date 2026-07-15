@@ -78,6 +78,7 @@ export default function PlaceTurbines() {
   const [showEstateBoundary, setShowEstateBoundary] = useState(false);
   const [boundaryDebugMode, setBoundaryDebugMode] = useState(false);
   const [debugPanelOpen, setDebugPanelOpen] = useState(false);
+  const [scoreMinimized, setScoreMinimized] = useState(false);
   const [boundaryEditMode, setBoundaryEditMode] = useState(false);
   const [editableBoundary, setEditableBoundary] = useState<LatLon[]>(() => getActiveBoundary());
   const [boundaryVersion, setBoundaryVersion] = useState(0);
@@ -266,14 +267,6 @@ export default function PlaceTurbines() {
 
       <div className="flex items-center gap-2 border-b border-white/10 bg-[#0d0d0d] px-4 py-2">
         <button
-          onClick={() => setShowEstateBoundary((v) => !v)}
-          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-            showEstateBoundary ? "bg-[#FFB347] text-[#090909]" : "border border-white/20 bg-white/5 text-white hover:bg-white/10"
-          }`}
-        >
-          🗺️ Visa Ericsbergs mark
-        </button>
-        <button
           onClick={() => setBoundaryDebugMode((v) => !v)}
           className={`rounded-full px-3 py-1.5 text-xs font-medium ${
             boundaryDebugMode ? "bg-sky-400 text-[#090909]" : "border border-white/20 bg-white/5 text-white hover:bg-white/10"
@@ -329,7 +322,7 @@ export default function PlaceTurbines() {
         </div>
       )}
 
-      <div className="relative flex-1 overflow-hidden p-3">
+      <div className="relative flex-1 min-h-[55dvh] p-3">
         <PlacementMap
           turbines={turbines}
           colorTurbines={committedTurbines}
@@ -344,6 +337,7 @@ export default function PlaceTurbines() {
           onVertexDrag={handleVertexDrag}
           onVertexRemove={handleVertexRemove}
           onVertexAdd={handleVertexAdd}
+          onToggleEstateBoundary={() => setShowEstateBoundary((v) => !v)}
         />
 
         {debugPanelOpen && (
@@ -458,16 +452,25 @@ export default function PlaceTurbines() {
         </div>
       )}
 
-      <div className="max-h-[46dvh] overflow-y-auto border-t border-white/10 bg-[#0d0d0d] px-4 py-3">
-        <button
-          onClick={() => setDetailsOpen((v) => !v)}
-          className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left ${colors.border} ${colors.bg}`}
-        >
-          <span className={`text-sm font-semibold ${colors.text}`}>
-            {colors.emoji} {PLACEMENT_LEVEL_LABELS[result.level]} · {Math.round(result.totalScore)}/100
-          </span>
-          <span className="text-xs text-white/60">{detailsOpen ? "Dölj detaljer ▲" : "Visa mer ▼"}</span>
-        </button>
+      <div className={`overflow-y-auto border-t border-white/10 bg-[#0d0d0d] px-4 py-3 transition-[max-height] duration-300 ease-in-out ${scoreMinimized ? "max-h-[4.5rem]" : "max-h-[46dvh] lg:max-h-[30dvh]"}`}>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setDetailsOpen((v) => !v)}
+            className={`flex flex-1 items-center justify-between rounded-xl border px-3 py-2.5 text-left ${colors.border} ${colors.bg}`}
+          >
+            <span className={`text-sm font-semibold ${colors.text}`}>
+              {colors.emoji} {PLACEMENT_LEVEL_LABELS[result.level]} · {Math.round(result.totalScore)}/100
+            </span>
+            <span className="text-xs text-white/60">{detailsOpen ? "Dölj ▲" : "Mer ▼"}</span>
+          </button>
+          <button
+            onClick={() => setScoreMinimized((v) => !v)}
+            title={scoreMinimized ? "Visa panelen" : "Minimera panelen"}
+            className="shrink-0 rounded-full border border-white/20 bg-white/5 px-2.5 py-2 text-xs text-white/70 hover:bg-white/10"
+          >
+            {scoreMinimized ? "▲" : "▼"}
+          </button>
+        </div>
 
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div className="rounded-lg bg-white/5 px-2.5 py-2">

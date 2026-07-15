@@ -34,6 +34,7 @@ interface PlacementMapProps {
   onRemove: (id: string) => void;
   outsideBoundaryIds: string[];
   showEstateBoundary: boolean;
+  onToggleEstateBoundary?: () => void;
   /**
    * Redigeringsläge för markgränserna: visar numrerade hörnpunkter (med
    * lat/lon) för både placeringsgränsen och "Ericsbergs mark"-polygonen, så
@@ -165,6 +166,7 @@ export function PlacementMap({
   onRemove,
   outsideBoundaryIds,
   showEstateBoundary,
+  onToggleEstateBoundary,
   boundaryDebugMode = false,
   boundaryEditMode = false,
   editableBoundary,
@@ -175,7 +177,14 @@ export function PlacementMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 1, height: 1 });
   const [castleOpen, setCastleOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [view, setView] = useState<ViewState>(() => computeDefaultView(turbines));
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
 
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [moveMode, setMoveMode] = useState<MoveModeState | null>(null);
@@ -311,6 +320,10 @@ export function PlacementMap({
     }
     return map;
   }, [colorTurbines, outsideBoundaryIds]);
+
+  const turbineRadius = Math.max(0.5, Math.min(2.8, 1.2 / (view.latSpan * 8)));
+  const showHouseholdLabels = view.latSpan < 0.18;
+  const showTurbineLabels = view.latSpan < 0.14;
 
   function zoneRadiusPercent(radiusM: number, lat: number) {
     const metersPerDegreeLat = METERS_PER_DEGREE_LAT;
@@ -481,6 +494,19 @@ export function PlacementMap({
   function zoomByFactor(deltaY: number) {
     const factor = deltaY > 0 ? 1.15 : 1 / 1.15;
     setView((v) => ({ ...v, latSpan: Math.min(Math.max(v.latSpan * factor, MIN_LAT_SPAN), MAX_LAT_SPAN) }));
+  }
+
+  function zoomIn() { zoomByFactor(-1); }
+  function zoomOut() { zoomByFactor(1); }
+  function resetView() { setView(computeDefaultView(turbines)); }
+  function toggleFullscreen() {
+    const el = containerRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      el.requestFullscreen().catch(() => {});
+    }
   }
 
   function handleTouchStart(e: React.TouchEvent) {
@@ -684,7 +710,7 @@ export function PlacementMap({
               key={t.id}
               cx={p.x}
               cy={p.y}
-              r={menu?.id === t.id || isMoving ? "2.2" : "1.8"}
+              r={menu?.id === t.id || isMoving ? turbineRadius + 0.5 : turbineRadius}
               style={{ fill: color, transition: "fill 400ms ease, cx 300ms ease, cy 300ms ease" }}
               stroke={isMoving ? "#FFB347" : "#fff"}
               strokeWidth={isMoving ? "0.6" : "0.3"}
@@ -696,7 +722,7 @@ export function PlacementMap({
       </svg>
 
       <div className="pointer-events-none absolute inset-0">
-        {HOUSEHOLD_CLUSTERS.map((h) => {
+        {showHouseholdLabels && HOUSEHOLD_CLUSTERS.map((h) => {
           const p = project(h.lat, h.lon);
           return (
             <div
@@ -742,12 +768,24 @@ export function PlacementMap({
             <p className="text-sm font-semibold text-[#FFB347]">Ericsbergs slott</p>
             <p className="mt-1 text-white/80">Markägare: Caroline Bonde</p>
             <p className="mt-1 text-white/50">
-              Härifrån visas den markerade marken runt området (se "Visa Ericsbergs mark").
+              Runt egendomen löper den markerade placeringsgränsen för vindkraftprojektet.
             </p>
+            {onToggleEstateBoundary && (
+              <button
+                className={`mt-2 w-full rounded-full px-3 py-1.5 text-center text-[11px] font-medium transition ${
+                  showEstateBoundary
+                    ? "bg-[#FFB347] text-[#090909] hover:bg-[#FF8B01]"
+                    : "border border-white/20 bg-white/5 hover:bg-white/10"
+                }`}
+                onClick={(e) => { e.stopPropagation(); onToggleEstateBoundary(); }}
+              >
+                {showEstateBoundary ? "Dölj Ericsbergs mark" : "Visa Ericsbergs mark"}
+              </button>
+            )}
           </div>
         )}
 
-        {turbines.map((t, i) => {
+        {showTurbineLabels && turbines.map((t, i) => {
           const p = project(t.lat, t.lon);
           const isOutside = outsideBoundaryIds.includes(t.id);
           return (
@@ -841,10 +879,41 @@ export function PlacementMap({
         )}
       </div>
 
-      <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-black/60 px-2 py-1 text-[10px] text-white/60">
+      <div className="pointer-events-none absolute bottom-3 left-3 max-w-[55%] rounded-md bg-black/60 px-2 py-1 text-[10px] leading-relaxed text-white/60">
         {moveMode
           ? "Tryck på kartan för att välja ny plats · tryck igen på menyn för att avbryta"
-          : "Tryck på ett verk för alternativ · dra för att panorera · nyp/dubbeltryck för att zooma · klicka för att placera nytt verk"}
+          : "Tryck på ett verk · dra för att panorera · nyp/dubbeltryck för att zooma"}
+      </div>
+
+      <div className="pointer-events-auto absolute bottom-3 right-3 z-10 flex flex-col items-center gap-1.5">
+        <button
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "Stäng helskärm" : "Helskärm"}
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-black/70 text-sm text-white shadow hover:bg-black/90"
+        >
+          {isFullscreen ? "⊡" : "⛶"}
+        </button>
+        <button
+          onClick={resetView}
+          title="Återställ vy"
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-black/70 text-sm text-white shadow hover:bg-black/90"
+        >
+          ⌂
+        </button>
+        <button
+          onClick={zoomIn}
+          title="Zooma in"
+          className="flex h-9 w-8 items-center justify-center rounded-t-lg bg-black/70 text-lg font-bold text-white shadow hover:bg-black/90"
+        >
+          +
+        </button>
+        <button
+          onClick={zoomOut}
+          title="Zooma ut"
+          className="flex h-9 w-8 items-center justify-center rounded-b-lg bg-black/70 text-lg font-bold text-white shadow hover:bg-black/90 -mt-1"
+        >
+          −
+        </button>
       </div>
     </div>
   );
