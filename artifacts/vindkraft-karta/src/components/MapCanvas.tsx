@@ -456,6 +456,23 @@ export default function MapCanvas({
           </div>
         </Popup>
       )}
+
+      <div className="absolute bottom-8 right-3 z-10 flex flex-col overflow-hidden rounded-md shadow-md border border-border/60">
+        <button
+          aria-label="Zooma in"
+          onClick={() => mapRef.current?.getMap().zoomIn({ duration: 250 })}
+          className="flex h-8 w-8 items-center justify-center bg-background text-lg font-bold text-foreground hover:bg-muted leading-none select-none border-b border-border/60"
+        >
+          +
+        </button>
+        <button
+          aria-label="Zooma ut"
+          onClick={() => mapRef.current?.getMap().zoomOut({ duration: 250 })}
+          className="flex h-8 w-8 items-center justify-center bg-background text-lg font-bold text-foreground hover:bg-muted leading-none select-none"
+        >
+          −
+        </button>
+      </div>
     </MapboxMapView>
   );
 }

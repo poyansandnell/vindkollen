@@ -364,6 +364,18 @@ export default function PlaceTurbines() {
         <PlacementMap
           turbines={turbines}
           colorTurbines={committedTurbines}
+          initialView={editHandoff ? (() => {
+            const lats = editHandoff.turbines.map((t) => t.lat);
+            const lons = editHandoff.turbines.map((t) => t.lon);
+            const minLat = Math.min(...lats);
+            const maxLat = Math.max(...lats);
+            const pad = Math.max((maxLat - minLat) * 0.25, 0.06);
+            return {
+              centerLat: (minLat + maxLat) / 2,
+              centerLon: (Math.min(...lons) + Math.max(...lons)) / 2,
+              latSpan: Math.min(maxLat - minLat + pad * 2, 2.0),
+            };
+          })() : undefined}
           onMove={handleMove}
           onAdd={handleAdd}
           onRemove={handleRemove}

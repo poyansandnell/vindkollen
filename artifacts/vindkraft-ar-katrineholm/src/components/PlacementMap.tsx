@@ -29,6 +29,9 @@ interface PlacementMapProps {
    * istället för att allt hoppar direkt.
    */
   colorTurbines: PlacedTurbine[];
+  /** Åsidosätter default-vyn (centrerad på Ericsberg/Katrineholm) — används
+   *  när ett handoff-projekt från Sverigekartan öppnas. */
+  initialView?: { centerLat: number; centerLon: number; latSpan: number };
   onMove: (id: string, lat: number, lon: number) => void;
   onAdd: (lat: number, lon: number) => void;
   onRemove: (id: string) => void;
@@ -163,6 +166,7 @@ function boundsFromView(view: ViewState, containerAspect: number): LatLonBounds 
 export function PlacementMap({
   turbines,
   colorTurbines,
+  initialView,
   onMove,
   onAdd,
   onRemove,
@@ -181,7 +185,7 @@ export function PlacementMap({
   const [containerSize, setContainerSize] = useState({ width: 1, height: 1 });
   const [castleOpen, setCastleOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [view, setView] = useState<ViewState>(() => computeDefaultView(turbines));
+  const [view, setView] = useState<ViewState>(() => initialView ?? computeDefaultView(turbines));
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
