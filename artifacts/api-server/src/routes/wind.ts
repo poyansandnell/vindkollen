@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, gte, lte, inArray, sql, desc } from "drizzle-orm";
+import { and, eq, gte, lte, inArray, sql, desc, getTableColumns } from "drizzle-orm";
 import {
   db,
   windProjectAreasTable,
@@ -69,9 +69,16 @@ router.get("/wind/project-areas", async (req, res) => {
     conditions.push(lte(windProjectAreasTable.centerLng, bbox.maxLng));
   }
 
+  // In summary mode, exclude the polygon column entirely from the DB query so
+  // Postgres never serialises the (often large) JSONB geometry over the wire.
+  const { polygon: polygonCol, ...baseAreaColumns } = getTableColumns(windProjectAreasTable);
+  const areaSelect = query.detail === "full"
+    ? { ...baseAreaColumns, polygon: polygonCol }
+    : baseAreaColumns;
+
   const rows = await db
     .select({
-      area: windProjectAreasTable,
+      area: areaSelect,
       nearestLocalityName: localitiesTable.name,
     })
     .from(windProjectAreasTable)
@@ -79,9 +86,10 @@ router.get("/wind/project-areas", async (req, res) => {
     .where(and(...conditions))
     .limit(5000);
 
-  let results = rows.map(({ area, nearestLocalityName }) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let results: any[] = rows.map(({ area, nearestLocalityName }) => ({
     ...area,
-    polygon: query.detail === "summary" ? null : area.polygon,
+    polygon: query.detail === "full" ? (area as { polygon?: unknown }).polygon ?? null : null,
     nearestLocalityName: nearestLocalityName ?? null,
     distanceKm: hasPoint
       ? distanceKm(query.lat as number, query.lng as number, area.centerLat, area.centerLng)
@@ -93,7 +101,8 @@ router.get("/wind/project-areas", async (req, res) => {
     results.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
   }
 
-  res.json(ListWindProjectAreasResponse.parse(results));
+  res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=300");
+  res.json(results);
 });
 
 router.get("/wind/project-areas/:id", async (req, res) => {
@@ -171,7 +180,8 @@ router.get("/wind/turbines", async (req, res) => {
     results.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
   }
 
-  res.json(ListWindTurbinesResponse.parse(results.slice(0, query.limit)));
+  res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=300");
+  res.json(results.slice(0, query.limit));
 });
 
 router.get("/wind/turbines/:id", async (req, res) => {

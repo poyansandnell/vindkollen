@@ -138,12 +138,13 @@ export default function Home() {
   }, [queryParams, isWideView]);
 
   const turbinesQuery = useListWindTurbines(queryParams, {
-    query: { enabled: filters.showTurbines && !!queryParams } as UseQueryOptions<WindTurbine[]>,
+    query: { enabled: filters.showTurbines && !!queryParams, staleTime: 5 * 60 * 1000 } as UseQueryOptions<WindTurbine[]>,
   });
   const showAnyAreas = filters.showOnshoreAreas || filters.showOffshoreAreas;
   const projectAreasQuery = useListWindProjectAreas(projectAreasQueryParams, {
     query: {
       enabled: showAnyAreas && !!projectAreasQueryParams,
+      staleTime: 5 * 60 * 1000,
     } as UseQueryOptions<WindProjectArea[]>,
   });
 
