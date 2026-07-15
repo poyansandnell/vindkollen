@@ -1,0 +1,186 @@
+Skriv så här till Replit:
+
+⸻
+
+Gör nu en sista namn- och varumärkesanpassning inför att appen ska publiceras som Vindkollen i App Store och Google Play.
+
+Ändra inte analyslogik, karta, AR, konton, databas, API-anrop eller fungerande funktioner. Detta gäller endast namn, metadata, ikoner, PWA och native-identitet.
+
+Ändra appnamnet till Vindkollen
+
+Byt namn där det fortfarande står exempelvis:
+
+* Katrineholm
+* Vindkraft AR Katrineholm
+* Vindkraft Karta Sverige
+* Katrineholmframåt
+* andra gamla projektnamn som visas för användaren
+
+Det publika huvudnamnet ska vara:
+
+Vindkollen
+
+Undantag: geografiska namn i faktiska projekt, exempeldata, kartpositioner eller analyser ska inte ändras.
+
+Native-konfiguration
+
+Kontrollera att capacitor.config.ts innehåller:
+
+appId: "se.vindkollen.app"
+appName: "Vindkollen"
+
+Bundle ID och Android package name ska fortsatt vara:
+
+se.vindkollen.app
+
+Ändra inte detta senare utan att först meddela mig.
+
+Webbläsartitel och metadata
+
+Uppdatera huvudappens index.html och eventuell metadata så att följande används:
+
+Titel: Vindkollen
+
+Lägg till eller uppdatera:
+
+* page title
+* description
+* theme color
+* Apple mobile web app title
+* Open Graph title
+* Open Graph description
+* favicon-referenser
+* appnamn vid installation som PWA
+
+Förslag på beskrivning:
+
+Vindkollen hjälper dig att visualisera och analysera vindkraftsprojekt på karta och i AR.
+
+PWA-manifest
+
+Kontrollera PWA-manifestet och använd:
+
+{
+  "name": "Vindkollen",
+  "short_name": "Vindkollen"
+}
+
+Kontrollera även:
+
+* korrekt start URL
+* standalone display
+* korrekt theme color
+* korrekt background color
+* att inga gamla Replit- eller Katrineholm-ikoner används
+
+Appikon och startbild
+
+Förbered strukturen för Vindkollens slutliga ikon.
+
+Om någon färdig Vindkollen-ikon redan finns i projektet, använd den.
+
+Om ingen slutlig ikon finns:
+
+* behåll tillfälligt en neutral Vindkollen-ikon
+* använd inte Replit-logotyp
+* använd inte Katrineholm Framåts partilogotyp
+* skapa en tydlig lista över vilka ikonfiler jag senare behöver ersätta
+
+Förbered minst:
+
+* PWA-ikoner
+* favicon
+* Apple touch icon
+* native app icon-underlag
+* splash/launch screen-underlag
+
+Skapa inte en ny avancerad logotyp utan mitt godkännande.
+
+Synliga rubriker i appen
+
+Kontrollera startsida, meny, konto, Mina projekt, kartvyer och AR-vyer.
+
+Där appens namn visas ska det stå:
+
+Vindkollen
+
+Projekt och vyer får fortfarande heta exempelvis:
+
+* Katrineholm Wind by Ericsberg
+* Sverigekartan
+* AR
+* Mina projekt
+
+men de får inte presenteras som appens övergripande namn.
+
+Domän och länkar
+
+Nuvarande produktionsdomän är:
+
+https://katrineholm.replit.app
+
+Ändra inte API-adressen eller deploymenten automatiskt.
+
+Förbered däremot konfigurationen så att vi senare enkelt kan byta till exempelvis:
+
+https://app.vindkollen.com
+
+Alla publika länkar, delningslänkar, supportlänkar och callback-URL:er ska använda en central konfigurationsvariabel och inte vara utspridda eller hårdkodade.
+
+Skapa exempelvis:
+
+VITE_PUBLIC_APP_URL
+VITE_API_BASE_URL
+
+Nuvarande produktionsvärde får tills vidare vara:
+
+VITE_PUBLIC_APP_URL=https://katrineholm.replit.app
+VITE_API_BASE_URL=https://katrineholm.replit.app
+
+för native-bygget.
+
+Webbversionen får fortsatt använda relativa API-anrop där det redan fungerar.
+
+Viktig kontroll av arbetsytan
+
+Den app som ska publiceras är workspacet:
+
+artifacts/vindkraft-ar-katrineholm
+
+Kontrollera att Vindkollen-namnet ändras i detta workspace.
+
+Ändra inte artifacts/vindkraft-karta separat om det riskerar att skapa dubbla eller motstridiga appidentiteter. Sverigekartan ska fortsatt vara en del av Vindkollens användarflöde.
+
+Efter ändringarna
+
+Kör:
+
+* typecheck
+* production build
+* native build
+* sökning efter gamla synliga namn
+
+Sök särskilt efter:
+
+Vindkraft AR Katrineholm
+Vindkraft Karta Sverige
+Katrineholmframåt
+Katrineholm Framåt
+Replit
+
+Redovisa vilka förekomster som finns kvar och varför de behöver finnas kvar.
+
+Leveransrapport
+
+När du är klar, ge mig:
+
+1. Exakta filer som ändrades.
+2. Vilket appnamn som visas i webbläsaren.
+3. Vilket namn som används i PWA-installationen.
+4. Vilket namn som används i Capacitor.
+5. Vilka ikoner som används just nu.
+6. Vilka ikonfiler som måste ersättas före App Store-publicering.
+7. Bekräftelse på att analys, karta, AR, konton och API inte har ändrats.
+8. Bekräftelse på att både typecheck och production build är godkända.
+
+Gör en checkpoint efter arbetet.

@@ -29,7 +29,7 @@ export function PhotoMontageModal({ imageDataUrl, onRetake, onClose }: PhotoMont
   function handleSave() {
     const link = document.createElement("a");
     link.href = imageDataUrl;
-    link.download = `vindkraft-ar-katrineholm-${Date.now()}.png`;
+    link.download = `vindkollen-${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -40,14 +40,14 @@ export function PhotoMontageModal({ imageDataUrl, onRetake, onClose }: PhotoMont
   async function handleShare() {
     try {
       const blob = dataUrlToBlob(imageDataUrl);
-      const file = new File([blob], "vindkraft-ar-katrineholm.png", { type: blob.type });
+      const file = new File([blob], "vindkollen.png", { type: blob.type });
       if (navigator.canShare && !navigator.canShare({ files: [file] })) {
         setStatus("Delning stöds inte på den här enheten — spara bilden istället.");
         return;
       }
       await navigator.share({
         files: [file],
-        title: "Vindkraft AR Katrineholm",
+        title: "Vindkollen",
         text: WATERMARK_TEXT,
       });
     } catch {

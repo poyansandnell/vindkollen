@@ -9,7 +9,8 @@
  * - Ingen Replit-specifik dev-banner
  *
  * Bygg: pnpm native:build
- * API-adress: Sätt VITE_API_BASE_URL=https://din-produktion.repl.co i env
+ * API-adress:    VITE_API_BASE_URL=https://app.vindkollen.com
+ * Publik URL:    VITE_PUBLIC_APP_URL=https://app.vindkollen.com
  */
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -28,10 +29,13 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname),
   define: {
-    // Gör att import.meta.env.VITE_API_BASE_URL finns vid byggtid
-    // Sätt via: VITE_API_BASE_URL=https://... pnpm native:build
+    // Injiceras vid byggtid. Exempel:
+    //   VITE_API_BASE_URL=https://app.vindkollen.com pnpm native:build
     "import.meta.env.VITE_API_BASE_URL": JSON.stringify(
       process.env.VITE_API_BASE_URL ?? "",
+    ),
+    "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(
+      process.env.VITE_PUBLIC_APP_URL ?? "",
     ),
   },
   build: {
