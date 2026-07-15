@@ -1,0 +1,372 @@
+UPPDATERA POÄNG- OCH PÅVERKANSDELEN I KARTVERKTYGET
+
+Förbättra hur användaren förstår om en placering är bra eller dålig.
+
+Just nu visas varje faktor som en mörk rad med ett namn och ett poängvärde, exempelvis:
+
+Boendepåverkan (avståndsviktad) +39.6
+Visuell påverkan +11.1
+Utanför Ericsbergs marker +48.0
+
+Det är svårt för användaren att direkt förstå:
+
+* om värdet är bra eller dåligt
+* vilka faktorer som är mest problematiska
+* varför totalpoängen blivit hög
+* vad som behöver ändras i placeringen
+
+Gör därför följande.
+
+⸻
+
+1. Färgkoda varje påverkanrad
+
+Varje rad ska få en tydlig statusfärg baserad på hur stor negativ påverkan faktorn bidrar med.
+
+Använd följande nivåer:
+
+0 poäng = Grön
+0.1–9.9 poäng = Gul
+10.0–24.9 poäng = Orange
+25.0 poäng eller mer = Röd
+
+Färgerna ska vara tydliga men passa den mörka designen.
+
+Använd ungefär dessa färger:
+
+Grön:
+Bakgrund: rgba(34, 197, 94, 0.12)
+Kant: #22c55e
+Text/ikon: #4ade80
+Gul:
+Bakgrund: rgba(234, 179, 8, 0.12)
+Kant: #eab308
+Text/ikon: #facc15
+Orange:
+Bakgrund: rgba(249, 115, 22, 0.14)
+Kant: #f97316
+Text/ikon: #fb923c
+Röd:
+Bakgrund: rgba(239, 68, 68, 0.15)
+Kant: #ef4444
+Text/ikon: #f87171
+
+Raden får inte bli helt färgfylld. Använd en diskret tonad bakgrund, färgad vänsterkant och tydlig statusikon.
+
+⸻
+
+2. Lägg till statusikon och statusord
+
+Varje rad ska visa:
+
+* statusikon
+* faktorns namn
+* kort statusord
+* poängbidrag
+
+Exempel:
+
+✅ Avstånd till bostäder
+Bra
+0.0
+⚠️ Visuell påverkan
+Förhöjd påverkan
++11.1
+❌ Utanför Ericsbergs marker
+Kritiskt problem
++48.0
+
+Använd följande ikoner:
+
+Grön: ✅
+Gul: ⚠️
+Orange: 🟠 eller ⚠️
+Röd: ❌
+
+Statusorden ska vara:
+
+Grön: Bra
+Gul: Viss påverkan
+Orange: Hög påverkan
+Röd: Mycket hög påverkan
+
+⸻
+
+3. Visa en kort förklaring under varje faktor
+
+Varje rad ska kunna visa en kort, lättförståelig förklaring.
+
+Exempel:
+
+Avstånd till bostäder
+Bra
+Inga identifierade avståndsproblem.
+Boendepåverkan
+Hög påverkan
+Många hushåll ligger inom områden där placeringen kan upplevas tydligt.
+Mycket nära Katrineholms centrum
+Mycket hög påverkan
+Placeringen ligger nära ett stort tätortsområde och påverkar många invånare.
+Utanför Ericsbergs marker
+Mycket hög påverkan
+Ett eller flera verk ligger utanför det valda projektområdet.
+
+Förklaringen får gärna visas direkt på desktop och vid klick eller expansion på mobil.
+
+⸻
+
+4. Sortera faktorer efter allvarlighetsgrad
+
+Visa alltid de största problemen först.
+
+Sortera enligt:
+
+1. Röd
+2. Orange
+3. Gul
+4. Grön
+
+Inom samma färgnivå ska den faktor med högst poäng visas först.
+
+Exempel:
+
+❌ Utanför Ericsbergs marker +48.0
+❌ Boendepåverkan +39.6
+❌ Mycket nära Katrineholms centrum +35.0
+🟠 Avstånd till tätort +20.0
+🟠 Visuell påverkan +11.1
+🟡 Skuggpåverkan +4.3
+🟡 Uppskattad bullerpåverkan +3.2
+✅ Natur- och friluftsvärden 0.0
+✅ Kulturmiljövärden 0.0
+✅ Vattenskyddsvärden 0.0
+
+⸻
+
+5. Dela upp faktorerna i tydliga grupper
+
+Lägg faktorerna under följande rubriker:
+
+Kritiska problem
+
+Visa röda och orange faktorer som direkt påverkar placeringens genomförbarhet.
+
+Exempel:
+
+Utanför projektområdet
+Avstånd till bostäder
+Boendepåverkan
+Avstånd till tätort
+Närhet till centrum
+
+Miljö och omgivning
+
+Exempel:
+
+Natur- och friluftsvärden
+Kulturmiljövärden
+Vattenskyddsvärden
+Skuggpåverkan
+Visuell påverkan
+Buller
+
+Planering och regelverk
+
+Exempel:
+
+Riksintresse vindbruk
+Kommunens vindbruksplanering
+Projektområdesgräns
+
+Visa bara en grupp om den innehåller faktorer.
+
+⸻
+
+6. Förbättra totalpoängen
+
+Delen som idag visar:
+
+Mycket hög påverkan · 100/100
+
+ska bli en tydlig sammanfattningspanel.
+
+Visa:
+
+PLACERINGENS PÅVERKAN
+99 / 100
+MYCKET HÖG PÅVERKAN
+
+Lägg till en horisontell färgskala:
+
+Grön → Gul → Orange → Röd
+
+Poängnivåer:
+
+0–24 = Låg påverkan
+25–49 = Måttlig påverkan
+50–74 = Hög påverkan
+75–100 = Mycket hög påverkan
+
+Använd följande färger:
+
+0–24: Grön
+25–49: Gul
+50–74: Orange
+75–100: Röd
+
+Visa även de tre största problemen direkt i sammanfattningen:
+
+Största problemen:
+❌ Utanför Ericsbergs marker
+❌ Många hushåll påverkas
+❌ Nära Katrineholms centrum
+
+Om en faktor har 0 poäng ska den inte visas bland de största problemen.
+
+⸻
+
+7. Gör varje faktor klickbar
+
+När användaren klickar på en faktor ska kartan tydligt visa vad faktorn avser.
+
+Exempel:
+
+Avstånd till bostäder
+
+* markera närmaste bostad
+* visa avståndslinje från närmaste verk
+* zooma vid behov
+
+Boendepåverkan
+
+* visa berörda bostadsområden
+* markera berörda hushåll eller analyszoner
+* tona ned övriga lager
+
+Avstånd till tätort
+
+* markera närmaste tätort
+* visa avstånd och riktning
+
+Visuell påverkan
+
+* visa beräknat synlighetsområde
+* markera observationspunkter
+* visa vilka verk som bidrar mest
+
+Skuggpåverkan
+
+* visa beräknade skuggområden
+* visa låg-sol-riktning om data finns
+
+Bullerpåverkan
+
+* visa bullerzoner runt verken
+* använd tydliga nivålinjer om data finns
+
+Utanför Ericsbergs marker
+
+* markera de verk som ligger utanför gränsen
+* markera gränsen tydligare
+* låt kartan zooma till de berörda verken
+
+Om ett analyslager ännu inte finns ska klicket åtminstone markera relevanta verk och visa en förklarande tooltip.
+
+⸻
+
+8. Visa tydlig legend
+
+Lägg en liten legend ovanför eller under faktorerna:
+
+✅ Bra
+⚠️ Viss påverkan
+🟠 Hög påverkan
+❌ Mycket hög påverkan
+
+På mobil kan legenden öppnas via:
+
+Vad betyder färgerna?
+
+⸻
+
+9. Förtydliga att högre poäng är sämre
+
+Lägg till en kort text nära totalpoängen:
+
+Högre poäng betyder större negativ påverkan.
+
+Lägg även gärna till:
+
+Poängen är en illustrativ uppskattning och inte en officiell tillståndsbedömning.
+
+Behåll den befintliga friskrivningen, men gör den mer lättläst.
+
+⸻
+
+10. Förbättra mobilvyn
+
+På mobil:
+
+* visa faktor, ikon, status och poäng på första raden
+* visa förklaringen först när raden öppnas
+* gör hela raden klickbar
+* använd tydliga touchytor
+* undvik horisontell scroll
+* håll poängen högerställd
+* låt grupperna kunna fällas ihop
+
+Exempel:
+
+❌ Utanför Ericsbergs marker        +48.0
+   Mycket hög påverkan
+
+Vid klick:
+
+Ett eller flera verk ligger utanför det valda projektområdet.
+[Visa på kartan]
+
+⸻
+
+11. Behåll all befintlig logik
+
+Ändra inte:
+
+* hur poängen beräknas
+* totalpoängens logik
+* avståndsberäkningar
+* hushållsdata
+* invånardata
+* AR-kopplingen
+* sparade placeringar
+* kartans befintliga verk
+* befintliga projektgränser
+
+Detta ska vara en förbättring av presentation, förståelse och interaktion.
+
+⸻
+
+12. Viktigt om färger
+
+Använd inte bara färg för att förklara status.
+
+Varje status ska alltid även ha:
+
+* ikon
+* text
+* poäng
+
+Detta är viktigt för tillgänglighet och för personer med nedsatt färgseende.
+
+⸻
+
+ÖNSKAT RESULTAT
+
+Användaren ska direkt kunna förstå:
+
+Varför placeringen har fått hög poäng
+Vilka tre problem som är störst
+Vilka faktorer som är bra
+Vad som behöver ändras
+Var på kartan problemet finns
+
+Bygg detta ovanpå den befintliga poängvyn utan att ändra själva beräkningsmotorn.

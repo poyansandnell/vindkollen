@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { PlacementMap } from "@/components/PlacementMap";
+import { PlacementScorePanel } from "@/components/PlacementScorePanel";
 import {
-  PLACEMENT_DISCLAIMER,
   PLACEMENT_LEVEL_COLORS,
-  PLACEMENT_LEVEL_LABELS,
   scorePlacement,
   type PlacedTurbine,
 } from "@/lib/placementScoring";
 import {
-  ERICSBERG_AREA_DISCLAIMER,
   boundaryToGeoJson,
   getActiveBoundary,
   hasCustomBoundary,
@@ -72,7 +70,6 @@ export default function PlaceTurbines() {
   const [committedTurbines, setCommittedTurbines] = useState<PlacedTurbine[]>(DEFAULT_TURBINES);
   const [calculating, setCalculating] = useState(false);
   const [saved, setSaved] = useState<SavedPlacement[]>([]);
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [showEstateBoundary, setShowEstateBoundary] = useState(false);
@@ -116,7 +113,6 @@ export default function PlaceTurbines() {
   // ett argument), så en sparad/återställd gräns måste explicit trigga om den
   // annars memoiserade omräkningen.
   const result = useMemo(() => scorePlacement(committedTurbines), [committedTurbines, boundaryVersion]);
-  const colors = PLACEMENT_LEVEL_COLORS[result.level];
 
   const handleMove = useCallback(
     (id: string, lat: number, lon: number) => {
@@ -322,7 +318,8 @@ export default function PlaceTurbines() {
         </div>
       )}
 
-      <div className="relative flex-1 min-h-[55dvh] p-3">
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className="relative flex-1 min-h-[35dvh] p-3">
         <PlacementMap
           turbines={turbines}
           colorTurbines={committedTurbines}
@@ -452,79 +449,15 @@ export default function PlaceTurbines() {
         </div>
       )}
 
-      <div className={`overflow-y-auto border-t border-white/10 bg-[#0d0d0d] px-4 py-3 transition-[max-height] duration-300 ease-in-out ${scoreMinimized ? "max-h-[4.5rem]" : "max-h-[46dvh] lg:max-h-[30dvh]"}`}>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setDetailsOpen((v) => !v)}
-            className={`flex flex-1 items-center justify-between rounded-xl border px-3 py-2.5 text-left ${colors.border} ${colors.bg}`}
-          >
-            <span className={`text-sm font-semibold ${colors.text}`}>
-              {colors.emoji} {PLACEMENT_LEVEL_LABELS[result.level]} · {Math.round(result.totalScore)}/100
-            </span>
-            <span className="text-xs text-white/60">{detailsOpen ? "Dölj ▲" : "Mer ▼"}</span>
-          </button>
-          <button
-            onClick={() => setScoreMinimized((v) => !v)}
-            title={scoreMinimized ? "Visa panelen" : "Minimera panelen"}
-            className="shrink-0 rounded-full border border-white/20 bg-white/5 px-2.5 py-2 text-xs text-white/70 hover:bg-white/10"
-          >
-            {scoreMinimized ? "▲" : "▼"}
-          </button>
-        </div>
+      <PlacementScorePanel
+        result={result}
+        minimized={scoreMinimized}
+        onToggleMinimized={() => setScoreMinimized((v) => !v)}
+      />
+      </div>
 
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div className="rounded-lg bg-white/5 px-2.5 py-2">
-            <p className="text-[10px] uppercase tracking-wide text-white/40">Berörda hushåll</p>
-            <p className="text-sm font-semibold text-white">{result.householdsAffected}</p>
-          </div>
-          <div className="rounded-lg bg-white/5 px-2.5 py-2">
-            <p className="text-[10px] uppercase tracking-wide text-white/40">Berörda invånare</p>
-            <p className="text-sm font-semibold text-white">{result.inhabitantsAffected}</p>
-          </div>
-          <div className="rounded-lg bg-white/5 px-2.5 py-2">
-            <p className="text-[10px] uppercase tracking-wide text-white/40">Snittavstånd närmaste verk</p>
-            <p className="text-sm font-semibold text-white">
-              {result.avgNearestHouseholdDistanceM !== null
-                ? `${(result.avgNearestHouseholdDistanceM / 1000).toLocaleString("sv-SE", { maximumFractionDigits: 1 })} km`
-                : "–"}
-            </p>
-          </div>
-          <div className="rounded-lg bg-white/5 px-2.5 py-2">
-            <p className="text-[10px] uppercase tracking-wide text-white/40">Påverkansindex</p>
-            <p className="text-sm font-semibold text-white">{result.impactIndex}/100</p>
-          </div>
-        </div>
-
-        {detailsOpen && (
-          <div className="mt-2 space-y-2">
-            <p className="text-xs text-white/70">
-              Uppskattningsvis <span className="font-semibold text-white">{result.householdsAffected}</span> hushåll
-              (~{result.inhabitantsAffected} invånare) kan påverkas.
-              {result.nearestHouseholdDistanceM !== null && (
-                <>
-                  {" "}
-                  Närmaste bebyggelse ({result.nearestHouseholdName}) ligger{" "}
-                  {Math.round(result.nearestHouseholdDistanceM)} m bort.
-                </>
-              )}
-            </p>
-            <ul className="space-y-1.5">
-              {result.factors.map((f) => (
-                <li key={f.key} className="flex items-center justify-between rounded-lg bg-white/5 px-2.5 py-1.5 text-xs">
-                  <span className="text-white/80">{f.label}</span>
-                  <span className={f.impactPoints < 0 ? "text-emerald-300" : "text-white/60"}>
-                    {f.impactPoints > 0 ? "+" : ""}
-                    {f.impactPoints.toFixed(1)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="text-[11px] text-white/40">{PLACEMENT_DISCLAIMER}</p>
-            <p className="text-[11px] text-white/40">{ERICSBERG_AREA_DISCLAIMER}</p>
-          </div>
-        )}
-
-        <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="border-t border-white/10 bg-[#0d0d0d] px-4 py-3">
+        <div className="grid grid-cols-2 gap-2">
           <button
             onClick={handleReset}
             className="rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white hover:bg-white/10"
