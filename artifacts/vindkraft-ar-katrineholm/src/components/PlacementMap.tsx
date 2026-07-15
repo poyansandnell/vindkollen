@@ -262,6 +262,7 @@ export function PlacementMap({
   );
 
   const containerAspect = containerSize.width / containerSize.height || 1;
+  const aspectX = containerSize.height / (containerSize.width || 1);
   const bounds = useMemo(() => boundsFromView(view, containerAspect), [view, containerAspect]);
   const project = useMemo(() => makeProjector(bounds), [bounds]);
 
@@ -578,10 +579,11 @@ export function PlacementMap({
             const p = project(v.lat, v.lon);
             return (
               <g key={`edit-v-${i}`} className="pointer-events-auto">
-                <circle
+                <ellipse
                   cx={p.x}
                   cy={p.y}
-                  r="1.6"
+                  rx={1.6 * aspectX}
+                  ry={1.6}
                   fill="#FF8B01"
                   stroke="#ffffff"
                   strokeWidth="0.3"
@@ -614,7 +616,7 @@ export function PlacementMap({
             const p = project(v.lat, v.lon);
             return (
               <g key={`boundary-v-${i}`}>
-                <circle cx={p.x} cy={p.y} r="0.9" fill="#FF8B01" stroke="#000000" strokeWidth="0.25" />
+                <ellipse cx={p.x} cy={p.y} rx={0.9 * aspectX} ry={0.9} fill="#FF8B01" stroke="#000000" strokeWidth="0.25" />
                 <text x={p.x + 1.2} y={p.y - 1} fontSize="2" fill="#FF8B01" style={{ paintOrder: "stroke", stroke: "#000", strokeWidth: 0.3 }}>
                   {i}: {v.lat.toFixed(4)},{v.lon.toFixed(4)}
                 </text>
@@ -626,7 +628,7 @@ export function PlacementMap({
             const p = project(v.lat, v.lon);
             return (
               <g key={`estate-v-${i}`}>
-                <circle cx={p.x} cy={p.y} r="0.9" fill="#38bdf8" stroke="#000000" strokeWidth="0.25" />
+                <ellipse cx={p.x} cy={p.y} rx={0.9 * aspectX} ry={0.9} fill="#38bdf8" stroke="#000000" strokeWidth="0.25" />
                 <text x={p.x + 1.2} y={p.y - 1} fontSize="2" fill="#38bdf8" style={{ paintOrder: "stroke", stroke: "#000", strokeWidth: 0.3 }}>
                   {i}: {v.lat.toFixed(4)},{v.lon.toFixed(4)}
                 </text>
@@ -639,11 +641,12 @@ export function PlacementMap({
           const r = zoneRadiusPercent(zone.radiusM, zone.lat);
           const color = ZONE_COLORS[zone.type] ?? "#ffffff";
           return (
-            <circle
+            <ellipse
               key={zone.id}
               cx={center.x}
               cy={center.y}
-              r={r}
+              rx={r * aspectX}
+              ry={r}
               fill={`${color}22`}
               stroke={color}
               strokeWidth="0.35"
@@ -654,7 +657,7 @@ export function PlacementMap({
 
         {HOUSEHOLD_CLUSTERS.map((h) => {
           const p = project(h.lat, h.lon);
-          return <circle key={h.id} cx={p.x} cy={p.y} r="1" fill="#ffffff" stroke="#0d0d0d" strokeWidth="0.25" />;
+          return <ellipse key={h.id} cx={p.x} cy={p.y} rx={aspectX} ry={1} fill="#ffffff" stroke="#0d0d0d" strokeWidth="0.25" />;
         })}
 
         {(() => {
@@ -691,7 +694,7 @@ export function PlacementMap({
                   strokeDasharray="1.4,1"
                   markerEnd="url(#move-arrow)"
                 />
-                <circle cx={from.x} cy={from.y} r="1.6" fill="none" stroke="#FFB347" strokeWidth="0.4" strokeDasharray="0.8,0.6" />
+                <ellipse cx={from.x} cy={from.y} rx={1.6 * aspectX} ry={1.6} fill="none" stroke="#FFB347" strokeWidth="0.4" strokeDasharray="0.8,0.6" />
               </g>
             );
           })()}
@@ -706,11 +709,12 @@ export function PlacementMap({
           const color = colorById.get(t.id) ?? PENDING_COLOR;
           const p = project(t.lat, t.lon);
           return (
-            <circle
+            <ellipse
               key={t.id}
               cx={p.x}
               cy={p.y}
-              r={menu?.id === t.id || isMoving ? turbineRadius + 0.5 : turbineRadius}
+              rx={(menu?.id === t.id || isMoving ? turbineRadius + 0.5 : turbineRadius) * aspectX}
+              ry={menu?.id === t.id || isMoving ? turbineRadius + 0.5 : turbineRadius}
               style={{ fill: color, transition: "fill 400ms ease, cx 300ms ease, cy 300ms ease" }}
               stroke={isMoving ? "#FFB347" : "#fff"}
               strokeWidth={isMoving ? "0.6" : "0.3"}

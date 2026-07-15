@@ -6,7 +6,10 @@ export function getMapboxToken(): Promise<string | null> {
   if (!cachedTokenPromise) {
     cachedTokenPromise = getPublicConfig()
       .then((config) => config.mapboxToken)
-      .catch(() => null);
+      .catch(() => {
+        cachedTokenPromise = null;
+        return null;
+      });
   }
   return cachedTokenPromise;
 }

@@ -1,0 +1,541 @@
+UPPDATERA APPEN: EN GEMENSAM SVERIGEKARTA DÄR ALLA VINDKRAFTVERK KAN FLYTTAS OCH VISAS I AR
+
+Slå ihop Sverigekartan och Ericsbergskartan till ett enda gemensamt kartverktyg.
+
+Det ska inte längre finnas två separata kartor eller två separata system.
+
+Sverigekartan ska vara huvudkartan för hela appen, och alla vindkraftverk i hela Sverige ska kunna redigeras på samma sätt som vindkraftverken i Ericsbergskartan kan redigeras idag.
+
+Grundfunktion
+
+Alla vindkraftverk som visas på Sverigekartan ska gå att:
+
+* klicka på
+* markera
+* flytta med drag-and-drop
+* ta bort tillfälligt ur ett scenario
+* återställa till sin ursprungliga position
+* komplettera med nya vindkraftverk
+* spara som en alternativ placering
+* jämföra mot originalplaceringen
+* visa i AR efter att de har flyttats
+
+Det ska alltså fungera på samma sätt som Ericsbergskartan fungerar idag, men för alla vindkraftverk i hela Sverige.
+
+Viktigt: ändra aldrig originalinformationen
+
+När användaren flyttar ett vindkraftverk får den ursprungliga positionen aldrig skrivas över permanent.
+
+Originalinformationen ska alltid finnas kvar.
+
+När ett verk flyttas ska systemet i stället skapa en alternativ scenarioposition.
+
+Varje vindkraftverk bör minst innehålla:
+
+Unikt verk-ID
+Ursprunglig latitud
+Ursprunglig longitud
+Aktuell scenariolatitud
+Aktuell scenariolongitud
+Totalhöjd
+Navhöjd
+Rotordiameter
+Status
+
+Möjliga statusvärden:
+
+oförändrat
+flyttat
+borttaget
+nytillagt
+
+Användaren ska alltid kunna:
+
+* återställa ett enskilt verk
+* återställa markerade verk
+* återställa hela scenariot
+* jämföra original med det redigerade scenariot
+
+Kartans översiktsläge
+
+När kartan är utzoomad över Sverige ska vindkraftverken visas som kluster.
+
+Visa exempelvis:
+
+12 verk
+38 verk
+124 verk
+
+När kartan är utzoomad ska inte tusentals individuella verk visas ovanpå varandra.
+
+I översiktsläget ska användaren kunna:
+
+* zooma in och ut
+* söka kommun
+* söka ort
+* söka adress
+* söka vindkraftspark
+* klicka på ett kluster för att zooma in
+* använda sin aktuella position
+* välja ett område direkt på kartan
+
+Kartans redigeringsläge
+
+När användaren zoomar in tillräckligt ska klustren automatiskt lösas upp till individuella vindkraftverk.
+
+Varje individuellt verk ska då bli klickbart och redigerbart.
+
+Visa en tydlig knapp:
+
+Redigera placering
+
+När redigeringsläget aktiveras ska användaren kunna:
+
+* dra ett verk till en ny plats
+* klicka på kartan för att lägga till ett nytt verk
+* klicka på ett verk för att redigera det
+* ta bort verk ur scenariot
+* återställa verk
+* markera flera verk
+* flytta flera verk
+* spara scenariot
+* jämföra mot originalet
+* öppna scenariot i AR
+
+Redigeringsläget ska fungera i hela Sverige.
+
+Det får inte vara begränsat till:
+
+* Ericsbergs marker
+* Katrineholms kommun
+* Ramsjöhult
+* något särskilt projektområde
+
+När ett vindkraftverk markeras
+
+När användaren klickar på ett vindkraftverk ska en informationsruta visas.
+
+Visa information som finns tillgänglig, exempelvis:
+
+Vindkraftverk
+Verk-ID
+Status
+Totalhöjd
+Navhöjd
+Rotordiameter
+Modell
+Driftsstatus
+Ursprunglig position
+Nuvarande scenarioposition
+Avstånd som verket har flyttats
+
+Visa följande knappar:
+
+Flytta verk
+Ta bort ur scenario
+Återställ originalposition
+Visa i AR
+
+Om all information inte finns för ett verk ska gränssnittet fortfarande fungera utan fel.
+
+Flytta flera vindkraftverk samtidigt
+
+Användaren ska kunna markera och redigera flera vindkraftverk samtidigt.
+
+Lägg till:
+
+* flerval genom att klicka på flera verk
+* markeringsverktyg för att rita en ruta eller polygon
+* markera alla verk inom valt område
+* flytta en hel grupp
+* ta bort en hel grupp ur scenariot
+* återställa markerade verk
+* avmarkera alla
+
+Detta är särskilt viktigt för att kunna flytta en hel vindkraftspark.
+
+När flera verk flyttas ska deras inbördes placering kunna behållas.
+
+Lägg till nya vindkraftverk
+
+Användaren ska även kunna lägga till helt nya vindkraftverk.
+
+Visa en knapp:
+
+Lägg till vindkraftverk
+
+Användaren ska sedan kunna klicka på kartan för att placera verket.
+
+Det nya verket ska kunna få:
+
+Totalhöjd
+Navhöjd
+Rotordiameter
+Valfri benämning
+
+Om användaren inte anger värden ska rimliga standardvärden användas.
+
+Nya verk ska få status:
+
+nytillagt
+
+Jämför original och nytt scenario
+
+Lägg till tre tydliga visningslägen:
+
+Original
+Mitt scenario
+Jämför
+
+Original
+
+Visa vindkraftverken på deras ursprungliga positioner.
+
+Mitt scenario
+
+Visa vindkraftverken på deras aktuella scenariopositioner.
+
+Visa inte verk som användaren har tagit bort ur scenariot.
+
+Jämför
+
+Visa både originalpositioner och nya positioner samtidigt.
+
+I jämförelseläget:
+
+* visa ursprungliga positioner diskret
+* visa nya positioner tydligt
+* visa linjer mellan gamla och nya positioner
+* visa flyttat avstånd
+* markera borttagna verk
+* markera nytillagda verk
+* gör skillnaden tydlig utan att kartan blir rörig
+
+Beräkningar och påverkan
+
+När användaren flyttar, tar bort eller lägger till vindkraftverk ska befintliga beräkningar uppdateras.
+
+Behåll och återanvänd funktionerna från Ericsbergskartan, exempelvis:
+
+* berörda hushåll
+* berörda invånare
+* minsta avstånd till närmaste bostad
+* påverkansindex
+* bullerpåverkan
+* visuell påverkan
+* naturvärden
+* kulturvärden
+* vattenskydd
+* andra befintliga analyslager
+
+Beräkningarna ska använda verkens aktuella scenariopositioner.
+
+Beräkningarna får inte fortsätta använda originalpositionerna efter att ett verk har flyttats.
+
+Om vissa beräkningar ännu bara har lokal datatäckning ska appen tydligt visa detta i stället för att krascha eller visa felaktiga värden.
+
+Exempel:
+
+Detaljerad analysdata saknas för detta område.
+Placeringen kan fortfarande redigeras och visas i AR.
+
+AR efter att vindkraftverken har flyttats
+
+När användaren har flyttat ett eller flera vindkraftverk ska knappen:
+
+Se denna placering i AR
+
+öppna samma AR-funktion som redan fungerar idag.
+
+Ändra inte den befintliga fungerande AR-motorn i onödan.
+
+Utöka endast vilken geografisk data som skickas till AR.
+
+AR-vyn ska alltid använda vindkraftverkens aktuella scenariopositioner.
+
+AR-vyn får inte använda originalpositionerna om användaren har flyttat verken.
+
+Överför minst följande till AR:
+
+Verk-ID
+Aktuell latitud
+Aktuell longitud
+Totalhöjd
+Navhöjd
+Rotordiameter
+Status
+Scenario-ID
+
+Verk med status:
+
+borttaget
+
+ska inte visas i AR.
+
+Verk med status:
+
+flyttat
+nytillagt
+oförändrat
+
+ska visas på sina aktuella positioner.
+
+Valfri observationsplats för AR
+
+Användaren ska kunna välja varifrån placeringen ska betraktas.
+
+Lägg till stöd för:
+
+* aktuell GPS-position
+* vald punkt på kartan
+* sökt adress
+* flyttbar observationsmarkör
+
+Visa en tydlig markör på kartan:
+
+Du betraktar vindkraftverken härifrån
+
+Visa alternativ:
+
+Använd min position
+Välj observationsplats på kartan
+Sök adress
+
+När användaren öppnar AR ska den valda observationsplatsen användas.
+
+Om ingen plats har valts ska aktuell GPS-position användas.
+
+Gemensamt scenario mellan karta och AR
+
+Kartvyn och AR-vyn ska använda exakt samma scenario.
+
+När användaren går:
+
+Karta → AR → tillbaka till karta
+
+ska följande finnas kvar:
+
+* flyttade verk
+* borttagna verk
+* nytillagda verk
+* markerad observationsplats
+* valt projekt
+* aktiverade lager
+* aktuellt scenario
+
+Det får inte skapas en ny tom karta när användaren går tillbaka från AR.
+
+Använd befintlig state-hantering, databas, local storage eller scenario-ID, beroende på hur appen redan är byggd.
+
+Spara scenarier
+
+Användaren ska kunna spara sin alternativa placering.
+
+Visa knappen:
+
+Spara scenario
+
+Varje scenario bör minst innehålla:
+
+Scenario-ID
+Scenarionamn
+Skapad datum och tid
+Senast ändrad
+Kartans centrum
+Zoomnivå
+Observationsplats
+Alla ändrade verk
+Alla borttagna verk
+Alla nytillagda verk
+Aktiverade lager
+Analysresultat
+
+Exempel på scenarionamn:
+
+Ericsberg – alternativ 1
+Ramsjöhult – alternativ 2
+Katrineholm – flyttad park
+Nyköping – testplacering
+
+Ericsberg ska finnas kvar, men inte som separat karta
+
+Ericsberg ska inte längre öppnas i ett separat kartverktyg.
+
+Ericsberg ska i stället finnas kvar som:
+
+* ett förvalt scenario
+* ett projektområde
+* en genväg
+* en sökbar plats
+* ett valbart kartlager
+
+När användaren väljer Ericsberg ska samma gemensamma Sverigekarta öppnas och zooma in på området.
+
+Den befintliga Ericsbergsplaceringen ska laddas in i samma nationella redigeringsmotor.
+
+Ericsbergs slott kan visas som en klickbar markör.
+
+När användaren klickar på Ericsbergs slott kan en informationsruta visas:
+
+Ericsbergs slott
+Visa Ericsbergs marker
+Öppna befintligt scenario
+
+Ericsbergs markgränser ska vara ett valbart lager och inte behöva visas hela tiden.
+
+En gemensam karta och route
+
+Ta bort behovet av två separata kartverktyg.
+
+Det ska finnas en gemensam route för kartan, exempelvis:
+
+/karta
+
+Denna route ska hantera:
+
+* hela Sverigekartan
+* alla befintliga vindkraftverk
+* redigering
+* scenarier
+* analys
+* observationsplats
+* AR-koppling
+* Ericsberg
+* övriga projektområden
+
+Undvik separata routes för:
+
+Ericsbergskartan
+Sverigekartan
+Kartverktyget
+
+Alla knappar ska gå till samma gemensamma kartvy.
+
+Navigation på AR-sidan
+
+På AR-sidan ska det inte längre finnas två konkurrerande kartknappar.
+
+Använd denna struktur:
+
+Starta AR
+Öppna kartan
+
+Knappen:
+
+Öppna kartan
+
+ska öppna den gemensamma Sverigekartan och behålla det aktuella scenariot.
+
+Ta bort eller ersätt den trasiga separata länken som idag leder till 404.
+
+Responsiv karta
+
+Kartan måste fungera korrekt på:
+
+* mobil
+* surfplatta
+* laptop
+* bred datorskärm
+
+Kartan får aldrig sträckas eller tryckas ihop.
+
+Behåll korrekta geografiska proportioner.
+
+Kartan ska anpassas efter skärmens verkliga bredd och höjd.
+
+Lägg till:
+
+* tydliga zoomknappar
+* mushjulszoom
+* pinch-zoom
+* dubbelklickszoom
+* helskärmsläge
+* knapp för att återställa kartvyn
+* automatisk resize när paneler öppnas eller stängs
+* korrekt resize när skärmen roteras
+
+Informationspaneler ska kunna minimeras så att kartan får tillräckligt med plats.
+
+Prestanda
+
+Eftersom hela Sveriges vindkraftverk ska visas måste kartan optimeras.
+
+Använd:
+
+* klustring vid låg zoomnivå
+* lazy loading
+* spatial indexering
+* endast rendering av verk i synligt kartområde
+* cache för hämtade områden
+* förenklade markörer vid låg zoom
+* detaljerade objekt först vid hög zoom
+
+Ladda inte alla detaljerade 3D- eller AR-data för hela Sverige samtidigt.
+
+Hämta detaljerna först när användaren zoomar in, markerar ett område eller öppnar ett scenario.
+
+Viktigt att bevara
+
+Ändra eller förstör inte fungerande funktioner från Ericsbergskartan.
+
+Behåll och återanvänd:
+
+* drag-and-drop
+* placering av nya verk
+* borttagning
+* återställning
+* poängberäkning
+* avståndsberäkning
+* berörda hushåll
+* berörda invånare
+* påverkansindex
+* sparade placeringar
+* jämförelse
+* observationsplats
+* export till AR
+* fungerande AR-visning
+
+Flytta dessa funktioner till den gemensamma Sverigekartan i stället för att bygga en förenklad parallell lösning.
+
+Teknisk huvudprincip
+
+Använd:
+
+En gemensam kartkomponent
+En gemensam vindkraftverksdatabas
+En gemensam scenariomodell
+En gemensam redigeringsmotor
+En gemensam analysmotor
+En gemensam AR-modul
+En gemensam route
+
+Undvik:
+
+Dubblerad kod
+Separata listor över vindkraftverk
+Olika sparformat
+Olika AR-flöden
+Olika beräkningslogik
+En speciallösning endast för Ericsberg
+
+Slutligt önskat användarflöde
+
+1. Användaren öppnar kartan.
+2. Hela Sverige visas.
+3. Alla vindkraftverk visas som kluster.
+4. Användaren söker efter en plats eller zoomar in.
+5. Klustren löses upp till individuella verk.
+6. Användaren aktiverar redigeringsläget.
+7. Användaren flyttar, tar bort eller lägger till verk.
+8. Beräkningar uppdateras.
+9. Användaren väljer observationsplats.
+10. Användaren sparar scenariot.
+11. Användaren klickar på Se denna placering i AR.
+12. AR visar exakt den redigerade placeringen.
+13. Användaren kan gå tillbaka till kartan utan att något försvinner.
+
+Implementera detta genom att bygga vidare på den fungerande Ericsbergskartan och den befintliga AR-funktionen.
+
+Bygg inte om den fungerande AR-delen från grunden.
+
+Gör Ericsbergskartans redigeringsfunktion till standard för alla vindkraftverk på hela Sverigekartan.

@@ -51,7 +51,14 @@ export default function Home() {
   });
 
   useEffect(() => {
-    getMapboxToken().then(setMapboxToken);
+    let cancelled = false;
+    const load = () => {
+      getMapboxToken().then((token) => {
+        if (!cancelled) setMapboxToken(token);
+      });
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const handleLocated = (point: GeoPoint) => {
@@ -202,10 +209,21 @@ export default function Home() {
   if (!mapboxToken) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background px-4">
-        <p className="text-center text-muted-foreground max-w-sm">
-          Ingen Mapbox-token är konfigurerad på servern. Kontakta administratören för att aktivera
-          kartan.
-        </p>
+        <div className="flex flex-col items-center gap-4 max-w-sm text-center">
+          <p className="text-muted-foreground">
+            Kartan kunde inte aktiveras. Kontrollera att servern är igång och att Mapbox-token är
+            konfigurerad.
+          </p>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setMapboxToken(undefined);
+              getMapboxToken().then(setMapboxToken);
+            }}
+          >
+            Försök igen
+          </Button>
+        </div>
       </div>
     );
   }
