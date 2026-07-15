@@ -7,7 +7,11 @@
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "native:build": "vite build --config vite.native.config.ts",
+    "native:sync": "pnpm native:build && cap sync",
+    "native:ios": "pnpm native:build && cap sync ios && cap open ios",
+    "native:android": "pnpm native:build && cap sync android && cap open android"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -41,7 +45,6 @@
     "@replit/vite-plugin-cartographer": "catalog:",
     "@replit/vite-plugin-dev-banner": "catalog:",
     "@replit/vite-plugin-runtime-error-modal": "catalog:",
-    "@workspace/replit-auth-web": "workspace:*",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query": "catalog:",
@@ -51,6 +54,7 @@
     "@types/three": "^0.185.0",
     "@vitejs/plugin-react": "catalog:",
     "@workspace/api-client-react": "workspace:*",
+    "@workspace/replit-auth-web": "workspace:*",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "cmdk": "^1.1.1",
@@ -79,6 +83,10 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/ios": "^8.4.2",
     "proj4": "^2.20.9",
     "three": "^0.185.1"
   }

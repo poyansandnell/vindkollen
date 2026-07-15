@@ -29,7 +29,18 @@ app.use(
   }),
 );
 app.use(compression());
-app.use(cors({ credentials: true, origin: true }));
+
+// Tillåt Replit-webbappen + Capacitor native-WebView-origins (iOS: capacitor://localhost, Android: http://localhost)
+const CAPACITOR_ORIGINS = new Set(["capacitor://localhost", "http://localhost"]);
+app.use(
+  cors({
+    credentials: true,
+    origin(origin, cb) {
+      if (!origin || CAPACITOR_ORIGINS.has(origin)) return cb(null, true);
+      cb(null, true); // tillåt alla origins för webb-deployment (Replit proxy hanterar exponering)
+    },
+  }),
+);
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

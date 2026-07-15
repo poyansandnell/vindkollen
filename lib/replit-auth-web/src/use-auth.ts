@@ -3,6 +3,13 @@ import type { AuthUser } from "@workspace/api-client-react";
 
 export type { AuthUser };
 
+// VITE_API_BASE_URL sätts vid byggtid för native (Capacitor iOS/Android).
+// Webb-bygget lämnar den tom → relativa URL:er fungerar som förut.
+const _apiBase: string = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
+function _api(path: string): string {
+  return _apiBase ? `${_apiBase.replace(/\/$/, "")}${path}` : path;
+}
+
 interface AuthState {
   user: AuthUser | null;
   isLoading: boolean;
@@ -18,7 +25,7 @@ export function useAuth(): AuthState {
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/auth/user", { credentials: "include" })
+    fetch(_api("/api/auth/user"), { credentials: "include" })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<{ user: AuthUser | null }>;
@@ -42,12 +49,12 @@ export function useAuth(): AuthState {
   }, []);
 
   const login = useCallback(() => {
-    const base = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
-    window.location.href = `/api/login?returnTo=${encodeURIComponent(base)}`;
+    const base = import.meta.env.BASE_URL?.replace(/\/+$/, "") || "/";
+    window.location.href = _api(`/api/login?returnTo=${encodeURIComponent(base)}`);
   }, []);
 
   const logout = useCallback(() => {
-    window.location.href = "/api/logout";
+    window.location.href = _api("/api/logout");
   }, []);
 
   return {

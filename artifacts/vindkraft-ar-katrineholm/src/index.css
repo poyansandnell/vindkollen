@@ -434,3 +434,36 @@
     transform: translateX(-50%);
   }
 }
+
+/* ─── Capacitor / native safe-area ───────────────────────────────────────────
+ * Gör att statusfältet (kameraö), hemindikator och Android-systemfältet inte
+ * täcker UI-element. Lägg klassen "safe-top" / "safe-bottom" direkt på
+ * de fixerade header- och footer-element som behöver det.
+ * env(safe-area-inset-*) = 0 på webb, korrekt värde i iOS/Android WKWebView.
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+.safe-top {
+  padding-top: max(var(--safe-top), 0px);
+}
+.safe-bottom {
+  padding-bottom: max(var(--safe-bottom), 0px);
+}
+.safe-insets {
+  padding-top: max(var(--safe-top), 0px);
+  padding-bottom: max(var(--safe-bottom), 0px);
+  padding-left: max(var(--safe-left), 0px);
+  padding-right: max(var(--safe-right), 0px);
+}
+
+/* Fullskärms-views (AR, karta) behöver stretcha hela ytan inkl. safe areas */
+.h-safe-screen {
+  height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
+}
+
+/* Viewport-meta för Capacitor: viewport-fit=cover aktiveras i index.html */

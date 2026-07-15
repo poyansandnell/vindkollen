@@ -1,0 +1,219 @@
+Perfekt. Då är Capacitor den snabbaste och rimligaste vägen. Du behöver inte bygga om Vindkollen i React Native. Capacitor lägger ett riktigt iOS- och Android-skal runt er befintliga React/Vite-app och skapar projekt som öppnas i Xcode respektive Android Studio.  
+
+Gör detta nu i Replit
+
+Skicka följande instruktion:
+
+⸻
+
+Förbered Vindkollen för iOS och Android med Capacitor
+
+Appen är byggd som ett pnpm-monorepo med React, Vite och TypeScript. Lägg nu till Capacitor för att skapa riktiga iOS- och Android-appar utan att skriva om den befintliga appen.
+
+Börja med att identifiera vilket workspace som är den huvudsakliga appen som ska publiceras. Det ska vara den version där Sverigekartan, projektanalysen och AR-funktionerna ingår i samma användarflöde.
+
+Installera senaste stabila kompatibla version av:
+
+pnpm add @capacitor/core @capacitor/cli
+pnpm add @capacitor/ios @capacitor/android
+
+Om installationen behöver göras i ett särskilt workspace ska kommandona köras där och inte okontrollerat i hela monorepot.
+
+Initiera Capacitor med:
+
+App name: Vindkollen
+App ID: se.vindkollen.app
+
+Skapa capacitor.config.ts och ange korrekt Vite-buildmapp som webDir. Kontrollera den faktiska Vite-konfigurationen; använd exempelvis dist endast om det verkligen är den katalog som byggkommandot genererar.
+
+Exempel:
+
+import type { CapacitorConfig } from '@capacitor/cli';
+const config: CapacitorConfig = {
+  appId: 'se.vindkollen.app',
+  appName: 'Vindkollen',
+  webDir: 'dist',
+  bundledWebRuntime: false,
+};
+export default config;
+
+Lägg sedan till plattformarna:
+
+pnpm exec cap add ios
+pnpm exec cap add android
+
+Skapa ett tydligt build- och syncflöde:
+
+pnpm build
+pnpm exec cap sync
+
+Lägg gärna till scripts i rätt package.json:
+
+{
+  "scripts": {
+    "native:sync": "pnpm build && cap sync",
+    "native:ios": "pnpm build && cap sync ios && cap open ios",
+    "native:android": "pnpm build && cap sync android && cap open android"
+  }
+}
+
+Anpassa scriptsen till monorepots faktiska workspace-struktur.
+
+Viktigt om API-servern
+
+Den paketerade mobilappen får inte försöka anropa localhost, Replits lokala utvecklingsadress eller en tillfällig preview-URL.
+
+Skapa en tydlig miljövariabel för produktions-API, exempelvis:
+
+VITE_API_BASE_URL=https://api.vindkollen.com
+
+eller den permanenta produktionsadress som redan används.
+
+Säkerställ följande:
+
+* API-servern är publikt tillgänglig via HTTPS.
+* CORS tillåter anrop från iOS- och Android-appen.
+* Inloggning och sessioner fungerar i Capacitors WebView.
+* Cookies använder korrekta inställningar för HTTPS och cross-origin-anrop.
+* Ingen hemlig servernyckel exponeras i Vite-klienten.
+* Appen fungerar efter en riktig produktionsbuild, inte bara i Replits utvecklingsläge.
+
+Behörigheter och native-funktioner
+
+Kartläget ska fungera utan kamera- och platsbehörighet.
+
+Förbered native-hantering för:
+
+* GPS/plats
+* kamera
+* kompass eller enhetens orientering
+* delning
+* nätverksstatus
+
+Använd officiella Capacitor-plugins där det passar. Begär inte alla behörigheter när appen öppnas. Begär dem först när användaren startar den funktion som behöver dem.
+
+Visa alltid en kort förklaring före begäran:
+
+Plats
+
+Vindkollen använder din plats för att visa din position och placera vindkraftverk korrekt i kart- och AR-läget.
+
+Kamera
+
+Vindkollen använder kameran för att visa vindkraftverk i den verkliga omgivningen genom AR.
+
+Om behörighet nekas ska appen visa ett tydligt meddelande och fortsatt fungera i kartläget.
+
+Kontrollera AR-funktionen noggrant
+
+Behåll nuvarande fungerande AR-logik, men kontrollera om den bygger på webbläsar-API:er som fungerar annorlunda eller är begränsade i iOS WKWebView och Android WebView.
+
+Testa särskilt:
+
+* kameraåtkomst,
+* DeviceOrientation,
+* kompassriktning,
+* GPS,
+* helskärmsläge,
+* skärmrotation,
+* sensortillstånd,
+* HTTPS-krav,
+* återgång från bakgrunden.
+
+Gör inga stora omskrivningar innan funktionen har testats på en fysisk iPhone och Android-enhet.
+
+Om nuvarande webbaserade AR inte fungerar fullt ut i Capacitor ska detta rapporteras tydligt innan någon ersättningslösning byggs.
+
+Mobilanpassning
+
+Kontrollera och korrigera:
+
+* safe areas runt kameraö, statusfält och hemindikator,
+* tangentbord som täcker formulär,
+* bakåtknappen på Android,
+* externa länkar,
+* filnedladdningar och PDF-export,
+* delningslänkar,
+* inloggningsflöde,
+* omladdning av SPA-routes,
+* återställning av appens state efter bakgrundsläge,
+* layout på små skärmar.
+
+Använd CSS safe-area-insets där det behövs:
+
+padding-top: env(safe-area-inset-top);
+padding-bottom: env(safe-area-inset-bottom);
+
+Appidentitet
+
+Konfigurera:
+
+Appnamn: Vindkollen
+Bundle ID / Package name: se.vindkollen.app
+Version: 1.0.0
+Build number iOS: 1
+Version code Android: 1
+
+Kontrollera först att se.vindkollen.app inte redan används i våra utvecklarkonton. Bundle-ID och Android package name ska behandlas som permanenta.
+
+Förbered platserna för:
+
+* appikon,
+* launch screen,
+* iOS permission descriptions,
+* Android permissions,
+* appens visningsnamn.
+
+Använd inga tillfälliga Replit-logotyper eller standardikoner.
+
+Leverans efter arbetet
+
+När arbetet är klart ska du redovisa:
+
+1. Vilket workspace som paketerades.
+2. Exakta filer som skapades eller ändrades.
+3. Produktions-API-adressen som appen använder.
+4. Eventuella funktioner som inte fungerar i native-skalet.
+5. Exakta lokala kommandon för att bygga och öppna iOS.
+6. Exakta lokala kommandon för att bygga och öppna Android.
+7. Om projektet måste laddas ned eller klonas lokalt för Xcode och Android Studio.
+8. En checklista över vad som måste testas på riktiga telefoner.
+
+Ändra inte analysregler, projektdata, kartplaceringar eller den fungerande designen utöver det som krävs för native-kompatibilitet.
+
+⸻
+
+Därefter behöver projektet till din Mac
+
+Replit kan förbereda Capacitor-filerna, men iOS-versionen behöver slutligen öppnas och byggas med Xcode på en Mac. Android-versionen hanteras i Android Studio. Capacitors officiella arbetsflöde bygger först webbappen och synkar sedan innehållet till de båda native-projekten.  
+
+När Replit är färdig:
+
+1. Ladda ned eller klona hela repot till din Mac.
+2. Installera Node.js 22 eller senare, pnpm, Xcode och Android Studio. Capacitor 8 anger Node.js 22 som grundkrav.  
+3. Kör ungefär:
+
+pnpm install
+pnpm build
+pnpm exec cap sync
+pnpm exec cap open ios
+
+4. Välj ditt Apple-team i Xcode.
+5. Kör appen på din riktiga iPhone.
+6. Därefter:
+
+pnpm exec cap open android
+
+7. Kör den på en fysisk Android-telefon.
+
+Innan vi laddar upp något
+
+Det viktigaste testet är inte att startsidan öppnas. Testa hela kedjan:
+
+karta → skapa placering → analys → AR → konto → spara → stäng appen → öppna igen → öppna sparat projekt → dela/PDF.
+
+För Apple skapar ni sedan en app-post i App Store Connect, arkiverar i Xcode och laddar upp bygget till TestFlight. Apple kräver nu att nya uppladdningar byggs med Xcode 26 och iOS 26 SDK eller senare.  
+
+För Google bygger ni en signerad Android App Bundle (.aab) och laddar först upp den till intern testning i Play Console. Google använder App Bundles som standard och package name är unikt och permanent.  
+
+Nästa konkreta steg är alltså att skicka instruktionen ovan till Replit. När Replit svarar med vad den gjort och vilka kommandon du ska köra, skicka svaret hit så tar vi Xcode-delen rad för rad.

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
+import { apiUrl } from "@/lib/apiUrl";
 
 const SAVED_KEY = "vindkraft-ar-katrineholm:savedPlacements";
 const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
@@ -55,7 +56,7 @@ export default function MyProjects() {
     setLoadingApi(true);
     setError(null);
     try {
-      const res = await fetch("/api/projects", { credentials: "include" });
+      const res = await fetch(apiUrl("/api/projects"), { credentials: "include" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as ApiProject[];
       setApiProjects(data);
@@ -102,7 +103,7 @@ export default function MyProjects() {
 
   async function handleDeleteApiProject(id: string) {
     try {
-      const res = await fetch(`/api/projects/${id}`, { method: "DELETE", credentials: "include" });
+      const res = await fetch(apiUrl(`/api/projects/${id}`), { method: "DELETE", credentials: "include" });
       if (!res.ok && res.status !== 204) throw new Error();
       setApiProjects((prev) => prev.filter((p) => p.id !== id));
       setDeleteFlash(id);
@@ -120,7 +121,7 @@ export default function MyProjects() {
 
   async function handleShare(id: string) {
     try {
-      const res = await fetch(`/api/projects/${id}/share`, {
+      const res = await fetch(apiUrl(`/api/projects/${id}/share`), {
         method: "POST",
         credentials: "include",
       });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
+import { apiUrl } from "@/lib/apiUrl";
 import { PlacementMap } from "@/components/PlacementMap";
 import { PlacementScorePanel } from "@/components/PlacementScorePanel";
 import {
@@ -247,7 +248,7 @@ export default function PlaceTurbines() {
       const centerLat = lats.length ? String(((Math.min(...lats) + Math.max(...lats)) / 2).toFixed(6)) : null;
       const centerLng = lons.length ? String(((Math.min(...lons) + Math.max(...lons)) / 2).toFixed(6)) : null;
       try {
-        await fetch("/api/projects", {
+        await fetch(apiUrl("/api/projects"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
