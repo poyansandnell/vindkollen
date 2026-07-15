@@ -1,0 +1,271 @@
+Här är en samlad slut­instruktion till Replit för det som bör byggas innan ni går vidare mot native, App Store och Google Play:
+
+⸻
+
+Slutlig komplettering inför native-versionen
+
+Vindkollen ska nu förberedas för att senare kunna paketeras som en riktig native-app för iOS och Android.
+
+Ändra inte fungerande funktioner i kartan, AR-läget, projektanalysen eller redigeringsverktyget. Arbetet ska främst komplettera appens struktur, konton, lagring och lanseringsberedskap.
+
+1. Inför frivilliga användarkonton
+
+Appen ska fortfarande kunna användas utan konto.
+
+En besökare ska kunna:
+
+* öppna Sverigekartan
+* söka efter en plats
+* skapa och flytta vindkraftverk
+* genomföra analys
+* använda AR-läget
+* testa appen utan registrering
+
+Lägg samtidigt till:
+
+* Logga in
+* Skapa konto
+* Logga ut
+* enkel kontosida
+* möjlighet att återställa lösenord
+
+Använd i första hand Replit Auth eller den autentiseringslösning som passar nuvarande teknik bäst.
+
+Kontosystemet ska byggas så att Apple- och Google-inloggning enkelt kan läggas till senare i native-versionen.
+
+2. Konto ska krävas först när användaren vill spara
+
+När en användare utan konto trycker på exempelvis:
+
+* Spara projekt
+* Spara placering
+* Mina projekt
+
+ska en tydlig ruta visas:
+
+Skapa ett kostnadsfritt konto för att spara dina placeringar och fortsätta arbeta med dem senare.
+
+Knappar:
+
+* Skapa konto
+* Logga in
+* Fortsätt utan att spara
+
+Undvik att kräva inloggning när appen öppnas.
+
+3. Lägg till Mina projekt
+
+Inloggade användare ska få sidan:
+
+Mina projekt
+
+Där ska användaren kunna:
+
+* se sparade projekt
+* öppna ett projekt
+* byta namn
+* duplicera projekt
+* radera projekt
+* se datum för senaste ändring
+* fortsätta redigera kartan och analysen
+
+Visa gärna en liten sammanfattning per projekt:
+
+* projektnamn
+* ort eller koordinat
+* antal verk
+* total påverkan
+* senaste ändring
+
+4. Anpassa datamodellen
+
+Alla projekt ska kunna kopplas till ett användarkonto.
+
+Exempel på struktur:
+
+User {
+  id
+  email
+  name
+  createdAt
+}
+Project {
+  id
+  userId
+  name
+  location
+  municipality
+  turbines
+  analysisResult
+  createdAt
+  updatedAt
+}
+
+userId ska kunna vara tomt för ett tillfälligt projekt som ännu inte sparats.
+
+Projektdata ska inte enbart sparas i webbläsarens minne när användaren är inloggad.
+
+5. Tillfälliga projekt utan konto
+
+När användaren inte är inloggad kan aktuellt projekt sparas lokalt i webbläsaren, exempelvis med Local Storage eller IndexedDB.
+
+Det ska återställas om användaren:
+
+* råkar ladda om sidan
+* stänger fliken
+* återkommer senare på samma enhet
+
+När användaren sedan skapar konto ska appen fråga:
+
+Vill du spara den placering du redan arbetar med på ditt konto?
+
+6. Appen ska vara gratis
+
+Det ska inte finnas någon betalvägg, prenumeration eller 14-dagarsperiod vid lanseringen.
+
+All nuvarande funktionalitet ska vara kostnadsfri.
+
+Bygg däremot strukturen så att framtida nivåer kan införas utan att databasen behöver göras om.
+
+Exempelvis kan användaren ha:
+
+accountTier: "free"
+
+Men visa ingen Pro-nivå, prissida eller låsta funktioner nu.
+
+7. Kontoradering och integritet
+
+På kontosidan ska användaren kunna:
+
+* se sin registrerade e-postadress
+* logga ut
+* radera sitt konto
+* radera sina sparade projekt
+
+Vid kontoradering ska en tydlig bekräftelse visas:
+
+Detta raderar ditt konto och alla sparade projekt permanent.
+
+Lägg till sidor för:
+
+* Integritetspolicy
+* Användarvillkor
+* Kontakt och support
+* Om Vindkollen
+
+Använd platshållartext där den juridiska sluttexten ännu inte finns, men bygg sidorna och länkarna nu.
+
+8. Hantering av person- och platsdata
+
+Spara bara den information som behövs.
+
+Spara inte användarens löpande rörelser eller positionshistorik.
+
+Det ska vara tydligt att:
+
+* GPS används för att visa användarens aktuella plats
+* kamera används för AR
+* sparade projekt kan innehålla valda koordinater
+* användarens aktuella position inte lagras som historik
+
+9. Förbered behörigheter för native
+
+Samla kamera-, GPS- och kompasshantering så att den senare enkelt kan kopplas mot native-behörigheter.
+
+Appen ska alltid förklara varför behörigheten behövs innan den begärs.
+
+Exempel:
+
+Plats
+
+Vindkollen använder din plats för att visa närliggande projekt och placera vindkraftverken korrekt i AR.
+
+Kamera
+
+Kameran används endast för att visa vindkraftverken i din omgivning genom AR.
+
+Om användaren nekar ska appen fortfarande fungera i kartläget och visa ett tydligt meddelande i AR-läget.
+
+10. Förbättra stabilitet och felhantering
+
+Lägg till tydliga statuslägen för:
+
+* kartan laddas
+* analys genomförs
+* projekt sparas
+* projekt kunde inte sparas
+* internetanslutning saknas
+* GPS kunde inte hämtas
+* kameraåtkomst nekades
+* AR stöds inte på enheten
+
+Användaren ska aldrig mötas av en tom eller frusen sida utan förklaring.
+
+11. Dela projekt
+
+Inloggade användare ska kunna skapa en delningslänk till ett sparat projekt.
+
+Mottagaren ska kunna:
+
+* öppna projektet
+* se karta och analys
+* använda det som skrivskyddad visning
+
+Mottagaren ska inte kunna redigera ägarens originalprojekt utan att först duplicera det till sitt eget konto.
+
+12. Förbered PDF-exporten
+
+PDF-exporten behöver inte göras om från grunden, men säkerställ att:
+
+* den fungerar för alla projekt
+* projektets namn och datum visas
+* kartbilden kommer med
+* analysfaktorer och slutsumma kommer med
+* boendepåverkan visas korrekt
+* text inte kapas
+* PDF-knappen endast visas där export är möjlig
+
+Om PDF-funktionen inte fungerar ännu ska den repareras före native-arbetet.
+
+13. Ingen hårdkodning för Katrineholm
+
+Alla nya funktioner ska fungera för:
+
+* hela Sverige
+* samtliga projekt
+* samtliga kommuner
+* framtida internationella projekt
+
+Katrineholm får bara vara ett exempel eller förvalt projekt, inte en teknisk speciallösning.
+
+14. Förbered för framtida native-app
+
+Separera så långt det är praktiskt möjligt:
+
+* analysmotorn
+* projektdata
+* autentisering
+* kartlogik
+* AR-logik
+* användargränssnitt
+
+Analysregler ska inte ligga utspridda i olika komponenter.
+
+Skapa gärna gemensamma tjänster eller moduler som senare kan återanvändas i React Native, Expo eller annan native-lösning.
+
+15. Ändra inte följande
+
+* Nuvarande fungerande AR-logik får inte ersättas.
+* Verkens koordinater och placeringar får inte påverkas.
+* Redigeringsläget för kartan ska finnas kvar.
+* Sverigekartan ska fortsätta vara huvudversionen.
+* Projektanalysen och boendepåverkanslogiken ska behållas enligt senaste instruktionen.
+* Ändra inte design eller funktioner som inte berör denna komplettering.
+
+Godkänt slutläge
+
+När detta är klart ska en ny användare kunna:
+
+Öppna Vindkollen utan konto → skapa en placering → se analysen → använda AR → skapa konto när projektet ska sparas → öppna projektet senare under Mina projekt → dela eller exportera det.
+
+Appen ska fortsatt vara helt gratis. Kontot ska användas för sparande, synkning och framtida utveckling, inte som ett hinder för att testa appen.

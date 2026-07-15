@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { useAuth } from "@workspace/replit-auth-web";
 import { PlacementMap } from "@/components/PlacementMap";
 import { PlacementScorePanel } from "@/components/PlacementScorePanel";
 import {
@@ -101,6 +102,9 @@ export default function PlaceTurbines() {
   const initialTurbines = editHandoff?.turbines ?? DEFAULT_TURBINES;
   const [turbines, setTurbines] = useState<PlacedTurbine[]>(initialTurbines);
   const [committedTurbines, setCommittedTurbines] = useState<PlacedTurbine[]>(initialTurbines);
+  const { isAuthenticated, login } = useAuth();
+  const [showLoginGate, setShowLoginGate] = useState(false);
+  const [savingToCloud, setSavingToCloud] = useState(false);
   const [calculating, setCalculating] = useState(false);
   const [saved, setSaved] = useState<SavedPlacement[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -220,17 +224,52 @@ export default function PlaceTurbines() {
     if (commitTimerRef.current) window.clearTimeout(commitTimerRef.current);
   }
 
-  function handleSave() {
+  async function handleSave() {
+    const name = editHandoff?.projectName ?? `Placering ${saved.length + 1}`;
     const entry: SavedPlacement = {
       id: `placement-${Date.now()}`,
-      name: `Placering ${saved.length + 1}`,
+      name,
       timestamp: Date.now(),
       turbines,
       totalScore: result.totalScore,
     };
+
+    // Spara alltid lokalt
     const next = [...saved, entry].slice(-8);
     localStorage.setItem(SAVED_KEY, JSON.stringify(next));
     setSaved(next);
+
+    if (isAuthenticated) {
+      // Spara även i molnet
+      setSavingToCloud(true);
+      const lats = turbines.map((t) => t.lat);
+      const lons = turbines.map((t) => t.lon);
+      const centerLat = lats.length ? String(((Math.min(...lats) + Math.max(...lats)) / 2).toFixed(6)) : null;
+      const centerLng = lons.length ? String(((Math.min(...lons) + Math.max(...lons)) / 2).toFixed(6)) : null;
+      try {
+        await fetch("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            name,
+            turbines,
+            turbineCount: String(turbines.length),
+            totalScore: String(Math.round(result.totalScore)),
+            centerLat,
+            centerLng,
+          }),
+        });
+      } catch {
+        // tyst fel — lokal kopia är sparad
+      } finally {
+        setSavingToCloud(false);
+      }
+    } else {
+      // Visa inloggningsgaten om ej inloggad
+      setShowLoginGate(true);
+    }
+
     setSavedFlash(true);
     window.setTimeout(() => setSavedFlash(false), 1800);
   }
@@ -334,10 +373,16 @@ export default function PlaceTurbines() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
+            onClick={() => navigate("/mina-projekt")}
+            className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/20"
+          >
+            {isAuthenticated ? "☁️ Mina projekt" : "📁 Lokala projekt"}
+          </button>
+          <button
             onClick={() => { window.location.href = "/vindkraft-karta/"; }}
             className="rounded-full bg-white/10 px-4 py-1.5 text-sm text-white hover:bg-white/20"
           >
-            🗺️ Tillbaka till kartan
+            🗺️ Kartan
           </button>
           <button
             onClick={() => navigate("/")}
@@ -601,9 +646,10 @@ export default function PlaceTurbines() {
           </button>
           <button
             onClick={handleSave}
-            className="rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white hover:bg-white/10"
+            disabled={savingToCloud}
+            className="rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
           >
-            {savedFlash ? "✅ Sparad!" : "💾 Spara placering"}
+            {savingToCloud ? "☁️ Sparar…" : savedFlash ? (isAuthenticated ? "✅ Sparad i molnet!" : "✅ Sparad lokalt!") : "💾 Spara placering"}
           </button>
           <button
             onClick={() => setCompareOpen((v) => !v)}
@@ -658,6 +704,40 @@ export default function PlaceTurbines() {
           </div>
         )}
       </div>
+
+      {/* Login-gate modal */}
+      {showLoginGate && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 pb-10 sm:items-center sm:pb-0">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#141414] px-6 py-7 text-white shadow-2xl">
+            <button
+              onClick={() => setShowLoginGate(false)}
+              className="absolute right-4 top-4 text-white/40 hover:text-white"
+              aria-label="Stäng"
+            >
+              ✕
+            </button>
+            <p className="mb-1 text-lg font-semibold">Logga in för att spara i molnet</p>
+            <p className="mb-5 text-sm text-white/60">
+              Placeringen är sparad lokalt på din enhet. Logga in för att synkronisera till molnet
+              och nå den från alla enheter.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => { setShowLoginGate(false); login(); }}
+                className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-semibold text-[#090909]"
+              >
+                Logga in
+              </button>
+              <button
+                onClick={() => setShowLoginGate(false)}
+                className="w-full rounded-full border border-white/20 py-3 text-sm text-white/70 hover:bg-white/5"
+              >
+                Behåll lokalt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

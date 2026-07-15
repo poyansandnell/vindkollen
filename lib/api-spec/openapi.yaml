@@ -12,6 +12,10 @@ tags:
     description: Health operations
   - name: wind
     description: Wind power project, turbine and locality operations
+  - name: Auth
+    description: Browser and mobile authentication endpoints.
+  - name: projects
+    description: User-created wind placement projects.
 paths:
   /healthz:
     get:
@@ -245,6 +249,248 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LocalityRanking"
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Auth status resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '302':
+          description: Redirect to the OIDC authorization endpoint.
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete the browser OIDC login flow
+      responses:
+        '302':
+          description: Redirect to the returnTo path on success or /api/login on failure.
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '302':
+          description: Redirect to the OIDC provider logout URL.
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+      responses:
+        '200':
+          description: Session created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Token exchange failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        '200':
+          description: Logout processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccess'
+  /projects:
+    get:
+      tags: [projects]
+      operationId: listUserProjects
+      summary: List all projects for the authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: List of user projects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserProject'
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    post:
+      tags: [projects]
+      operationId: createUserProject
+      summary: Create a new user project
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectBody'
+      responses:
+        '201':
+          description: Project created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProject'
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /projects/{id}:
+    get:
+      tags: [projects]
+      operationId: getUserProject
+      summary: Get a single project (authenticated owner or via share token)
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: shareToken
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Project data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProject'
+        '404':
+          description: Not found.
+    put:
+      tags: [projects]
+      operationId: updateUserProject
+      summary: Update a project (owner only)
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectBody'
+      responses:
+        '200':
+          description: Updated project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProject'
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not found.
+    delete:
+      tags: [projects]
+      operationId: deleteUserProject
+      summary: Delete a project (owner only)
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Not found.
+  /projects/{id}/share:
+    post:
+      tags: [projects]
+      operationId: generateProjectShareLink
+      summary: Generate a share token for a project
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Share link generated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareLinkResponse'
+        '401':
+          description: Not authenticated.
+        '404':
+          description: Not found.
   /config:
     get:
       operationId: getPublicConfig
@@ -271,7 +517,172 @@ paths:
               schema:
                 $ref: "#/components/schemas/WindSyncStatus"
 components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      description: Opaque session token — `Bearer <sid>`.
+      schema:
+        type: string
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      description: Browser session cookie.
+      schema:
+        type: string
   schemas:
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id:
+          type: string
+        email:
+          type: [string, 'null']
+          format: email
+        firstName:
+          type: [string, 'null']
+        lastName:
+          type: [string, 'null']
+        profileImageUrl:
+          type: [string, 'null']
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        code_verifier:
+          type: string
+          minLength: 1
+        redirect_uri:
+          type: string
+          minLength: 1
+          format: uri
+        state:
+          type: string
+          minLength: 1
+        nonce:
+          type: string
+          minLength: 1
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    UserProject:
+      type: object
+      required: [id, name, turbineCount, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: [string, 'null']
+        name:
+          type: string
+        location:
+          type: [string, 'null']
+        municipality:
+          type: [string, 'null']
+        turbines:
+          type: array
+          items: {}
+        analysisResult:
+          nullable: true
+        shareToken:
+          type: [string, 'null']
+        centerLat:
+          type: [string, 'null']
+        centerLng:
+          type: [string, 'null']
+        turbineCount:
+          type: string
+        totalScore:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateProjectBody:
+      type: object
+      required: [name, turbines]
+      properties:
+        name:
+          type: string
+        location:
+          type: [string, 'null']
+        municipality:
+          type: [string, 'null']
+        turbines:
+          type: array
+          items: {}
+        analysisResult:
+          nullable: true
+        centerLat:
+          type: [string, 'null']
+        centerLng:
+          type: [string, 'null']
+        turbineCount:
+          type: string
+        totalScore:
+          type: [string, 'null']
+    UpdateProjectBody:
+      type: object
+      properties:
+        name:
+          type: string
+        location:
+          type: [string, 'null']
+        municipality:
+          type: [string, 'null']
+        turbines:
+          type: array
+          items: {}
+        analysisResult:
+          nullable: true
+        centerLat:
+          type: [string, 'null']
+        centerLng:
+          type: [string, 'null']
+        turbineCount:
+          type: string
+        totalScore:
+          type: [string, 'null']
+    ShareLinkResponse:
+      type: object
+      required: [shareToken, shareUrl]
+      properties:
+        shareToken:
+          type: string
+        shareUrl:
+          type: string
     HealthStatus:
       type: object
       properties:

@@ -5,6 +5,10 @@ export * from "./generated/api";
 // zod schemas from "./generated/api" are what the server actually validates
 // against, so we re-export "./generated/types" with those names excluded.
 export type {
+  AuthUser,
+  AuthUserEnvelope,
+  CreateProjectBody,
+  ErrorEnvelope,
   HealthStatus,
   ListBestLocalitiesToTestParams,
   ListWindProjectAreasCategory,
@@ -14,8 +18,14 @@ export type {
   LocalityImpactDetail,
   LocalityImpactDetailScoreBreakdown,
   LocalityRanking,
+  LogoutSuccess,
+  MobileTokenExchangeRequest,
+  MobileTokenExchangeSuccess,
   PublicConfig,
   SearchLocalitiesParams,
+  ShareLinkResponse,
+  UpdateProjectBody,
+  UserProject,
   WindProjectArea,
   WindProjectAreaCategory,
   WindProjectAreaPolygon,

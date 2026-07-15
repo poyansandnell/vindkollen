@@ -5,6 +5,111 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface AuthUser {
+  id: string;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  firstName: string | null;
+  /** @nullable */
+  lastName: string | null;
+  /** @nullable */
+  profileImageUrl: string | null;
+}
+
+export interface AuthUserEnvelope {
+  user: AuthUser | null;
+}
+
+export interface MobileTokenExchangeRequest {
+  /** @minLength 1 */
+  code: string;
+  /** @minLength 1 */
+  code_verifier: string;
+  /** @minLength 1 */
+  redirect_uri: string;
+  /** @minLength 1 */
+  state: string;
+  /** @minLength 1 */
+  nonce?: string;
+}
+
+export interface MobileTokenExchangeSuccess {
+  token: string;
+}
+
+export const LogoutSuccessValue = {
+  success: true,
+} as const;
+export type LogoutSuccess = typeof LogoutSuccessValue;
+
+export interface ErrorEnvelope {
+  error: string;
+}
+
+export interface UserProject {
+  id: string;
+  /** @nullable */
+  userId?: string | null;
+  name: string;
+  /** @nullable */
+  location?: string | null;
+  /** @nullable */
+  municipality?: string | null;
+  turbines?: unknown[];
+  analysisResult?: unknown | null;
+  /** @nullable */
+  shareToken?: string | null;
+  /** @nullable */
+  centerLat?: string | null;
+  /** @nullable */
+  centerLng?: string | null;
+  turbineCount: string;
+  /** @nullable */
+  totalScore?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateProjectBody {
+  name: string;
+  /** @nullable */
+  location?: string | null;
+  /** @nullable */
+  municipality?: string | null;
+  turbines: unknown[];
+  analysisResult?: unknown | null;
+  /** @nullable */
+  centerLat?: string | null;
+  /** @nullable */
+  centerLng?: string | null;
+  turbineCount?: string;
+  /** @nullable */
+  totalScore?: string | null;
+}
+
+export interface UpdateProjectBody {
+  name?: string;
+  /** @nullable */
+  location?: string | null;
+  /** @nullable */
+  municipality?: string | null;
+  turbines?: unknown[];
+  analysisResult?: unknown | null;
+  /** @nullable */
+  centerLat?: string | null;
+  /** @nullable */
+  centerLng?: string | null;
+  turbineCount?: string;
+  /** @nullable */
+  totalScore?: string | null;
+}
+
+export interface ShareLinkResponse {
+  shareToken: string;
+  shareUrl: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -216,6 +321,11 @@ export interface WindSyncStatus {
   scheduler?: WindSyncStatusScheduler;
 }
 
+/**
+ * Opaque session token — `Bearer <sid>`.
+ */
+export type AuthorizationSessionHeaderParameter = string;
+
 export type ListWindProjectAreasParams = {
 lat?: number;
 lng?: number;
@@ -302,5 +412,13 @@ limit?: number;
 export type ListBestLocalitiesToTestParams = {
 countryCode?: string;
 limit?: number;
+};
+
+export type BeginBrowserLoginParams = {
+returnTo?: string;
+};
+
+export type GetUserProjectParams = {
+shareToken?: string;
 };
 

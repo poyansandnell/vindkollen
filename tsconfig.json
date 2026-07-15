@@ -17,6 +17,9 @@
     },
     {
       "path": "./lib/wind-sync"
+    },
+    {
+      "path": "./lib/replit-auth-web"
     }
   ]
 }

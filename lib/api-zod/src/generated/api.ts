@@ -357,6 +357,253 @@ export const ListBestLocalitiesToTestResponse = zod.array(ListBestLocalitiesToTe
 
 
 /**
+ * @summary Get the currently authenticated user
+ */
+export const GetCurrentAuthUserHeader = zod.object({
+  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
+})
+
+export const GetCurrentAuthUserResponse = zod.object({
+  "user": zod.union([zod.object({
+  "id": zod.string(),
+  "email": zod.string().email().nullable(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "profileImageUrl": zod.string().nullable()
+}),zod.null()])
+})
+
+
+/**
+ * @summary Start the browser OIDC login flow
+ */
+export const BeginBrowserLoginQueryParams = zod.object({
+  "returnTo": zod.coerce.string().optional()
+})
+
+export const BeginBrowserLoginResponse = zod.void()
+
+
+/**
+ * @summary Complete the browser OIDC login flow
+ */
+export const HandleBrowserLoginCallbackResponse = zod.void()
+
+
+/**
+ * @summary Clear the session and begin OIDC logout
+ */
+export const LogoutBrowserSessionHeader = zod.object({
+  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
+})
+
+export const LogoutBrowserSessionResponse = zod.void()
+
+
+/**
+ * @summary Exchange a mobile OIDC code for a session token
+ */
+
+
+
+
+
+
+
+export const ExchangeMobileAuthorizationCodeBody = zod.object({
+  "code": zod.string().min(1),
+  "code_verifier": zod.string().min(1),
+  "redirect_uri": zod.string().url().min(1),
+  "state": zod.string().min(1),
+  "nonce": zod.string().min(1).optional()
+})
+
+export const ExchangeMobileAuthorizationCodeResponse = zod.object({
+  "token": zod.string()
+})
+
+
+/**
+ * @summary Delete a mobile session token
+ */
+export const LogoutMobileSessionHeader = zod.object({
+  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
+})
+
+export const LogoutMobileSessionResponse = zod.object({
+  "success": zod.boolean()
+})
+
+
+/**
+ * @summary List all projects for the authenticated user
+ */
+export const ListUserProjectsHeader = zod.object({
+  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
+})
+
+export const ListUserProjectsResponseItem = zod.object({
+  "id": zod.string(),
+  "userId": zod.string().nullish(),
+  "name": zod.string(),
+  "location": zod.string().nullish(),
+  "municipality": zod.string().nullish(),
+  "turbines": zod.array(zod.unknown()).optional(),
+  "analysisResult": zod.unknown().nullish(),
+  "shareToken": zod.string().nullish(),
+  "centerLat": zod.string().nullish(),
+  "centerLng": zod.string().nullish(),
+  "turbineCount": zod.string(),
+  "totalScore": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListUserProjectsResponse = zod.array(ListUserProjectsResponseItem)
+
+
+/**
+ * @summary Create a new user project
+ */
+export const CreateUserProjectHeader = zod.object({
+  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
+})
+
+export const CreateUserProjectBody = zod.object({
+  "name": zod.string(),
+  "location": zod.string().nullish(),
+  "municipality": zod.string().nullish(),
+  "turbines": zod.array(zod.unknown()),
+  "analysisResult": zod.unknown().nullish(),
+  "centerLat": zod.string().nullish(),
+  "centerLng": zod.string().nullish(),
+  "turbineCount": zod.string().optional(),
+  "totalScore": zod.string().nullish()
+})
+
+export const CreateUserProjectResponse = zod.object({
+  "id": zod.string(),
+  "userId": zod.string().nullish(),
+  "name": zod.string(),
+  "location": zod.string().nullish(),
+  "municipality": zod.string().nullish(),
+  "turbines": zod.array(zod.unknown()).optional(),
+  "analysisResult": zod.unknown().nullish(),
+  "shareToken": zod.string().nullish(),
+  "centerLat": zod.string().nullish(),
+  "centerLng": zod.string().nullish(),
+  "turbineCount": zod.string(),
+  "totalScore": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get a single project (authenticated owner or via share token)
+ */
+export const GetUserProjectParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetUserProjectQueryParams = zod.object({
+  "shareToken": zod.coerce.string().optional()
+})
+
+export const GetUserProjectHeader = zod.object({
+  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
+})
+
+export const GetUserProjectResponse = zod.object({
+  "id": zod.string(),
+  "userId": zod.string().nullish(),
+  "name": zod.string(),
+  "location": zod.string().nullish(),
+  "municipality": zod.string().nullish(),
+  "turbines": zod.array(zod.unknown()).optional(),
+  "analysisResult": zod.unknown().nullish(),
+  "shareToken": zod.string().nullish(),
+  "centerLat": zod.string().nullish(),
+  "centerLng": zod.string().nullish(),
+  "turbineCount": zod.string(),
+  "totalScore": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a project (owner only)
+ */
+export const UpdateUserProjectParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateUserProjectHeader = zod.object({
+  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
+})
+
+export const UpdateUserProjectBody = zod.object({
+  "name": zod.string().optional(),
+  "location": zod.string().nullish(),
+  "municipality": zod.string().nullish(),
+  "turbines": zod.array(zod.unknown()).optional(),
+  "analysisResult": zod.unknown().nullish(),
+  "centerLat": zod.string().nullish(),
+  "centerLng": zod.string().nullish(),
+  "turbineCount": zod.string().optional(),
+  "totalScore": zod.string().nullish()
+})
+
+export const UpdateUserProjectResponse = zod.object({
+  "id": zod.string(),
+  "userId": zod.string().nullish(),
+  "name": zod.string(),
+  "location": zod.string().nullish(),
+  "municipality": zod.string().nullish(),
+  "turbines": zod.array(zod.unknown()).optional(),
+  "analysisResult": zod.unknown().nullish(),
+  "shareToken": zod.string().nullish(),
+  "centerLat": zod.string().nullish(),
+  "centerLng": zod.string().nullish(),
+  "turbineCount": zod.string(),
+  "totalScore": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a project (owner only)
+ */
+export const DeleteUserProjectParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeleteUserProjectHeader = zod.object({
+  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
+})
+
+export const DeleteUserProjectResponse = zod.void()
+
+
+/**
+ * @summary Generate a share token for a project
+ */
+export const GenerateProjectShareLinkParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GenerateProjectShareLinkHeader = zod.object({
+  "Authorization": zod.string().optional().describe('Opaque session token — `Bearer <sid>`.')
+})
+
+export const GenerateProjectShareLinkResponse = zod.object({
+  "shareToken": zod.string(),
+  "shareUrl": zod.string()
+})
+
+
+/**
  * Returns public configuration values needed by frontend clients (e.g. Mapbox token).
  * @summary Public frontend configuration
  */
