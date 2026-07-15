@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { FactorScore, PlacementScoreResult } from "@/lib/placementScoring";
+import type { FactorScore, HouseholdTierKey, PlacementScoreResult } from "@/lib/placementScoring";
 import { PLACEMENT_DISCLAIMER } from "@/lib/placementScoring";
 import { ERICSBERG_AREA_DISCLAIMER } from "@/lib/ericsbergArea";
 
@@ -17,6 +17,16 @@ function getSeverity(points: number): Severity {
 }
 
 const SEVERITY_ORDER: Record<Severity, number> = { red: 0, orange: 1, yellow: 2, green: 3 };
+
+/** Mappar hushållsnivå-nyckel till severity + ord för boendepåverkan-faktorn. */
+const HOUSEHOLD_TIER_SEVERITY: Record<HouseholdTierKey, { severity: Severity; word: string }> = {
+  low: { severity: "green", word: "Låg påverkan" },
+  viss: { severity: "yellow", word: "Viss påverkan" },
+  high: { severity: "orange", word: "Hög påverkan" },
+  veryHigh: { severity: "red", word: "Mycket hög påverkan" },
+  critical: { severity: "red", word: "Kritisk påverkan" },
+  extreme: { severity: "red", word: "Extrem påverkan" },
+};
 
 const SEV_CONFIG = {
   green: {
@@ -118,10 +128,17 @@ function ScoreBar({ score }: { score: number }) {
 // Individual factor row
 // ---------------------------------------------------------------------------
 
-function FactorRow({ factor }: { factor: FactorScore }) {
+function FactorRow({
+  factor,
+  severityOverride,
+}: {
+  factor: FactorScore;
+  severityOverride?: { severity: Severity; word: string };
+}) {
   const [open, setOpen] = useState(false);
-  const sev = getSeverity(factor.impactPoints);
+  const sev = severityOverride?.severity ?? getSeverity(factor.impactPoints);
   const c = SEV_CONFIG[sev];
+  const word = severityOverride?.word ?? c.word;
   const ptsStr = factor.impactPoints === 0 ? "0.0" : `+${factor.impactPoints.toFixed(1)}`;
 
   return (
@@ -135,7 +152,7 @@ function FactorRow({ factor }: { factor: FactorScore }) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-[12px] font-medium leading-snug text-white/90">{factor.label}</p>
           <p className="mt-0.5 text-[11px] leading-none" style={{ color: c.textColor }}>
-            {c.word}
+            {word}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -158,13 +175,21 @@ function FactorRow({ factor }: { factor: FactorScore }) {
 // Factor group section
 // ---------------------------------------------------------------------------
 
-function FactorGroup({ title, factors }: { title: string; factors: FactorScore[] }) {
+function FactorGroup({
+  title,
+  factors,
+  factorOverrides,
+}: {
+  title: string;
+  factors: FactorScore[];
+  factorOverrides?: Map<string, { severity: Severity; word: string }>;
+}) {
   if (factors.length === 0) return null;
   return (
     <div className="space-y-1.5">
       <p className="pt-1 text-[10px] uppercase tracking-widest text-white/35">{title}</p>
       {sortFactors(factors).map((f) => (
-        <FactorRow key={f.key} factor={f} />
+        <FactorRow key={f.key} factor={f} severityOverride={factorOverrides?.get(f.key)} />
       ))}
     </div>
   );
@@ -241,11 +266,19 @@ export function PlacementScorePanel({ result, minimized, onToggleMinimized, show
     ? result.factors
     : result.factors.filter((f) => f.key !== "outsideBoundary");
 
-  const score = showEricsbergFeatures
-    ? Math.round(result.totalScore)
-    : Math.min(Math.round(visibleFactors.reduce((sum, f) => sum + f.impactPoints, 0)), 100);
+  // `result.totalScore` har redan minimigolvet från hushållsnivå inbakat (se
+  // `scorePlacement()`) och exkluderar aldrig `outsideBoundary` i nationellt
+  // läge (faktorn läggs inte till när `ctx` är satt). Tryggt att alltid använda.
+  const score = Math.round(result.totalScore);
   const totalSev = totalScoreSeverity(score);
   const totalC = SEV_CONFIG[totalSev];
+
+  // Severity-override för boendepåverkan-faktorn — styr färg/ord baserat på
+  // hushållsnivå snarare än enbart faktorpoängen.
+  const householdOverride = HOUSEHOLD_TIER_SEVERITY[result.householdTierKey];
+  const criticalOverrides = new Map<string, { severity: Severity; word: string }>([
+    ["householdImpact", householdOverride],
+  ]);
 
   const top3 = visibleFactors
     .filter((f) => f.impactPoints > 0)
@@ -341,7 +374,7 @@ export function PlacementScorePanel({ result, minimized, onToggleMinimized, show
         {/* ── Factor groups ── */}
         {detailsOpen && (
           <div className="space-y-4">
-            <FactorGroup title="Kritiska problem" factors={criticalFactors} />
+            <FactorGroup title="Kritiska problem" factors={criticalFactors} factorOverrides={criticalOverrides} />
             <FactorGroup title="Miljö och omgivning" factors={envFactors} />
             <FactorGroup title="Planering och regelverk" factors={planFactors} />
             <StatsGrid result={result} />

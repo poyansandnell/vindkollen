@@ -39,10 +39,40 @@ export interface FactorScore {
 
 export type PlacementLevel = "low" | "moderate" | "high" | "veryHigh";
 
+export type HouseholdTierKey = "low" | "viss" | "high" | "veryHigh" | "critical" | "extreme";
+
+export const HOUSEHOLD_TIER_LABELS: Record<HouseholdTierKey, string> = {
+  low: "Boendepåverkan (avståndsviktad)",
+  viss: "Viss boendepåverkan",
+  high: "Hög boendepåverkan",
+  veryHigh: "Mycket hög boendepåverkan",
+  critical: "Kritisk boendepåverkan",
+  extreme: "Extrem boendepåverkan",
+};
+
+const HOUSEHOLD_TIER_EXPLANATIONS: Record<HouseholdTierKey, string> = {
+  low: "",
+  viss: " Det antal berörda hushåll ger viss boendepåverkan.",
+  high: " Det höga antalet berörda hushåll gör att boendepåverkan bedöms som hög.",
+  veryHigh: " Det mycket höga antalet berörda hushåll gör att boendepåverkan bedöms som mycket hög.",
+  critical: " Det kritiskt höga antalet berörda hushåll gör att boendepåverkan bedöms som kritisk.",
+  extreme: " Det mycket stora antalet berörda hushåll gör att boendepåverkan bedöms som extrem.",
+};
+
+/**
+ * Panelens färgbrytpunkter (från `PlacementScorePanel.tsx`): grön < 25,
+ * gul < 50, orange < 75, röd ≥ 75. Används för minimigolv på totalpoängen.
+ */
+const PANEL_YELLOW_MIN = 25;
+const PANEL_ORANGE_MIN = 50;
+const PANEL_RED_MIN = 75;
+
 export interface PlacementScoreResult {
   /** 0-100, klipps även om delfaktorerna summerar till mer/mindre. */
   totalScore: number;
   level: PlacementLevel;
+  /** Hushållsnivå-nyckel — styr färg/etikett för boendepåverkan-faktorn i panelen. */
+  householdTierKey: HouseholdTierKey;
   /** Avståndsviktad summa (över alla hushållskluster) av `households * kombineradPåverkanFraktion`. */
   householdsAffected: number;
   /** `householdsAffected * KOMMUN_POPULATION.personsPerHousehold`, avrundat. */
@@ -392,6 +422,7 @@ export function scorePlacement(turbines: PlacedTurbine[], ctx?: LocationContext)
     return {
       totalScore: 0,
       level: "low",
+      householdTierKey: "low",
       householdsAffected: 0,
       inhabitantsAffected: 0,
       avgNearestHouseholdDistanceM: null,
@@ -452,16 +483,41 @@ export function scorePlacement(turbines: PlacedTurbine[], ctx?: LocationContext)
   const inhabitantsAffected = Math.round(householdsAffectedF * effPersonsPerHousehold);
   const avgNearestHouseholdDistanceM = weightedDistanceWeight > 0 ? weightedDistanceSum / weightedDistanceWeight : null;
   const impactIndex = totalHouseholds > 0 ? Math.round(clamp01(householdsAffectedF / totalHouseholds) * 100) : 0;
-  const householdImpactScore = clamp01(impactIndex / 100) * HOUSEHOLD_IMPACT_WEIGHT;
+
+  // Hushållsnivå — styr etikett, faktorfärg och minimigolv.
+  const householdTierKey: HouseholdTierKey =
+    householdsAffected > 10000 ? "extreme" :
+    householdsAffected > 5000 ? "critical" :
+    householdsAffected > 2000 ? "veryHigh" :
+    householdsAffected > 500 ? "high" :
+    householdsAffected > 100 ? "viss" :
+    "low";
+
+  // Minimipoäng för faktorn baserat på antal hushåll — oberoende av avståndsviktning.
+  const householdMinimumScore =
+    householdsAffected > 10000 ? 10 :
+    householdsAffected > 5000 ? 8 :
+    householdsAffected > 2000 ? 6 :
+    householdsAffected > 500 ? 4 :
+    householdsAffected > 100 ? 2 :
+    0;
+
+  const distanceBasedHouseholdScore = clamp01(impactIndex / 100) * HOUSEHOLD_IMPACT_WEIGHT;
+  const householdImpactScore = Math.max(distanceBasedHouseholdScore, householdMinimumScore);
+
+  const avgDistStr =
+    avgNearestHouseholdDistanceM !== null
+      ? `, i genomsnitt ${(avgNearestHouseholdDistanceM / 1000).toLocaleString("sv-SE", { maximumFractionDigits: 1 })} km från närmaste verk.`
+      : ".";
+
   factors.push({
     key: "householdImpact",
-    label: "Boendepåverkan (avståndsviktad)",
+    label: HOUSEHOLD_TIER_LABELS[householdTierKey],
     impactPoints: householdImpactScore,
-    note: `Uppskattningsvis ${householdsAffected} hushåll (~${inhabitantsAffected} invånare) berörs, Påverkansindex ${impactIndex}/100${
-      avgNearestHouseholdDistanceM !== null
-        ? `, i genomsnitt ${(avgNearestHouseholdDistanceM / 1000).toLocaleString("sv-SE", { maximumFractionDigits: 1 })} km från närmaste verk.`
-        : "."
-    }`,
+    note:
+      `Uppskattningsvis ${householdsAffected.toLocaleString("sv-SE")} hushåll (cirka ${inhabitantsAffected.toLocaleString("sv-SE")} invånare) berörs. ` +
+      `Påverkansindex ${impactIndex}/100${avgDistStr}` +
+      HOUSEHOLD_TIER_EXPLANATIONS[householdTierKey],
   });
 
   // --- Avstånd till tätort (närmaste stad/ort) ---
@@ -638,7 +694,16 @@ export function scorePlacement(turbines: PlacedTurbine[], ctx?: LocationContext)
   }
 
   const rawTotal = factors.reduce((sum, f) => sum + f.impactPoints, 0);
-  const totalScore = clamp(rawTotal, 0, 100);
+
+  // Minimigolv på totalpoängen när mycket många hushåll berörs — projektet
+  // ska aldrig visas som grönt/gult/orange om antalet berörda hushåll är
+  // kritiskt. Trösklar matchar panelens färgbrytpunkter (25/50/75).
+  const minimumTotalScoreFromHousing =
+    householdsAffected > 10000 ? PANEL_RED_MIN :
+    householdsAffected > 5000 ? PANEL_ORANGE_MIN :
+    householdsAffected > 2000 ? PANEL_YELLOW_MIN :
+    0;
+  const totalScore = clamp(Math.max(rawTotal, minimumTotalScoreFromHousing), 0, 100);
 
   let level: PlacementLevel = "low";
   if (totalScore >= 80) level = "veryHigh";
@@ -722,6 +787,7 @@ export function scorePlacement(turbines: PlacedTurbine[], ctx?: LocationContext)
   return {
     totalScore,
     level,
+    householdTierKey,
     householdsAffected,
     inhabitantsAffected,
     avgNearestHouseholdDistanceM,

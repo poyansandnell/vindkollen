@@ -1,0 +1,95 @@
+Ändra logiken för Boendepåverkan (avståndsviktad) så att både faktorns poäng, färg och projektets slutbedömning tar hänsyn till hur många hushåll som totalt berörs.
+
+Problemet nu är att cirka 12 246 hushåll / 24 492 invånare berörs, men faktorn får bara +2,0, visas gul och hela placeringen blir 13/100 – Låg påverkan. Det blir motsägelsefullt och missvisande.
+
+Ny logik för boendepåverkan
+
+Behåll den nuvarande avståndsviktade beräkningen, men lägg till en tydlig viktning utifrån antalet berörda hushåll.
+
+Använd följande nivåer:
+
+* 0–100 hushåll: låg påverkan
+* 101–500 hushåll: viss påverkan
+* 501–2 000 hushåll: hög påverkan
+* 2 001–5 000 hushåll: mycket hög påverkan
+* 5 001–10 000 hushåll: kritisk påverkan
+* Över 10 000 hushåll: extrem påverkan
+
+Boendefaktorns slutpoäng ska baseras på både avståndsindex och antal hushåll, men följande minimipoäng ska alltid gälla:
+
+* 0–100 hushåll: minst +0
+* 101–500 hushåll: minst +2
+* 501–2 000 hushåll: minst +4
+* 2 001–5 000 hushåll: minst +6
+* 5 001–10 000 hushåll: minst +8
+* Över 10 000 hushåll: minst +10
+
+Använd den högsta poängen av:
+
+1. nuvarande avståndsviktade poäng
+2. minimipoängen från antalet hushåll
+
+Exempel:
+
+const householdMinimumScore =
+  households > 10000 ? 10 :
+  households > 5000 ? 8 :
+  households > 2000 ? 6 :
+  households > 500 ? 4 :
+  households > 100 ? 2 :
+  0;
+const housingImpactScore = Math.max(
+  currentDistanceWeightedScore,
+  householdMinimumScore
+);
+
+Färger för boendefaktorn
+
+Färgen och texten ska inte bara styras av avståndsindexet.
+
+* 0–100 hushåll: grön – Låg påverkan
+* 101–500 hushåll: gul – Viss påverkan
+* 501–2 000 hushåll: orange – Hög påverkan
+* 2 001–5 000 hushåll: röd – Mycket hög påverkan
+* 5 001–10 000 hushåll: mörkröd – Kritisk påverkan
+* Över 10 000 hushåll: mörkröd – Extrem påverkan
+
+I Katrineholmsexemplet ska det alltså visas:
+
+Extrem boendepåverkan
++10,0
+
+Uppskattningsvis 12 246 hushåll (cirka 24 492 invånare) berörs. Påverkansindex 5/100 och i genomsnitt 7,8 km från närmaste verk. Det mycket stora antalet berörda hushåll gör att boendepåverkan bedöms som extrem.
+
+Boendepåverkan ska påverka slutsumman
+
+Den nya boendepoängen ska räknas in fullt ut i projektets vanliga totalpoäng. Ta bort eventuell tidigare begränsning som gör att faktorn bara kan ge omkring +2.
+
+Lägg dessutom in en lägsta tillåten totalnivå när mycket många hushåll berörs:
+
+* Över 2 000 hushåll: projektet får inte visas som grönt
+* Över 5 000 hushåll: projektet får inte visas lägre än orange
+* Över 10 000 hushåll: projektet får inte visas lägre än rött
+
+Det ska alltså finnas två separata värden:
+
+const calculatedTotalScore = /* vanlig summa av alla faktorer */;
+const minimumTotalScoreFromHousing =
+  households > 10000 ? RED_THRESHOLD :
+  households > 5000 ? ORANGE_THRESHOLD :
+  households > 2000 ? YELLOW_THRESHOLD :
+  0;
+const displayedTotalScore = Math.max(
+  calculatedTotalScore,
+  minimumTotalScoreFromHousing
+);
+
+Använd appens befintliga gränsvärden för gul, orange och röd nivå i stället för att skapa parallella färggränser.
+
+Viktigt
+
+* Antalet hushåll får inte ensamt beskrivas som att alla påverkas lika mycket.
+* Behåll därför både avståndsindex och genomsnittligt avstånd i texten.
+* Gör tydligt att hushållen är uppskattningsvis berörda inom analysområdet.
+* Ändra inte övriga faktorer eller fungerande delar av kartan, AR-funktionen eller redigeringsverktyget.
+* Säkerställ att detta fungerar för alla projekt och placeringar i hela Sverige, inte bara Katrineholm.
