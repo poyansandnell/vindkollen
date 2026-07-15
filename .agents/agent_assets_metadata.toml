@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "1xnl0xzDkA3C1Jm7kTfbH"
+uri = "file://vindkollen-src.tar.gz"
+type = "unspecified"
+title = "Vindkollen — källkod (tar.gz, 45 MB)"
