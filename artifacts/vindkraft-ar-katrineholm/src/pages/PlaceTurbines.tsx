@@ -524,18 +524,23 @@ export default function PlaceTurbines() {
         )}
       </div>
 
-      {result.playfulWarning && (!editHandoff || !result.playfulWarning.includes("Ericsberg")) && (
+      {result.playfulWarning && !editHandoff && (
         <div className="mx-3 mb-2 rounded-xl border border-yellow-400/30 bg-yellow-500/15 px-3 py-2 text-xs text-yellow-100">
           ⚠️ {result.playfulWarning}
         </div>
       )}
 
-      <PlacementScorePanel
-        result={result}
-        minimized={scoreMinimized}
-        onToggleMinimized={() => setScoreMinimized((v) => !v)}
-        showEricsbergFeatures={!editHandoff}
-      />
+      {editHandoff ? (
+        <div className="border-t border-white/10 bg-[#0d0d0d] px-4 py-3 text-center text-[11px] text-white/35">
+          Påverkansanalys är kalibrerad för Katrineholmsområdet och visas inte här.
+        </div>
+      ) : (
+        <PlacementScorePanel
+          result={result}
+          minimized={scoreMinimized}
+          onToggleMinimized={() => setScoreMinimized((v) => !v)}
+        />
+      )}
       </div>
 
       <div className="border-t border-white/10 bg-[#0d0d0d] px-4 py-3">
