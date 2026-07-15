@@ -23,10 +23,12 @@ const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
 interface EditHandoff {
   projectName: string;
   turbines: { id: string; lat: number; lon: number }[];
+  centerLat?: number | null;
+  centerLng?: number | null;
   savedAt: number;
 }
 
-function consumeEditHandoff(): { projectName: string; turbines: PlacedTurbine[] } | null {
+function consumeEditHandoff(): { projectName: string; turbines: PlacedTurbine[]; centerLat?: number | null; centerLng?: number | null } | null {
   try {
     const raw = localStorage.getItem(EDIT_HANDOFF_KEY);
     if (!raw) return null;
@@ -39,6 +41,8 @@ function consumeEditHandoff(): { projectName: string; turbines: PlacedTurbine[] 
     return {
       projectName: data.projectName,
       turbines: data.turbines.map((t) => ({ id: t.id, lat: t.lat, lon: t.lon })),
+      centerLat: data.centerLat ?? null,
+      centerLng: data.centerLng ?? null,
     };
   } catch {
     return null;
@@ -92,7 +96,7 @@ const RECOMPUTE_DELAY_MS = 700;
 
 export default function PlaceTurbines() {
   const [, navigate] = useLocation();
-  const [editHandoff] = useState<{ projectName: string; turbines: PlacedTurbine[] } | null>(consumeEditHandoff);
+  const [editHandoff] = useState<{ projectName: string; turbines: PlacedTurbine[]; centerLat?: number | null; centerLng?: number | null } | null>(consumeEditHandoff);
   const initialTurbines = editHandoff?.turbines ?? DEFAULT_TURBINES;
   const [turbines, setTurbines] = useState<PlacedTurbine[]>(initialTurbines);
   const [committedTurbines, setCommittedTurbines] = useState<PlacedTurbine[]>(initialTurbines);
@@ -369,6 +373,11 @@ export default function PlaceTurbines() {
           turbines={turbines}
           colorTurbines={committedTurbines}
           initialView={editHandoff ? (() => {
+            if (editHandoff.turbines.length === 0) {
+              const lat = editHandoff.centerLat ?? 62.5;
+              const lon = editHandoff.centerLng ?? 15.5;
+              return { centerLat: lat, centerLon: lon, latSpan: 0.3 };
+            }
             const lats = editHandoff.turbines.map((t) => t.lat);
             const lons = editHandoff.turbines.map((t) => t.lon);
             const minLat = Math.min(...lats);

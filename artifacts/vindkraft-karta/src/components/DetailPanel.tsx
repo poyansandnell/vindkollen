@@ -22,9 +22,16 @@ function openInAr(turbines: { id: string; lat: number; lon: number }[]) {
   window.location.href = "/";
 }
 
-function openInEditor(projectName: string, turbines: { id: string; lat: number; lon: number }[]) {
-  if (turbines.length === 0) return;
-  localStorage.setItem(EDIT_HANDOFF_KEY, JSON.stringify({ projectName, turbines, savedAt: Date.now() }));
+function openInEditor(
+  projectName: string,
+  turbines: { id: string; lat: number; lon: number }[],
+  centerLat?: number | null,
+  centerLng?: number | null,
+) {
+  localStorage.setItem(
+    EDIT_HANDOFF_KEY,
+    JSON.stringify({ projectName, turbines, centerLat: centerLat ?? null, centerLng: centerLng ?? null, savedAt: Date.now() }),
+  );
   window.location.href = "/placera";
 }
 
@@ -207,24 +214,27 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                 const turbineCount = projectAreaQuery.data?.turbineCountPlannedMax ?? projectTurbines.length;
                 return (
                   <div className="mt-4 space-y-2">
-                    {projectTurbines.length > 0 ? (
-                      <Button
-                        className="w-full font-semibold"
-                        style={{ backgroundColor: '#fff7ed', color: '#1f2937', border: '2px solid #FF8B01' }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ffedd5')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#fff7ed')}
-                        onClick={() => openInEditor(projectName, projectTurbines)}
-                        data-testid="button-edit-project"
-                      >
-                        ✏️ Redigera {projectTurbines.length} verk
-                      </Button>
-                    ) : (
-                      <div className="w-full rounded-md border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-muted-foreground">
-                        <div className="font-medium">✏️ Redigering ej tillgänglig</div>
-                        <div className="text-xs mt-0.5 text-muted-foreground/70">
-                          {turbineCount ? `${turbineCount} verk planerade — exakta positioner saknas i databasen` : "Exakta positioner för verken saknas"}
-                        </div>
-                      </div>
+                    <Button
+                      className="w-full font-semibold"
+                      style={{ backgroundColor: '#fff7ed', color: '#1f2937', border: '2px solid #FF8B01' }}
+                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ffedd5')}
+                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#fff7ed')}
+                      onClick={() => openInEditor(
+                        projectName,
+                        projectTurbines,
+                        projectAreaQuery.data?.centerLat,
+                        projectAreaQuery.data?.centerLng,
+                      )}
+                      data-testid="button-edit-project"
+                    >
+                      {projectTurbines.length > 0
+                        ? `✏️ Redigera ${projectTurbines.length} verk`
+                        : `✏️ Placera ${turbineCount ? `${turbineCount} ` : ""}verk`}
+                    </Button>
+                    {projectTurbines.length === 0 && (
+                      <p className="text-xs text-muted-foreground/60 text-center -mt-1">
+                        Exakta positioner saknas — du kan placera dem manuellt
+                      </p>
                     )}
                     {projectTurbines.length > 0 && (
                       <Button
