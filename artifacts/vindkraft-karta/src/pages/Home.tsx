@@ -24,6 +24,9 @@ import type { UseQueryOptions } from "@tanstack/react-query";
 
 const SWEDEN_VIEWPORT: MapViewport = { latitude: 62.5, longitude: 15.5, zoom: 4.3 };
 const RADIUS_ZOOM = 10;
+const KATRINEHOLM: { lat: number; lon: number } = { lat: 58.9878, lon: 16.1917 };
+/** Zoom-nivå och proximitet som avgör om vi visar "Öppna kartverktyget"-knappen. */
+const KARTVERKTYG_ZOOM_THRESHOLD = 10;
 const EMPTY_TURBINES: WindTurbine[] = [];
 const EMPTY_PROJECT_AREAS: WindProjectArea[] = [];
 
@@ -95,6 +98,12 @@ export default function Home() {
   // we ask the server to omit polygon geometry ("summary" detail) until the
   // user zooms in far enough to actually see area outlines.
   const WIDE_VIEW_SPAN_DEG = 3;
+
+  const nearKatrineholm = useMemo(() => {
+    const dlat = Math.abs(viewport.latitude - KATRINEHOLM.lat);
+    const dlon = Math.abs(viewport.longitude - KATRINEHOLM.lon);
+    return viewport.zoom >= KARTVERKTYG_ZOOM_THRESHOLD && dlat < 1.5 && dlon < 2.5;
+  }, [viewport]);
 
   const isWideView = useMemo(() => {
     if (focusPoint) {
@@ -345,6 +354,17 @@ export default function Home() {
             setShowBestPlaces(false);
           }}
         />
+      )}
+
+      {nearKatrineholm && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
+          <button
+            onClick={() => { window.location.href = "/placera"; }}
+            className="flex items-center gap-2 rounded-full bg-[#FF8B01] px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-[#e07800] transition-colors"
+          >
+            🗺️ Öppna kartverktyget för Katrineholm
+          </button>
+        </div>
       )}
 
       <InstallPrompt />

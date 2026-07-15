@@ -1180,7 +1180,6 @@ export default function Home() {
       {!started && (
         <PermissionGate
           onStart={handleStart}
-          onOpenMapTool={() => navigate("/placera")}
           starting={starting}
           errors={errors}
           turbineCount={activeTurbines.length}
@@ -1706,9 +1705,9 @@ export default function Home() {
                 </div>
                 <button
                   onClick={() => { window.location.href = "/vindkraft-karta/"; }}
-                  className="w-full rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
+                  className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
                 >
-                  ← Sverigekartan
+                  🗺️ Sverigekartan – Öppna kartverktyg
                 </button>
                 {/* Juli 2026-fix (produktfeedback, ny omgång: "gör det
                     smartare, tar för mycket plats"): flyttade hit från
@@ -1737,15 +1736,6 @@ export default function Home() {
                     {turbinesVisible ? "🌬️ Dölj verk" : "🌬️ Visa verk"}
                   </button>
                 </div>
-                <button
-                  onClick={() => {
-                    setShowMenu(false);
-                    navigate("/placera");
-                  }}
-                  className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
-                >
-                  🗺️ Placera vindkraftverken själv
-                </button>
                 {usingCustomPlacement && (
                   <button
                     onClick={() => {

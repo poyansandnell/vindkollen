@@ -4,13 +4,12 @@ import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 
 interface PermissionGateProps {
   onStart: () => void;
-  onOpenMapTool: () => void;
   starting: boolean;
   errors: string[];
   turbineCount: number;
 }
 
-export function PermissionGate({ onStart, onOpenMapTool, starting, errors, turbineCount }: PermissionGateProps) {
+export function PermissionGate({ onStart, starting, errors, turbineCount }: PermissionGateProps) {
   const [inApp] = useState(() => (typeof navigator !== "undefined" ? isInAppBrowser() : false));
   const [appName] = useState(() => (typeof navigator !== "undefined" ? inAppBrowserName() : ""));
 
@@ -120,20 +119,14 @@ export function PermissionGate({ onStart, onOpenMapTool, starting, errors, turbi
               {starting ? "Startar…" : "📷 Starta AR"}
             </button>
             <button
-              onClick={onOpenMapTool}
+              onClick={() => { window.location.href = "/vindkraft-karta/"; }}
               disabled={starting}
               className="w-full rounded-full border border-white/20 bg-white/5 py-3.5 text-sm font-medium text-white transition hover:bg-white/10 disabled:opacity-60"
             >
-              🗺️ Öppna kartverktyg
-            </button>
-            <button
-              onClick={() => { window.location.href = "/vindkraft-karta/"; }}
-              className="w-full rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
-            >
-              ← Sverigekartan
+              🗺️ Sverigekartan – Öppna kartverktyg
             </button>
             <p className="text-center text-[11px] text-white/40">
-              Kartverktyget kräver ingen kamera, GPS eller kompass — du kan testa placeringar direkt.
+              Sverigekartan visar alla planerade vindkraftverk. Zooma in på Katrineholm för att öppna kartverktyget — kräver ingen kamera, GPS eller kompass.
             </p>
             <p className="text-center text-[11px] leading-relaxed text-white/40">
               Se begärd kopia från Ericsbergs Säteri/Renewable Sweden AB:s begäran om samrådsyttrande till

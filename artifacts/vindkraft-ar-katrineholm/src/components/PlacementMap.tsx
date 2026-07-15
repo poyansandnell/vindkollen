@@ -35,6 +35,8 @@ interface PlacementMapProps {
   outsideBoundaryIds: string[];
   showEstateBoundary: boolean;
   onToggleEstateBoundary?: () => void;
+  /** Anropas när kartans latSpan (zoom-nivå) ändras — används av förälder för att visa "← Sverigekartan"-knapp. */
+  onLatSpanChange?: (latSpan: number) => void;
   /**
    * Redigeringsläge för markgränserna: visar numrerade hörnpunkter (med
    * lat/lon) för både placeringsgränsen och "Ericsbergs mark"-polygonen, så
@@ -167,6 +169,7 @@ export function PlacementMap({
   outsideBoundaryIds,
   showEstateBoundary,
   onToggleEstateBoundary,
+  onLatSpanChange,
   boundaryDebugMode = false,
   boundaryEditMode = false,
   editableBoundary,
@@ -260,6 +263,10 @@ export function PlacementMap({
     },
     [],
   );
+
+  useEffect(() => {
+    onLatSpanChange?.(view.latSpan);
+  }, [view.latSpan, onLatSpanChange]);
 
   const containerAspect = containerSize.width / containerSize.height || 1;
   const aspectX = containerSize.height / (containerSize.width || 1);

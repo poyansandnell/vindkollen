@@ -80,6 +80,7 @@ export default function PlaceTurbines() {
   const [editableBoundary, setEditableBoundary] = useState<LatLon[]>(() => getActiveBoundary());
   const [boundaryVersion, setBoundaryVersion] = useState(0);
   const [boundarySavedFlash, setBoundarySavedFlash] = useState(false);
+  const [currentLatSpan, setCurrentLatSpan] = useState<number>(0.25);
 
   const turbinesRef = useRef(turbines);
   turbinesRef.current = turbines;
@@ -328,6 +329,7 @@ export default function PlaceTurbines() {
           onRemove={handleRemove}
           outsideBoundaryIds={result.outsideBoundaryIds}
           showEstateBoundary={showEstateBoundary}
+          onLatSpanChange={setCurrentLatSpan}
           boundaryDebugMode={boundaryDebugMode}
           boundaryEditMode={boundaryEditMode}
           editableBoundary={editableBoundary}
@@ -440,6 +442,15 @@ export default function PlaceTurbines() {
               Beräknar påverkan…
             </div>
           </div>
+        )}
+
+        {currentLatSpan > 0.5 && (
+          <button
+            onClick={() => { window.location.href = "/vindkraft-karta/"; }}
+            className="absolute left-3 top-3 z-20 flex items-center gap-1.5 rounded-full bg-black/75 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur-sm hover:bg-black/90"
+          >
+            ← Sverigekartan
+          </button>
         )}
       </div>
 
