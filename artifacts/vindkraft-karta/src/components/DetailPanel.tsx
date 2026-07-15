@@ -14,11 +14,18 @@ import type { UseQueryOptions } from "@tanstack/react-query";
 import { sourceLabel, sourceUrl } from "@/lib/sourceMeta";
 
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
+const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
 
 function openInAr(turbines: { id: string; lat: number; lon: number }[]) {
   if (turbines.length === 0) return;
   localStorage.setItem(AR_HANDOFF_KEY, JSON.stringify({ turbines, savedAt: Date.now() }));
   window.location.href = "/";
+}
+
+function openInEditor(projectName: string, turbines: { id: string; lat: number; lon: number }[]) {
+  if (turbines.length === 0) return;
+  localStorage.setItem(EDIT_HANDOFF_KEY, JSON.stringify({ projectName, turbines, savedAt: Date.now() }));
+  window.location.href = "/placera";
 }
 
 interface DetailPanelProps {
@@ -196,14 +203,37 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                 const projectTurbines = (turbines ?? [])
                   .filter((t) => t.projectAreaId === selection.id && t.lat != null && t.lng != null)
                   .map((t) => ({ id: String(t.id), lat: t.lat!, lon: t.lng! }));
-                return projectTurbines.length > 0 ? (
-                  <Button
-                    className="w-full mt-4 bg-[#FF8B01] hover:bg-[#FFB347] text-[#090909] font-semibold"
-                    onClick={() => openInAr(projectTurbines)}
-                  >
-                    📱 Visa {projectTurbines.length} verk i AR
-                  </Button>
-                ) : null;
+                const projectName = projectAreaQuery.data?.name ?? "Vindkraftsprojekt";
+                const turbineCount = projectAreaQuery.data?.turbineCountPlannedMax ?? projectTurbines.length;
+                return (
+                  <div className="mt-4 space-y-2">
+                    {projectTurbines.length > 0 ? (
+                      <Button
+                        className="w-full bg-white/10 hover:bg-white/20 text-white font-semibold border border-white/20"
+                        onClick={() => openInEditor(projectName, projectTurbines)}
+                        data-testid="button-edit-project"
+                      >
+                        ✏️ Redigera {projectTurbines.length} verk
+                      </Button>
+                    ) : (
+                      <div className="w-full rounded-md border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-muted-foreground">
+                        <div className="font-medium">✏️ Redigering ej tillgänglig</div>
+                        <div className="text-xs mt-0.5 text-muted-foreground/70">
+                          {turbineCount ? `${turbineCount} verk planerade — exakta positioner saknas i databasen` : "Exakta positioner för verken saknas"}
+                        </div>
+                      </div>
+                    )}
+                    {projectTurbines.length > 0 && (
+                      <Button
+                        className="w-full bg-[#FF8B01] hover:bg-[#FFB347] text-[#090909] font-semibold"
+                        onClick={() => openInAr(projectTurbines)}
+                        data-testid="button-ar-project"
+                      >
+                        📱 Visa {projectTurbines.length} verk i AR
+                      </Button>
+                    )}
+                  </div>
+                );
               })()}
               {sourceLabel(projectAreaQuery.data.source) && (
                 <div className="text-xs text-muted-foreground mt-3 pt-3 border-t">

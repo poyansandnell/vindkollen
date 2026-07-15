@@ -1,0 +1,623 @@
+SLUTLIG UPPDATERING: EN GEMENSAM NATIONELL VINDKRAFTSKARTA MED REDIGERING, AR OCH LOKALA UNDERLAG
+
+Gör Sverigekartan till appens enda gemensamma kartverktyg.
+
+Katrineholm och Ericsberg ska inte längre vara tekniska specialfall. Alla vindkraftsområden i hela Sverige ska kunna använda samma redigeringsverktyg, samma AR-funktion och samma struktur för lokala dokument.
+
+Ändra inte den fungerande AR-motorn eller den befintliga redigeringslogiken. Generalisera funktionerna som redan finns så att de fungerar för samtliga projekt.
+
+⸻
+
+1. Nationell huvudkarta
+
+På AR-sidan ska knappen inte heta:
+
+Öppna kartverktyget för Katrineholm
+
+Byt den till:
+
+🗺️ Öppna Sveriges vindkraftskarta
+
+eller:
+
+🗺️ Öppna Vindkraftskartan
+
+Knappen ska alltid öppna den gemensamma nationella kartan.
+
+Användaren ska där kunna:
+
+* se vindkraftsprojekt i hela Sverige
+* söka ort, kommun eller adress
+* zooma in på valfritt område
+* klicka på projektområden
+* se enskilda vindkraftverk
+* redigera samtliga projekt som innehåller verkpositioner
+* visa valda eller redigerade verk i AR
+
+Appen får inte längre uppfattas som begränsad till Katrineholm.
+
+⸻
+
+2. Alla projektområden ska vara redigerbara
+
+När användaren klickar på ett valfritt vindkraftsområde i Sverige ska sidopanelen visa projektets information och följande huvudknappar:
+
+✏️ Redigera placeringen
+📱 Visa verken i AR
+
+Exempel:
+
+Hedbodberget Etapp 1
+15 planerade verk
+✏️ Redigera 15 verk
+📱 Visa 15 verk i AR
+
+Detta ska fungera för alla projekt i Sverige, bland annat:
+
+* Hedbodberget
+* Markbygden
+* Ericsberg
+* Ramsjöhult
+* andra landbaserade områden
+* havsbaserade områden
+* alla framtida importerade projekt
+
+Katrineholm får inte vara det enda området där redigeringsknappen visas.
+
+⸻
+
+3. Generell aktivering av redigeringsläget
+
+Använd inte projektnamn eller kommunnamn för att avgöra om redigering är tillgänglig.
+
+Undvik specialkod som:
+
+if (project.name === "Ericsberg") {
+  openEditor();
+}
+
+Använd i stället generell logik:
+
+if (project.turbines?.length > 0) {
+  openProjectEditor(project);
+}
+
+Redigeringsknappen ska alltså visas automatiskt för varje projekt som innehåller exakta eller användbara koordinater för individuella verk.
+
+Om koordinater saknas ska knappen visas inaktiverad med texten:
+
+Redigering ej tillgänglig
+Exakta positioner för verken saknas
+
+Knappen får inte försvinna utan förklaring.
+
+⸻
+
+4. Redigera direkt i samma karta
+
+När användaren trycker på:
+
+✏️ Redigera placeringen
+
+ska Sverigekartan växla till redigeringsläge för det valda projektet.
+
+Användaren ska inte skickas till en separat Katrineholms- eller Ericsbergssida.
+
+Vid aktivering:
+
+* zooma så att projektgränsen och samtliga verk syns
+* markera projektgränsen tydligt
+* tona ned andra projekt och kartlager
+* gör alla verk i det valda projektet klickbara och flyttbara
+* visa redigeringsverktygen
+* behåll projektets information och identitet
+
+Exempel på state:
+
+selectedProject = project;
+mapMode = "edit";
+activeTurbines = project.turbines;
+
+⸻
+
+5. Funktioner i redigeringsläget
+
+Alla projekt ska använda samma funktioner som idag finns i Ericsbergskartan.
+
+Användaren ska kunna:
+
+* klicka på ett verk
+* dra ett verk till en ny position
+* flytta flera verk
+* ta bort verk ur scenariot
+* lägga till nya verk
+* återställa ett enskilt verk
+* återställa alla verk
+* spara ett scenario
+* jämföra original och redigerad placering
+* välja observationsplats
+* visa den redigerade placeringen i AR
+
+Visa tydliga knappar:
+
+Lägg till verk
+Ångra
+Återställ
+Spara scenario
+Jämför original
+Välj observationsplats
+Se denna placering i AR
+Avsluta redigering
+
+⸻
+
+6. Bevara originalpositionerna
+
+När ett befintligt verk flyttas får originalpositionen aldrig skrivas över permanent.
+
+Varje verk ska minst ha:
+
+{
+  id,
+  originalLatitude,
+  originalLongitude,
+  scenarioLatitude,
+  scenarioLongitude,
+  totalHeight,
+  hubHeight,
+  rotorDiameter,
+  status
+}
+
+Status ska kunna vara:
+
+unchanged
+moved
+removed
+added
+
+Användaren ska alltid kunna återgå till originalplaceringen.
+
+⸻
+
+7. Gemensam AR-koppling
+
+Knappen:
+
+📱 Visa verken i AR
+
+ska fungera för alla projekt i hela Sverige.
+
+Om användaren inte har redigerat området ska AR visa projektets ursprungliga verkpositioner.
+
+Om användaren har redigerat området ska AR visa:
+
+* flyttade verk på de nya positionerna
+* nytillagda verk
+* oförändrade verk
+* inte visa borttagna verk
+
+Skicka minst följande till AR:
+
+{
+  projectId,
+  scenarioId,
+  observerPosition,
+  turbines: [
+    {
+      id,
+      latitude,
+      longitude,
+      totalHeight,
+      hubHeight,
+      rotorDiameter,
+      status
+    }
+  ]
+}
+
+Ändra inte den fungerande AR-motorn. Ändra endast vilken projekt- och scenariodata som skickas till den.
+
+⸻
+
+8. Gemensamt scenario mellan karta och AR
+
+När användaren går:
+
+Karta → AR → tillbaka till karta
+
+ska följande finnas kvar:
+
+* valt projekt
+* flyttade verk
+* borttagna verk
+* nytillagda verk
+* observationsplats
+* zoomnivå
+* aktiverade lager
+* sparat eller osparat scenario
+
+AR-sidan ska ha en knapp:
+
+🗺️ Tillbaka till kartan
+
+Den ska öppna samma projekt och scenario, inte en ny eller tom karta.
+
+⸻
+
+9. Lokala PDF-underlag ska inte ligga på AR-startsidan
+
+Ta bort knappen:
+
+Visa/ladda ner underlaget (PDF)
+
+från den allmänna AR-startsidan.
+
+Underlagen är lokala och ska därför bara visas när användaren befinner sig i ett specifikt projekt eller område.
+
+AR-startsidan ska endast innehålla de generella funktionerna:
+
+Starta AR
+Öppna Sveriges vindkraftskarta
+
+Den ska inte visa Katrineholmsspecifika texter eller dokument.
+
+⸻
+
+10. Underlag i projektets sidopanel
+
+När användaren klickar på ett projekt ska lokala dokument visas i projektets informationspanel.
+
+Exempel:
+
+Hedbodberget Etapp 1
+✏️ Redigera 15 verk
+📱 Visa 15 verk i AR
+📄 Visa underlag
+
+Knappen ska bara visas om projektet faktiskt har dokument registrerade.
+
+Använd generell logik:
+
+if (project.documents?.length > 0) {
+  showDocumentsButton();
+}
+
+Om inga dokument finns ska knappen inte visas.
+
+Visa gärna texten:
+
+Inga lokala underlag har lagts till för detta projekt ännu.
+
+Det är bättre än en trasig knapp.
+
+⸻
+
+11. Flera dokument per projekt
+
+Bygg inte lösningen för endast en PDF.
+
+Varje projekt ska kunna innehålla flera dokument:
+
+documents: [
+  {
+    id,
+    title,
+    type,
+    url,
+    source,
+    date
+  }
+]
+
+Exempel:
+
+Underlag
+📄 Samrådshandling
+📄 Projektkarta
+📄 Miljökonsekvensbeskrivning
+📄 Ansökan
+📄 Kommunalt beslut
+
+När användaren klickar på Visa underlag ska en lista eller panel öppnas.
+
+⸻
+
+12. Laga den nuvarande PDF-funktionen
+
+Den befintliga PDF-knappen fungerar inte och ska rättas.
+
+Kontrollera följande:
+
+* att dokumentets URL faktiskt finns
+* att sökvägen inte pekar på en gammal eller lokal fil
+* att PDF-filen finns tillgänglig i produktion
+* att filnamn med mellanslag och specialtecken hanteras korrekt
+* att länken fungerar både på dator och mobil
+* att dokumentet kan öppnas i en ny flik
+* att dokumentet även kan laddas ner
+* att användaren får ett begripligt felmeddelande om filen saknas
+
+Visa inte en 404-sida eller en tom vy.
+
+Vid fel ska exempelvis detta visas:
+
+Dokumentet kunde inte öppnas.
+Kontrollera att filen fortfarande finns tillgänglig.
+
+Lägg gärna till två val:
+
+Öppna PDF
+Ladda ner PDF
+
+⸻
+
+13. Katrineholms underlag
+
+De dokument som idag är kopplade till Ericsberg/Katrineholm ska flyttas från AR-startsidan till Katrineholms projektdata.
+
+Exempel:
+
+{
+  id: "ericsberg",
+  name: "Ericsberg / Ramsjöhult",
+  municipality: "Katrineholm",
+  turbines: [...],
+  boundary: [...],
+  documents: [
+    {
+      title: "Begärd kopia av samrådsyttrande",
+      type: "PDF",
+      url: "..."
+    }
+  ]
+}
+
+När användaren öppnar Katrineholmsområdet ska dokumentet finnas under:
+
+📄 Underlag
+
+När användaren öppnar ett annat projekt ska endast det projektets dokument visas.
+
+⸻
+
+14. Projektmodell för hela Sverige
+
+Alla projekt ska använda samma datamodell.
+
+Exempel:
+
+type WindProject = {
+  id: string;
+  name: string;
+  municipality?: string;
+  county?: string;
+  type: "land" | "offshore";
+  status?: string;
+  operator?: string;
+  annualProduction?: number;
+  nearestTown?: string;
+  boundary?: Coordinate[];
+  turbines: Turbine[];
+  documents?: ProjectDocument[];
+  scoringConfig?: ScoringConfig;
+  arConfig?: ArConfig;
+};
+
+På så sätt ska ett nytt projekt kunna läggas till utan ny specialkod.
+
+Det ska räcka att lägga till projektets:
+
+* metadata
+* gräns
+* verkpositioner
+* eventuella dokument
+* eventuella lokala analysdata
+
+Därefter ska kartvy, redigering och AR fungera automatiskt.
+
+⸻
+
+15. Projektpanelens rekommenderade struktur
+
+När användaren klickar på ett område ska panelen se ut ungefär så här:
+
+PROJEKTERINGSOMRÅDE
+Hedbodberget Etapp 1
+Aktuellt · Landbaserat
+Kommun: Rättvik
+Län: Dalarnas län
+Planerade verk: 15
+Årsproduktion: 88,63 GWh
+Verksamhetsutövare: Hedbodberget Vind AB
+Närmaste ort: Dalfors, 4,2 km
+✏️ Redigera 15 verk
+📱 Visa 15 verk i AR
+📄 Visa underlag
+
+Knappordningen ska vara:
+
+1. Redigera
+2. AR
+3. Underlag
+
+Redigering är huvudfunktionen efter att ett projekt valts.
+
+⸻
+
+16. Tydligt redigeringsmeddelande
+
+När redigeringsläget öppnas ska användaren direkt förstå vad som går att göra.
+
+Visa exempelvis:
+
+REDIGERA VINDAKRAFTSPROJEKTET
+Dra ett verk för att flytta det.
+Tryck på ett verk för att redigera eller ta bort det.
+Klicka på kartan för att lägga till ett nytt verk.
+
+Visa också:
+
+Ändringarna sparas endast i ditt scenario och påverkar inte originalinformationen.
+
+⸻
+
+17. Nationell poäng- och analysvy
+
+Poängsystemet ska kunna visas för samtliga projekt, men endast med de faktorer där analysdata finns.
+
+Om fullständig lokal data saknas ska appen inte visa påhittade eller missvisande värden.
+
+Visa i stället:
+
+Detaljerad analysdata saknas för detta område.
+Du kan fortfarande:
+– flytta verken
+– spara scenariot
+– jämföra placeringar
+– visa resultatet i AR
+
+När lokal analysdata senare läggs till ska den automatiskt kunna användas av samma system.
+
+⸻
+
+18. Responsivitet
+
+Den gemensamma kartan och projektpanelen ska fungera på:
+
+* mobil
+* surfplatta
+* laptop
+* bred datorskärm
+
+På dator kan projektpanelen ligga till höger.
+
+På mobil ska projektpanelen öppnas som en nedre drawer eller helskärmspanel.
+
+Kartans geografiska proportioner får aldrig förvrängas.
+
+Kör kartans resize- eller invalidate-funktion när:
+
+* projektpanelen öppnas
+* projektpanelen stängs
+* redigeringsläget aktiveras
+* redigeringsläget avslutas
+* skärmen roteras
+* helskärmsläge används
+
+⸻
+
+19. Prestanda
+
+Eftersom detta gäller hela Sverige ska appen inte ladda alla detaljerade verk och dokument samtidigt.
+
+Använd:
+
+* klustring vid låg zoom
+* endast rendering av synliga projekt och verk
+* lazy loading av individuella verk
+* lazy loading av dokument
+* cache av hämtade områden
+* spatial indexering
+* detaljerad data först när ett projekt väljs
+
+Redigeringsmotorn ska endast aktiveras för det valda projektet.
+
+⸻
+
+20. Ta bort lokala specialkopplingar
+
+Sök igenom koden och ta bort eller generalisera sådant som är hårdkodat till:
+
+Katrineholm
+Ericsberg
+Ramsjöhult
+
+Det gäller särskilt:
+
+* knapptexter
+* routes
+* projektval
+* PDF-länkar
+* AR-data
+* redigeringsaktivering
+* observationspunkter
+* poängsystem
+* kartcentrum
+
+Katrineholm ska fortfarande fungera, men genom samma generella projektmodell som övriga Sverige.
+
+⸻
+
+21. Gemensam route
+
+Använd en gemensam route för kartverktyget, exempelvis:
+
+/karta
+
+Projekt och scenario kan anges via state eller URL:
+
+/karta?project=hedbodberget
+/karta?project=ericsberg&scenario=abc123
+
+Undvik separata routes som:
+
+/ericsberg-map
+/katrineholm-map
+/sweden-map
+
+Direktlänkning och omladdning ska fungera utan 404.
+
+⸻
+
+22. Viktigt att bevara
+
+Förstör eller skriv inte om fungerande funktionalitet i onödan.
+
+Behåll:
+
+* befintlig Sverigekarta
+* befintliga projektområden
+* projektinformationen i sidopanelen
+* fungerande AR
+* drag-and-drop från Ericsberg
+* scenariologiken
+* återställning
+* sparade placeringar
+* jämförelse
+* observationspunkt
+* poängsystem
+* kartlager
+
+Flytta och generalisera funktionerna så att de fungerar nationellt.
+
+⸻
+
+SLUTLIGT ÖNSKAT FLÖDE
+
+1. Användaren öppnar Sveriges vindkraftskarta.
+2. Användaren söker eller zoomar till valfri plats i Sverige.
+3. Användaren klickar på ett vindkraftsområde.
+4. Projektets informationspanel öppnas.
+5. Panelen visar:
+   – projektinformation
+   – Redigera placeringen
+   – Visa i AR
+   – Underlag, om dokument finns
+6. Användaren trycker på Redigera placeringen.
+7. Samma karta växlar till redigeringsläge.
+8. Användaren flyttar, tar bort eller lägger till verk.
+9. Användaren sparar scenariot eller jämför med originalet.
+10. Användaren väljer observationsplats.
+11. Användaren öppnar placeringen i AR.
+12. AR visar exakt den aktuella scenarioplaceringen.
+13. Användaren återgår till samma karta och samma scenario.
+14. Lokala PDF-underlag visas endast inne i respektive projekt.
+
+Huvudmålet
+
+Appen ska upplevas som:
+
+En nationell plattform där användaren kan utforska, redigera och uppleva alla planerade vindkraftsprojekt i Sverige i AR.
+
+Katrineholm är det första fullt utvecklade projektet, men alla tekniska funktioner ska vara generella och redo för hela Sverige.

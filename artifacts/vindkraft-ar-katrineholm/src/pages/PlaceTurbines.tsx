@@ -18,6 +18,32 @@ import {
 
 const SAVED_KEY = "vindkraft-ar-katrineholm:savedPlacements";
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
+const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
+
+interface EditHandoff {
+  projectName: string;
+  turbines: { id: string; lat: number; lon: number }[];
+  savedAt: number;
+}
+
+function consumeEditHandoff(): { projectName: string; turbines: PlacedTurbine[] } | null {
+  try {
+    const raw = localStorage.getItem(EDIT_HANDOFF_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as EditHandoff;
+    if (Date.now() - data.savedAt > 10 * 60 * 1000) {
+      localStorage.removeItem(EDIT_HANDOFF_KEY);
+      return null;
+    }
+    localStorage.removeItem(EDIT_HANDOFF_KEY);
+    return {
+      projectName: data.projectName,
+      turbines: data.turbines.map((t) => ({ id: t.id, lat: t.lat, lon: t.lon })),
+    };
+  } catch {
+    return null;
+  }
+}
 
 // De 8 verkliga planerade vindkraftverk (från src/lib/turbines.ts, SWEREF99 TM
 // konverterat till WGS84) som ligger NÄRMAST Katrineholms centrum. Kartverktyget
@@ -66,8 +92,10 @@ const RECOMPUTE_DELAY_MS = 700;
 
 export default function PlaceTurbines() {
   const [, navigate] = useLocation();
-  const [turbines, setTurbines] = useState<PlacedTurbine[]>(DEFAULT_TURBINES);
-  const [committedTurbines, setCommittedTurbines] = useState<PlacedTurbine[]>(DEFAULT_TURBINES);
+  const [editHandoff] = useState<{ projectName: string; turbines: PlacedTurbine[] } | null>(consumeEditHandoff);
+  const initialTurbines = editHandoff?.turbines ?? DEFAULT_TURBINES;
+  const [turbines, setTurbines] = useState<PlacedTurbine[]>(initialTurbines);
+  const [committedTurbines, setCommittedTurbines] = useState<PlacedTurbine[]>(initialTurbines);
   const [calculating, setCalculating] = useState(false);
   const [saved, setSaved] = useState<SavedPlacement[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -249,17 +277,29 @@ export default function PlaceTurbines() {
     <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <div>
-          <p className="text-xs font-semibold tracking-wide text-[#FFB347]">PLACERA VINDKRAFTVERKEN SJÄLV</p>
+          <p className="text-xs font-semibold tracking-wide text-[#FFB347]">
+            {editHandoff ? "REDIGERA VINDKRAFTSPROJEKTET" : "PLACERA VINDKRAFTVERKEN SJÄLV"}
+          </p>
           <p className="text-sm text-white/70">
-            Ericsbergs marker · klicka för att placera · tryck på ett verk för att flytta/ta bort
+            {editHandoff
+              ? `${editHandoff.projectName} · klicka på ett verk för att flytta/ta bort`
+              : "Ericsbergs marker · klicka för att placera · tryck på ett verk för att flytta/ta bort"}
           </p>
         </div>
-        <button
-          onClick={() => navigate("/")}
-          className="shrink-0 rounded-full bg-white/10 px-4 py-1.5 text-sm text-white hover:bg-white/20"
-        >
-          Stäng
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => { window.location.href = "/vindkraft-karta/"; }}
+            className="rounded-full bg-white/10 px-4 py-1.5 text-sm text-white hover:bg-white/20"
+          >
+            🗺️ Tillbaka till kartan
+          </button>
+          <button
+            onClick={() => navigate("/")}
+            className="rounded-full bg-white/10 px-4 py-1.5 text-sm text-white hover:bg-white/20"
+          >
+            📷 AR
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 border-b border-white/10 bg-[#0d0d0d] px-4 py-2">
