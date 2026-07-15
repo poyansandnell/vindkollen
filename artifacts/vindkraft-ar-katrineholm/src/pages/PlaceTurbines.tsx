@@ -146,7 +146,7 @@ export default function PlaceTurbines() {
       setContextLoading(true);
       try {
         const resp = await fetch(
-          `/api/location-context?lat=${centerLat.toFixed(5)}&lng=${centerLng.toFixed(5)}&radiusKm=50`,
+          apiUrl(`/api/location-context?lat=${centerLat.toFixed(5)}&lng=${centerLng.toFixed(5)}&radiusKm=50`),
           { signal: controller.signal },
         );
         if (resp.ok) {
