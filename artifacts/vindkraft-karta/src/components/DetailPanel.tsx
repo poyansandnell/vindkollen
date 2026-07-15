@@ -209,7 +209,10 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                   <div className="mt-4 space-y-2">
                     {projectTurbines.length > 0 ? (
                       <Button
-                        className="w-full bg-slate-800 hover:bg-slate-700 text-white font-semibold border border-slate-600"
+                        className="w-full font-semibold"
+                        style={{ backgroundColor: '#e5e7eb', color: '#1f2937', borderColor: '#d1d5db' }}
+                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#d1d5db')}
+                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#e5e7eb')}
                         onClick={() => openInEditor(projectName, projectTurbines)}
                         data-testid="button-edit-project"
                       >
