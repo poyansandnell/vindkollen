@@ -75,6 +75,7 @@ const MapboxMapView = forwardRef<MapRef, MapboxMapViewProps>(function MapboxMapV
       mapStyle="mapbox://styles/mapbox/light-v11"
       style={{ width: "100%", height: "100%" }}
       interactiveLayerIds={interactiveLayerIds}
+      scrollZoom={true}
       onClick={onMapClick}
       onMouseMove={onMapMouseMove}
       onMoveEnd={(evt) => {

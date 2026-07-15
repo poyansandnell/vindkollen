@@ -209,7 +209,7 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                   <div className="mt-4 space-y-2">
                     {projectTurbines.length > 0 ? (
                       <Button
-                        className="w-full bg-white/10 hover:bg-white/20 text-white font-semibold border border-white/20"
+                        className="w-full bg-slate-800 hover:bg-slate-700 text-white font-semibold border border-slate-600"
                         onClick={() => openInEditor(projectName, projectTurbines)}
                         data-testid="button-edit-project"
                       >
