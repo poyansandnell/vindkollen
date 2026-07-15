@@ -71,7 +71,7 @@ const ZONE_COLORS: Record<string, string> = {
 /** Klick/drag under detta antal pixlar räknas som ett klick, inte en panorering. */
 const CLICK_MOVE_THRESHOLD_PX = 6;
 const MIN_LAT_SPAN = 0.004;
-const MAX_LAT_SPAN = 0.25;
+const MAX_LAT_SPAN = 2.0;
 /** Väntetid innan ett enkelklick körs, för att kunna upptäcka ett dubbeltryck (zoom). */
 const DOUBLE_TAP_WINDOW_MS = 280;
 const DOUBLE_TAP_MAX_DIST_PX = 30;
