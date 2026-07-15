@@ -5,6 +5,7 @@ import { PlacementScorePanel } from "@/components/PlacementScorePanel";
 import {
   PLACEMENT_LEVEL_COLORS,
   scorePlacement,
+  type LocationContext,
   type PlacedTurbine,
 } from "@/lib/placementScoring";
 import {
@@ -113,6 +114,8 @@ export default function PlaceTurbines() {
   const [boundaryVersion, setBoundaryVersion] = useState(0);
   const [boundarySavedFlash, setBoundarySavedFlash] = useState(false);
   const [currentLatSpan, setCurrentLatSpan] = useState<number>(0.25);
+  const [locationContext, setLocationContext] = useState<LocationContext | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
 
   const turbinesRef = useRef(turbines);
   turbinesRef.current = turbines;
@@ -121,6 +124,42 @@ export default function PlaceTurbines() {
   useEffect(() => {
     setSaved(loadSaved());
   }, []);
+
+  // Hämta nationell platskontext (orter + naturskydd) när vi är i
+  // national/editHandoff-läge. Debounced 1 s efter att turbiner ändras.
+  useEffect(() => {
+    if (!editHandoff) return;
+    if (committedTurbines.length === 0) return;
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      const lats = committedTurbines.map((t) => t.lat);
+      const lons = committedTurbines.map((t) => t.lon);
+      const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+      const centerLng = (Math.min(...lons) + Math.max(...lons)) / 2;
+
+      setContextLoading(true);
+      try {
+        const resp = await fetch(
+          `/api/location-context?lat=${centerLat.toFixed(5)}&lng=${centerLng.toFixed(5)}&radiusKm=50`,
+          { signal: controller.signal },
+        );
+        if (resp.ok) {
+          const data = (await resp.json()) as LocationContext;
+          setLocationContext(data);
+        }
+      } catch {
+        // AbortError eller nätverksfel — tyst
+      } finally {
+        setContextLoading(false);
+      }
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [editHandoff, committedTurbines]);
 
   useEffect(() => () => {
     if (commitTimerRef.current) window.clearTimeout(commitTimerRef.current);
@@ -145,7 +184,10 @@ export default function PlaceTurbines() {
   // läser den aktiva gränsen via `getActiveBoundary()` (modulnivå-state, inte
   // ett argument), så en sparad/återställd gräns måste explicit trigga om den
   // annars memoiserade omräkningen.
-  const result = useMemo(() => scorePlacement(committedTurbines), [committedTurbines, boundaryVersion]);
+  const result = useMemo(
+    () => scorePlacement(committedTurbines, editHandoff && locationContext ? locationContext : undefined),
+    [committedTurbines, boundaryVersion, editHandoff, locationContext],
+  );
 
   const handleMove = useCallback(
     (id: string, lat: number, lon: number) => {
@@ -527,6 +569,17 @@ export default function PlaceTurbines() {
       {result.playfulWarning && !editHandoff && (
         <div className="mx-3 mb-2 rounded-xl border border-yellow-400/30 bg-yellow-500/15 px-3 py-2 text-xs text-yellow-100">
           ⚠️ {result.playfulWarning}
+        </div>
+      )}
+
+      {editHandoff && contextLoading && (
+        <div className="mx-3 mb-1 flex items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs text-white/60">
+          <span className="animate-spin">⏳</span> Hämtar lokaldata (orter, naturskydd)…
+        </div>
+      )}
+      {editHandoff && !contextLoading && locationContext && (
+        <div className="mx-3 mb-1 rounded-lg bg-emerald-900/30 px-3 py-1.5 text-xs text-emerald-300/80">
+          📍 {locationContext.settlements.length} orter · {locationContext.protectedAreas.length} skyddade områden hittade
         </div>
       )}
 

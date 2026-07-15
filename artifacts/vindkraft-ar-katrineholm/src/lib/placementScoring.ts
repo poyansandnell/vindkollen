@@ -19,6 +19,7 @@ import {
   getActiveBoundary,
   isInsideBoundary,
   type HouseholdCluster,
+  type SensitiveZone,
   type SensitiveZoneType,
 } from "./ericsbergArea";
 
@@ -112,6 +113,33 @@ export interface LayerCounts {
 }
 
 /**
+ * Nationell platskontext hämtad från `/api/location-context` (Overpass API).
+ * När den skickas in till `scorePlacement` ersätter den de hårdkodade
+ * Ericsberg/Katrineholm-konstanterna, så att scoring fungerar var som helst
+ * i Sverige.
+ */
+export interface LocationSettlement {
+  name: string;
+  lat: number;
+  lng: number;
+  population: number;
+  households: number;
+}
+
+export interface LocationProtectedArea {
+  name: string;
+  type: "nature" | "cultural" | "water";
+  lat: number;
+  lng: number;
+  radiusM: number;
+}
+
+export interface LocationContext {
+  settlements: LocationSettlement[];
+  protectedAreas: LocationProtectedArea[];
+}
+
+/**
  * Avståndsviktad påverkansmodell (ersätter en tidigare fast räckviddsradie):
  * varje bostad/hushållskluster får en "påverkansfraktion" 0-1 baserat på
  * avstånd till ETT verk, ankrad i följande exempelvärden (linjärt
@@ -176,9 +204,12 @@ function clamp(x: number, min: number, max: number): number {
   return Math.min(Math.max(x, min), max);
 }
 
-function nearestHousehold(point: { lat: number; lon: number }): { cluster: HouseholdCluster; distanceM: number } | null {
+function nearestHousehold(
+  point: { lat: number; lon: number },
+  clusters: HouseholdCluster[],
+): { cluster: HouseholdCluster; distanceM: number } | null {
   let best: { cluster: HouseholdCluster; distanceM: number } | null = null;
-  for (const cluster of HOUSEHOLD_CLUSTERS) {
+  for (const cluster of clusters) {
     const distanceM = distanceMeters(point.lat, point.lon, cluster.lat, cluster.lon);
     if (!best || distanceM < best.distanceM) best = { cluster, distanceM };
   }
@@ -188,9 +219,10 @@ function nearestHousehold(point: { lat: number; lon: number }): { cluster: House
 function nearestZoneOfType(
   point: { lat: number; lon: number },
   type: SensitiveZoneType,
+  zones: SensitiveZone[],
 ): { name: string; distanceM: number } | null {
   let best: { name: string; distanceM: number } | null = null;
-  for (const zone of SENSITIVE_ZONES) {
+  for (const zone of zones) {
     if (zone.type !== type) continue;
     // Avstånd till kanten (negativt = innanför zonen), klippt till 0 så
     // "inom zonen" konsekvent visas som 0 m i felsökningspanelen.
@@ -200,9 +232,13 @@ function nearestZoneOfType(
   return best;
 }
 
-function householdsWithinRadius(point: { lat: number; lon: number }, radiusM: number): number {
+function householdsWithinRadius(
+  point: { lat: number; lon: number },
+  radiusM: number,
+  clusters: HouseholdCluster[],
+): number {
   let count = 0;
-  for (const cluster of HOUSEHOLD_CLUSTERS) {
+  for (const cluster of clusters) {
     if (distanceMeters(point.lat, point.lon, cluster.lat, cluster.lon) <= radiusM) {
       count += cluster.households;
     }
@@ -243,8 +279,8 @@ interface HouseholdClusterImpact {
  * fler verk mot samma område ökar den sammanlagda effekten (utan att kunna
  * överstiga 100 %) — istället för att bara räkna det närmaste verket.
  */
-function computeHouseholdImpacts(turbines: PlacedTurbine[]): HouseholdClusterImpact[] {
-  return HOUSEHOLD_CLUSTERS.map((cluster) => {
+function computeHouseholdImpacts(turbines: PlacedTurbine[], clusters: HouseholdCluster[]): HouseholdClusterImpact[] {
+  return clusters.map((cluster) => {
     let product = 1;
     let nearestDistanceM = Infinity;
     for (const t of turbines) {
@@ -301,7 +337,55 @@ const LAYER_COUNTS: LayerCounts = {
  * de verk som faktiskt är utplacerade, så panelen kan uppdateras live medan
  * användaren drar ut verk ett i taget.
  */
-export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult {
+export function scorePlacement(turbines: PlacedTurbine[], ctx?: LocationContext): PlacementScoreResult {
+  // --- Lös effektiva datakällor: ctx ersätter hårdkodad Ericsberg-data ---
+  const effClusters: HouseholdCluster[] = ctx
+    ? ctx.settlements.map((s, i) => ({
+        id: `loc-${i}`,
+        name: s.name,
+        lat: s.lat,
+        lon: s.lng,
+        households: s.households,
+      }))
+    : HOUSEHOLD_CLUSTERS;
+
+  const effUrbanSettlement = ctx
+    ? ctx.settlements.length > 0
+      ? ctx.settlements.reduce((a, b) => (a.population > b.population ? a : b))
+      : null
+    : null;
+  const effUrbanCenter: { lat: number; lon: number } | null = ctx
+    ? effUrbanSettlement
+      ? { lat: effUrbanSettlement.lat, lon: effUrbanSettlement.lng }
+      : null
+    : KATRINEHOLM_CENTER;
+  const effUrbanName: string = ctx
+    ? (effUrbanSettlement?.name ?? "närmaste tätort")
+    : "Katrineholms centrum";
+  const effUrbanRadius: number = ctx
+    ? effUrbanSettlement
+      ? effUrbanSettlement.population > 20000
+        ? 2500
+        : effUrbanSettlement.population > 5000
+          ? 1500
+          : 800
+      : 1000
+    : KATRINEHOLM_URBAN_RADIUS_M;
+
+  const effZones: SensitiveZone[] = ctx
+    ? ctx.protectedAreas.map((p, i) => ({
+        id: `loc-${i}`,
+        name: p.name,
+        type: p.type,
+        lat: p.lat,
+        lon: p.lng,
+        radiusM: p.radiusM,
+        description: "",
+      }))
+    : SENSITIVE_ZONES;
+
+  const effPersonsPerHousehold = ctx ? 2.0 : KOMMUN_POPULATION.personsPerHousehold;
+
   const factors: FactorScore[] = [];
 
   if (turbines.length === 0) {
@@ -320,7 +404,13 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
       playfulWarning: null,
       turbineContributions: [],
       turbineDebug: [],
-      layerCounts: LAYER_COUNTS,
+      layerCounts: {
+        householdClusters: effClusters.length,
+        natureZones: effZones.filter((z) => z.type === "nature").length,
+        culturalZones: effZones.filter((z) => z.type === "cultural").length,
+        waterZones: effZones.filter((z) => z.type === "water").length,
+        positiveZones: POSITIVE_ZONES.length,
+      },
     };
   }
 
@@ -328,7 +418,7 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
   let nearestHouseholdDistanceM: number | null = null;
   let nearestHouseholdName: string | null = null;
   for (const t of turbines) {
-    const nearest = nearestHousehold(t);
+    const nearest = nearestHousehold(t, effClusters);
     if (nearest && (nearestHouseholdDistanceM === null || nearest.distanceM < nearestHouseholdDistanceM)) {
       nearestHouseholdDistanceM = nearest.distanceM;
       nearestHouseholdName = nearest.cluster.name;
@@ -345,7 +435,7 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
   });
 
   // --- Boendepåverkan: avståndsviktad, kombinerad över ALLA verk per hushållskluster ---
-  const householdImpacts = computeHouseholdImpacts(turbines);
+  const householdImpacts = computeHouseholdImpacts(turbines, effClusters);
   let householdsAffectedF = 0;
   let totalHouseholds = 0;
   let weightedDistanceSum = 0;
@@ -359,7 +449,7 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
     }
   }
   const householdsAffected = Math.round(householdsAffectedF);
-  const inhabitantsAffected = Math.round(householdsAffectedF * KOMMUN_POPULATION.personsPerHousehold);
+  const inhabitantsAffected = Math.round(householdsAffectedF * effPersonsPerHousehold);
   const avgNearestHouseholdDistanceM = weightedDistanceWeight > 0 ? weightedDistanceSum / weightedDistanceWeight : null;
   const impactIndex = totalHouseholds > 0 ? Math.round(clamp01(householdsAffectedF / totalHouseholds) * 100) : 0;
   const householdImpactScore = clamp01(impactIndex / 100) * HOUSEHOLD_IMPACT_WEIGHT;
@@ -374,11 +464,13 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
     }`,
   });
 
-  // --- Avstånd till tätort (Katrineholm) ---
+  // --- Avstånd till tätort (närmaste stad/ort) ---
   let nearestUrbanDistanceM: number | null = null;
-  for (const t of turbines) {
-    const d = distanceMeters(t.lat, t.lon, KATRINEHOLM_CENTER.lat, KATRINEHOLM_CENTER.lon);
-    if (nearestUrbanDistanceM === null || d < nearestUrbanDistanceM) nearestUrbanDistanceM = d;
+  if (effUrbanCenter) {
+    for (const t of turbines) {
+      const d = distanceMeters(t.lat, t.lon, effUrbanCenter.lat, effUrbanCenter.lon);
+      if (nearestUrbanDistanceM === null || d < nearestUrbanDistanceM) nearestUrbanDistanceM = d;
+    }
   }
   const urbanScore =
     nearestUrbanDistanceM === null
@@ -390,16 +482,14 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
     impactPoints: urbanScore,
     note:
       nearestUrbanDistanceM !== null
-        ? `Närmaste verk ligger ca ${(nearestUrbanDistanceM / 1000).toLocaleString("sv-SE", { maximumFractionDigits: 1 })} km från Katrineholms centrum.`
-        : "Inget avstånd kunde beräknas.",
+        ? `Närmaste verk ligger ca ${(nearestUrbanDistanceM / 1000).toLocaleString("sv-SE", { maximumFractionDigits: 1 })} km från ${effUrbanName}.`
+        : "Ingen tätort hittades i närheten.",
   });
 
-  // --- Mycket nära Katrineholms centrum (buggfix, se konstantens kommentar
-  // ovan): en separat, betydligt kraftigare faktor för korta avstånd till
-  // tätortsbebyggelsen, så placeringar nära centrum konsekvent hamnar i
-  // "hög"/"mycket hög" (rött) — inte bara en svag gradvis ökning. ---
+  // --- Mycket nära tätortsbebyggelse: separat, kraftigare faktor för korta
+  // avstånd — placeringar nära centrum hamnar konsekvent i "hög"/"mycket hög". ---
   const urbanCriticalDistanceM =
-    nearestUrbanDistanceM === null ? null : nearestUrbanDistanceM - KATRINEHOLM_URBAN_RADIUS_M;
+    nearestUrbanDistanceM === null ? null : nearestUrbanDistanceM - effUrbanRadius;
   const urbanCriticalScore =
     urbanCriticalDistanceM === null
       ? 0
@@ -407,9 +497,9 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
   if (urbanCriticalScore > 0) {
     factors.push({
       key: "urbanCritical",
-      label: "Mycket nära Katrineholms centrum",
+      label: `Mycket nära ${effUrbanName}`,
       impactPoints: urbanCriticalScore,
-      note: `Ett verk ligger mycket nära (eller inom) Katrineholms tätortsbebyggelse — endast ca ${Math.round(
+      note: `Ett verk ligger mycket nära (eller inom) ${effUrbanName}s tätortsbebyggelse — endast ca ${Math.round(
         Math.max(0, urbanCriticalDistanceM ?? 0),
       )} m från tätortsgränsen.`,
     });
@@ -417,7 +507,7 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
 
   // --- Natur/kultur/vattenskydd (straff om ETT ELLER FLERA verk ligger inom en zon) ---
   function sensitiveZoneScore(type: "nature" | "cultural" | "water", weight: number) {
-    const zones = SENSITIVE_ZONES.filter((z) => z.type === type);
+    const zones = effZones.filter((z) => z.type === type);
     let worstOverlapFraction = 0;
     let hitName: string | null = null;
     for (const zone of zones) {
@@ -467,7 +557,7 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
 
   // --- Buller: dBA vid närmaste hushållskluster (energisumma av alla verk) ---
   let worstHouseholdDba = -Infinity;
-  for (const cluster of HOUSEHOLD_CLUSTERS) {
+  for (const cluster of effClusters) {
     const levels = turbines.map((t) => attenuatedLevelDba(distanceMeters(t.lat, t.lon, cluster.lat, cluster.lon)));
     const combined = combineLevelsDba(levels);
     if (combined > worstHouseholdDba) worstHouseholdDba = combined;
@@ -534,9 +624,11 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
       : "Inget verk ligger inom kommunens uppskattat utpekade område.",
   });
 
-  // --- Verk utanför Ericsbergs marker ---
-  const outsideBoundaryIds = turbines.filter((t) => !isInsideBoundary(t, getActiveBoundary())).map((t) => t.id);
-  if (outsideBoundaryIds.length > 0) {
+  // --- Verk utanför Ericsbergs marker (bara i fristående Ericsberg-läge) ---
+  const outsideBoundaryIds = ctx
+    ? []
+    : turbines.filter((t) => !isInsideBoundary(t, getActiveBoundary())).map((t) => t.id);
+  if (!ctx && outsideBoundaryIds.length > 0) {
     factors.push({
       key: "outsideBoundary",
       label: "Utanför Ericsbergs marker",
@@ -554,7 +646,7 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
   else if (totalScore >= 30) level = "moderate";
 
   let playfulWarning: string | null = null;
-  if (outsideBoundaryIds.length > 0) {
+  if (!ctx && outsideBoundaryIds.length > 0) {
     playfulWarning = "Hoppsan! Ett eller flera verk står utanför Ericsbergs marker. Dra tillbaka dem innanför gränsen.";
   } else if (nearestHouseholdDistanceM !== null && nearestHouseholdDistanceM < 400) {
     playfulWarning = `Oj då! Ett verk står bara ${Math.round(nearestHouseholdDistanceM)} m från ${nearestHouseholdName} — det blir nog svårt att sova där.`;
@@ -566,7 +658,7 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
 
   const soloScores = new Map<string, number>();
   if (turbines.length > 1) {
-    for (const t of turbines) soloScores.set(t.id, scorePlacement([t]).totalScore);
+    for (const t of turbines) soloScores.set(t.id, scorePlacement([t], ctx).totalScore);
   } else {
     for (const t of turbines) soloScores.set(t.id, totalScore);
   }
@@ -581,19 +673,19 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
   // lager (centrum, natur, kultur, vatten), buller/skugg/visuell
   // delpoäng, samt totalpoängen om verket stått ensamt. ---
   const turbineDebug: TurbineDebugInfo[] = turbines.map((t) => {
-    const nearest = nearestHousehold(t);
-    const nature = nearestZoneOfType(t, "nature");
-    const cultural = nearestZoneOfType(t, "cultural");
-    const water = nearestZoneOfType(t, "water");
+    const nearest = nearestHousehold(t, effClusters);
+    const nature = nearestZoneOfType(t, "nature", effZones);
+    const cultural = nearestZoneOfType(t, "cultural", effZones);
+    const water = nearestZoneOfType(t, "water", effZones);
     let worstDba = -Infinity;
-    for (const cluster of HOUSEHOLD_CLUSTERS) {
+    for (const cluster of effClusters) {
       const level = attenuatedLevelDba(distanceMeters(t.lat, t.lon, cluster.lat, cluster.lon));
       if (level > worstDba) worstDba = level;
     }
-    const nearestForVisualSolo = Math.min(
-      nearest?.distanceM ?? Infinity,
-      distanceMeters(t.lat, t.lon, KATRINEHOLM_CENTER.lat, KATRINEHOLM_CENTER.lon),
-    );
+    const urbanDistForDebug = effUrbanCenter
+      ? distanceMeters(t.lat, t.lon, effUrbanCenter.lat, effUrbanCenter.lon)
+      : Infinity;
+    const nearestForVisualSolo = Math.min(nearest?.distanceM ?? Infinity, urbanDistForDebug);
     const soloVisualScore = Number.isFinite(nearestForVisualSolo)
       ? clamp01(1 - (nearestForVisualSolo - VISUAL_CLOSE_M) / (VISUAL_FAR_M - VISUAL_CLOSE_M)) * VISUAL_WEIGHT
       : 0;
@@ -608,10 +700,12 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
       insideBoundary: isInsideBoundary(t, getActiveBoundary()),
       nearestHouseholdDistanceM: nearest?.distanceM ?? null,
       nearestHouseholdName: nearest?.cluster.name ?? null,
-      householdsWithin1kmCount: householdsWithinRadius(t, 1000),
-      householdsWithin2kmCount: householdsWithinRadius(t, 2000),
-      householdsWithin3kmCount: householdsWithinRadius(t, 3000),
-      distanceToKatrineholmCenterM: distanceMeters(t.lat, t.lon, KATRINEHOLM_CENTER.lat, KATRINEHOLM_CENTER.lon),
+      householdsWithin1kmCount: householdsWithinRadius(t, 1000, effClusters),
+      householdsWithin2kmCount: householdsWithinRadius(t, 2000, effClusters),
+      householdsWithin3kmCount: householdsWithinRadius(t, 3000, effClusters),
+      distanceToKatrineholmCenterM: effUrbanCenter
+        ? distanceMeters(t.lat, t.lon, effUrbanCenter.lat, effUrbanCenter.lon)
+        : 0,
       nearestNatureDistanceM: nature?.distanceM ?? null,
       nearestNatureName: nature?.name ?? null,
       nearestCulturalDistanceM: cultural?.distanceM ?? null,
@@ -640,7 +734,13 @@ export function scorePlacement(turbines: PlacedTurbine[]): PlacementScoreResult 
     playfulWarning,
     turbineContributions,
     turbineDebug,
-    layerCounts: LAYER_COUNTS,
+    layerCounts: {
+      householdClusters: effClusters.length,
+      natureZones: effZones.filter((z) => z.type === "nature").length,
+      culturalZones: effZones.filter((z) => z.type === "cultural").length,
+      waterZones: effZones.filter((z) => z.type === "water").length,
+      positiveZones: POSITIVE_ZONES.length,
+    },
   };
 }
 
