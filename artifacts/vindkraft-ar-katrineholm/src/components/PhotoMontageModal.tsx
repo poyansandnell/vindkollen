@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const WATERMARK_TEXT = "Katrineholm FRAMÅT – Vindkraft AR";
+const WATERMARK_TEXT = "Skapad med Vindkollen";
 const DISCLAIMER_TEXT = "Fotomontage/visualisering. GPS, kompass, terräng, väder och sikt kan påverka precisionen.";
 
 interface PhotoMontageModalProps {
