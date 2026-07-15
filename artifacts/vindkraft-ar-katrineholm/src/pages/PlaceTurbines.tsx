@@ -530,17 +530,12 @@ export default function PlaceTurbines() {
         </div>
       )}
 
-      {editHandoff ? (
-        <div className="border-t border-white/10 bg-[#0d0d0d] px-4 py-3 text-center text-[11px] text-white/35">
-          Påverkansanalys är kalibrerad för Katrineholmsområdet och visas inte här.
-        </div>
-      ) : (
-        <PlacementScorePanel
-          result={result}
-          minimized={scoreMinimized}
-          onToggleMinimized={() => setScoreMinimized((v) => !v)}
-        />
-      )}
+      <PlacementScorePanel
+        result={result}
+        minimized={scoreMinimized}
+        onToggleMinimized={() => setScoreMinimized((v) => !v)}
+        showEricsbergFeatures={!editHandoff}
+      />
       </div>
 
       <div className="border-t border-white/10 bg-[#0d0d0d] px-4 py-3">

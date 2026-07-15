@@ -237,13 +237,15 @@ export function PlacementScorePanel({ result, minimized, onToggleMinimized, show
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
 
-  const score = Math.round(result.totalScore);
-  const totalSev = totalScoreSeverity(score);
-  const totalC = SEV_CONFIG[totalSev];
-
   const visibleFactors = showEricsbergFeatures
     ? result.factors
     : result.factors.filter((f) => f.key !== "outsideBoundary");
+
+  const score = showEricsbergFeatures
+    ? Math.round(result.totalScore)
+    : Math.min(Math.round(visibleFactors.reduce((sum, f) => sum + f.impactPoints, 0)), 100);
+  const totalSev = totalScoreSeverity(score);
+  const totalC = SEV_CONFIG[totalSev];
 
   const top3 = visibleFactors
     .filter((f) => f.impactPoints > 0)
