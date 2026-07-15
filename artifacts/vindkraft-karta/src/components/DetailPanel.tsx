@@ -210,9 +210,9 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                     {projectTurbines.length > 0 ? (
                       <Button
                         className="w-full font-semibold"
-                        style={{ backgroundColor: '#e5e7eb', color: '#1f2937', borderColor: '#d1d5db' }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#d1d5db')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#e5e7eb')}
+                        style={{ backgroundColor: '#fff7ed', color: '#1f2937', border: '2px solid #FF8B01' }}
+                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ffedd5')}
+                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#fff7ed')}
                         onClick={() => openInEditor(projectName, projectTurbines)}
                         data-testid="button-edit-project"
                       >
