@@ -50,7 +50,7 @@ export default defineConfig({
       // (b) tyst göra ingenting så att nya versioner aldrig når användaren
       // (standardbeteendet för "prompt" utan egen onNeedRefresh-hantering).
       injectRegister: false,
-      includeAssets: ["favicon.svg", "robots.txt", "icons/apple-touch-icon.png"],
+      includeAssets: ["favicon.ico", "robots.txt", "icons/apple-touch-icon.png", "icons/favicon-32.png", "icons/favicon-16.png"],
       manifest: {
         id: basePath,
         scope: basePath,
