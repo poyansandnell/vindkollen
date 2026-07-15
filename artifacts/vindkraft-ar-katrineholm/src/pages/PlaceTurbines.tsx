@@ -283,7 +283,7 @@ export default function PlaceTurbines() {
           <p className="text-sm text-white/70">
             {editHandoff
               ? `${editHandoff.projectName} · klicka på ett verk för att flytta/ta bort`
-              : "Ericsbergs marker · klicka för att placera · tryck på ett verk för att flytta/ta bort"}
+              : "Ericsbergs marker · klicka på kartan för att placera · tryck på ett verk för att flytta/ta bort"}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -303,22 +303,26 @@ export default function PlaceTurbines() {
       </div>
 
       <div className="flex items-center gap-2 border-b border-white/10 bg-[#0d0d0d] px-4 py-2">
-        <button
-          onClick={() => setBoundaryDebugMode((v) => !v)}
-          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-            boundaryDebugMode ? "bg-sky-400 text-[#090909]" : "border border-white/20 bg-white/5 text-white hover:bg-white/10"
-          }`}
-        >
-          🔢 Visa gränspunkter
-        </button>
-        <button
-          onClick={handleToggleBoundaryEdit}
-          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-            boundaryEditMode ? "bg-purple-400 text-[#090909]" : "border border-white/20 bg-white/5 text-white hover:bg-white/10"
-          }`}
-        >
-          ✏️ Redigera gräns
-        </button>
+        {!editHandoff && (
+          <>
+            <button
+              onClick={() => setBoundaryDebugMode((v) => !v)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                boundaryDebugMode ? "bg-sky-400 text-[#090909]" : "border border-white/20 bg-white/5 text-white hover:bg-white/10"
+              }`}
+            >
+              🔢 Visa gränspunkter
+            </button>
+            <button
+              onClick={handleToggleBoundaryEdit}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                boundaryEditMode ? "bg-purple-400 text-[#090909]" : "border border-white/20 bg-white/5 text-white hover:bg-white/10"
+              }`}
+            >
+              ✏️ Redigera gräns
+            </button>
+          </>
+        )}
         <button
           onClick={() => setDebugPanelOpen((v) => !v)}
           className={`rounded-full px-3 py-1.5 text-xs font-medium ${
@@ -461,7 +465,7 @@ export default function PlaceTurbines() {
                         Hushåll: {td.nearestHouseholdName ?? "—"}
                         {td.nearestHouseholdDistanceM !== null ? ` (${Math.round(td.nearestHouseholdDistanceM)} m)` : ""}
                       </span>
-                      <span>Ctrm Katrineholm: {Math.round(td.distanceToKatrineholmCenterM)} m</span>
+                      
                       <span>Hushåll &lt;1 km: {td.householdsWithin1kmCount}</span>
                       <span>Hushåll &lt;2 km: {td.householdsWithin2kmCount}</span>
                       <span>Hushåll &lt;3 km: {td.householdsWithin3kmCount}</span>
@@ -496,17 +500,22 @@ export default function PlaceTurbines() {
           </div>
         )}
 
-        {currentLatSpan > 0.5 && (
-          <button
-            onClick={() => { window.location.href = "/vindkraft-karta/"; }}
-            className="absolute left-3 top-3 z-20 flex items-center gap-1.5 rounded-full bg-black/75 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur-sm hover:bg-black/90"
-          >
-            ← Sverigekartan
-          </button>
+        {currentLatSpan > 1.2 && (
+          <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-3 bg-black/85 px-4 py-3 shadow-xl backdrop-blur-sm">
+            <p className="text-sm font-medium text-white/90">
+              🗺️ Vill du gå tillbaka till Sverigekartan?
+            </p>
+            <button
+              onClick={() => { window.location.href = "/vindkraft-karta/"; }}
+              className="shrink-0 rounded-full bg-[#FF8B01] px-4 py-1.5 text-xs font-semibold text-[#090909] hover:bg-[#FFB347]"
+            >
+              Ja, gå tillbaka
+            </button>
+          </div>
         )}
       </div>
 
-      {result.playfulWarning && (
+      {result.playfulWarning && (!editHandoff || !result.playfulWarning.includes("Ericsberg")) && (
         <div className="mx-3 mb-2 rounded-xl border border-yellow-400/30 bg-yellow-500/15 px-3 py-2 text-xs text-yellow-100">
           ⚠️ {result.playfulWarning}
         </div>
@@ -516,6 +525,7 @@ export default function PlaceTurbines() {
         result={result}
         minimized={scoreMinimized}
         onToggleMinimized={() => setScoreMinimized((v) => !v)}
+        showEricsbergFeatures={!editHandoff}
       />
       </div>
 

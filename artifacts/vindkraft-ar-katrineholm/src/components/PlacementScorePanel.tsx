@@ -229,9 +229,11 @@ interface PlacementScorePanelProps {
   result: PlacementScoreResult;
   minimized: boolean;
   onToggleMinimized: () => void;
+  /** Om false filtreras Ericsberg-specifika faktorer och disclaimers bort */
+  showEricsbergFeatures?: boolean;
 }
 
-export function PlacementScorePanel({ result, minimized, onToggleMinimized }: PlacementScorePanelProps) {
+export function PlacementScorePanel({ result, minimized, onToggleMinimized, showEricsbergFeatures = true }: PlacementScorePanelProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
 
@@ -239,14 +241,18 @@ export function PlacementScorePanel({ result, minimized, onToggleMinimized }: Pl
   const totalSev = totalScoreSeverity(score);
   const totalC = SEV_CONFIG[totalSev];
 
-  const top3 = result.factors
+  const visibleFactors = showEricsbergFeatures
+    ? result.factors
+    : result.factors.filter((f) => f.key !== "outsideBoundary");
+
+  const top3 = visibleFactors
     .filter((f) => f.impactPoints > 0)
     .sort((a, b) => b.impactPoints - a.impactPoints)
     .slice(0, 3);
 
-  const criticalFactors = result.factors.filter((f) => getGroup(f.key) === "critical");
-  const envFactors = result.factors.filter((f) => getGroup(f.key) === "env");
-  const planFactors = result.factors.filter((f) => getGroup(f.key) === "plan");
+  const criticalFactors = visibleFactors.filter((f) => getGroup(f.key) === "critical");
+  const envFactors = visibleFactors.filter((f) => getGroup(f.key) === "env");
+  const planFactors = visibleFactors.filter((f) => getGroup(f.key) === "plan");
 
   return (
     <div
@@ -339,7 +345,9 @@ export function PlacementScorePanel({ result, minimized, onToggleMinimized }: Pl
             <StatsGrid result={result} />
             <div className="space-y-1.5 pb-1">
               <p className="text-[11px] leading-relaxed text-white/35">{PLACEMENT_DISCLAIMER}</p>
-              <p className="text-[11px] leading-relaxed text-white/35">{ERICSBERG_AREA_DISCLAIMER}</p>
+              {showEricsbergFeatures && (
+                <p className="text-[11px] leading-relaxed text-white/35">{ERICSBERG_AREA_DISCLAIMER}</p>
+              )}
               <p className="text-[11px] text-white/25">
                 Poängen är en illustrativ uppskattning och inte en officiell tillståndsbedömning.
               </p>
