@@ -7,7 +7,6 @@
  * direkt i hook- eller komponent-filer.
  */
 import { Capacitor } from "@capacitor/core";
-import { publicUrl } from "./apiUrl";
 
 /** True om appen körs i Capacitor (iOS eller Android). */
 export function isNative(): boolean {
@@ -21,14 +20,14 @@ export function isNative(): boolean {
 /**
  * Öppnar Sverigekartan.
  *
- * - Native: öppnar den publika URL:en i Safari/Chrome via _system (undviker 404
- *   eftersom /vindkraft-karta/ inte är en del av Capacitor-bundeln).
- * - Webb: navigerar direkt inom Replit-proxyn som vanligt.
+ * Navigerar till /vindkraft-karta/ via intern routing i både webb och native.
+ * Om VITE_PUBLIC_APP_URL är explicit satt öppnas URL:en externt i Safari/Chrome
+ * via _system — annars används alltid intern navigation (inget krav på env-variabel).
  */
 export function openSverigekartan(): void {
-  if (isNative()) {
-    const url = publicUrl("/vindkraft-karta/");
-    window.open(url, "_system");
+  const externalBase = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ?? "";
+  if (isNative() && externalBase) {
+    window.open(`${externalBase}/vindkraft-karta/`, "_system");
   } else {
     window.location.href = "/vindkraft-karta/";
   }
