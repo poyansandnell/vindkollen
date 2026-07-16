@@ -25,10 +25,52 @@ const SAVED_KEY = "vindkraft-ar-katrineholm:savedPlacements";
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
 const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
 
+// ─── API-typer och hjälpfunktioner för nationellt projektläge ─────────────
+
+/** Minimal projekttyp för Sverigekartan (undviker beroende av @workspace/api-zod). */
+interface ApiProjectArea {
+  id: number;
+  name: string;
+  status: string;
+  /** @nullable */
+  kommun?: string | null;
+  /** @nullable */
+  turbineCountPlannedMin?: number | null;
+  /** @nullable */
+  turbineCountPlannedMax?: number | null;
+  centerLat?: number;
+  centerLng?: number;
+  /** @nullable */
+  polygon?: { type: string; coordinates: unknown } | null;
+}
+
+/** Konverterar API GeoJSON Polygon/MultiPolygon till LatLon[] för gränseditorn. */
+function apiPolygonToLatLon(polygon: ApiProjectArea["polygon"]): LatLon[] | null {
+  if (!polygon?.coordinates) return null;
+  const { type, coordinates } = polygon;
+  let ring: unknown[];
+  if (type === "Polygon" && Array.isArray(coordinates)) {
+    ring = (coordinates as unknown[][])[0];
+  } else if (type === "MultiPolygon" && Array.isArray(coordinates)) {
+    ring = ((coordinates as unknown[][][])[0])[0];
+  } else {
+    return null;
+  }
+  if (!Array.isArray(ring) || ring.length < 3) return null;
+  return (ring as [number, number][]).map(([lon, lat]) => ({ lat, lon }));
+}
+
+/** Status → markörfärg (orange = aktuellt/samråd, grön = beviljat/driftsatt, grå = övrigt). */
+function projectStatusColor(status: string): string {
+  if (status === "beviljat" || status === "driftsatt") return "#22c55e";
+  if (status === "aktuellt" || status === "samråd") return "#FF8B01";
+  return "#94a3b8";
+}
+
 // ─── NationalView ──────────────────────────────────────────────────────────
-// Nationell vindkraftöversikt som visas när användaren öppnar Sverigekartan
-// från AR-hemvyn. Visar Sverigekarta med satellitbild (ESRI zoom 5) och
-// markör för Länsterbergets-projektet. Projektet väljs → Ericsberg-editorn.
+// Hämtar ALLA vindkraftsprojekt från /api/wind/project-areas (Sverige-bbox)
+// och visar dem som klickbara markörer på en ESRI-satellitbild (zoom 5).
+// Välj ett projekt → visa projektkort → "Öppna projektet" → editor.
 //
 // Zoom 5 → 3×4 plattor täcker Sverige (lon 0-33.75°E, lat ~55-69°N):
 //   x: 16 (0°), 17 (11.25°), 18 (22.5°)
@@ -38,11 +80,14 @@ const NATIONAL_X1 = 16,
   NATIONAL_X2 = 18;
 const NATIONAL_Y1 = 7,
   NATIONAL_Y2 = 10;
-// Ericsberget/Länsterberget — ungefärligt centrum för OX2-projektområdet
-const ERICSBERG_MARKER_LAT = 58.97;
-const ERICSBERG_MARKER_LON = 16.27;
 
-function NationalView({ onEnterEditor, onBack }: { onEnterEditor: () => void; onBack: () => void }) {
+function NationalView({
+  onEnterEditor,
+  onBack,
+}: {
+  onEnterEditor: (project: ApiProjectArea) => void;
+  onBack: () => void;
+}) {
   const tiles = useMemo(() => {
     const cols = NATIONAL_X2 - NATIONAL_X1 + 1;
     const rows = NATIONAL_Y2 - NATIONAL_Y1 + 1;
@@ -62,11 +107,57 @@ function NationalView({ onEnterEditor, onBack }: { onEnterEditor: () => void; on
     return result;
   }, []);
 
-  // WebMercator-fraktionell plattposition → procentuell position i kartan
-  const markerLeft =
-    ((lon2tileX(ERICSBERG_MARKER_LON, NATIONAL_ZOOM) - NATIONAL_X1) / (NATIONAL_X2 - NATIONAL_X1 + 1)) * 100;
-  const markerTop =
-    ((lat2tileY(ERICSBERG_MARKER_LAT, NATIONAL_ZOOM) - NATIONAL_Y1) / (NATIONAL_Y2 - NATIONAL_Y1 + 1)) * 100;
+  const [projects, setProjects] = useState<ApiProjectArea[]>([]);
+  const [loadState, setLoadState] = useState<"loading" | "ok" | "error">("loading");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedProject, setSelectedProject] = useState<ApiProjectArea | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadState("loading");
+    setLoadError(null);
+
+    // Sverige-bbox: lon 10-25°E, lat 55-70°N
+    const url = apiUrl("/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25");
+    fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<ApiProjectArea[]>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const withCoords = (Array.isArray(data) ? data : []).filter(
+          (p) => typeof p.centerLat === "number" && typeof p.centerLng === "number",
+        );
+        setProjects(withCoords);
+        setLoadState("ok");
+        console.log(
+          `[Vindkollen] Sverigekartan: laddade ${withCoords.length} projekt`,
+          withCoords.map((p) => `[${p.id}] ${p.name}`),
+        );
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setLoadError(err.message);
+        setLoadState("error");
+        console.error("[Vindkollen] Sverigekartan: projekthämtning misslyckades:", err.message, url);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Beräkna markörspositioner i WebMercator-koordinater → procent av kartarea
+  const markerPositions = useMemo(
+    () =>
+      projects.map((p) => ({
+        project: p,
+        left: ((lon2tileX(p.centerLng!, NATIONAL_ZOOM) - NATIONAL_X1) / (NATIONAL_X2 - NATIONAL_X1 + 1)) * 100,
+        top: ((lat2tileY(p.centerLat!, NATIONAL_ZOOM) - NATIONAL_Y1) / (NATIONAL_Y2 - NATIONAL_Y1 + 1)) * 100,
+      })),
+    [projects],
+  );
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
@@ -76,7 +167,13 @@ function NationalView({ onEnterEditor, onBack }: { onEnterEditor: () => void; on
           <p className="text-[10px] font-semibold uppercase tracking-wide text-[#FFB347]">
             Vindkraft i Sverige
           </p>
-          <h1 className="text-sm font-bold text-white">Välj ett projekt att utforska</h1>
+          <h1 className="text-sm font-bold text-white">
+            {loadState === "loading"
+              ? "Laddar projekt…"
+              : loadState === "error"
+                ? "Laddningsfel"
+                : `${projects.length} vindkraftsprojekt`}
+          </h1>
         </div>
         <button
           onClick={onBack}
@@ -86,8 +183,11 @@ function NationalView({ onEnterEditor, onBack }: { onEnterEditor: () => void; on
         </button>
       </div>
 
-      {/* Sverigekarta — satellitbild zoom 5, 3 × 4 ESRI-plattor */}
-      <div className="relative min-h-0 flex-1 overflow-hidden bg-[#0d0d0d]">
+      {/* Sverigekarta — satellitbild zoom 5, 3 × 4 ESRI-plattor + projektmarkörer */}
+      <div
+        className="relative min-h-0 flex-1 overflow-hidden bg-[#0d0d0d]"
+        onClick={() => setSelectedProject(null)}
+      >
         {tiles.map((tile) => (
           <img
             key={tile.key}
@@ -104,62 +204,146 @@ function NationalView({ onEnterEditor, onBack }: { onEnterEditor: () => void; on
           />
         ))}
 
-        {/* Länsterbergets-projekts kartmarkör */}
-        <button
-          onClick={onEnterEditor}
-          className="absolute -translate-x-1/2 -translate-y-1/2"
-          style={{ left: `${markerLeft}%`, top: `${markerTop}%` }}
-          aria-label="Öppna Länsterberget vindkraftsprojekt"
-        >
-          <div className="flex flex-col items-center">
-            <div className="h-4 w-4 rounded-full border-2 border-white bg-[#FF8B01] shadow-lg shadow-black/60 transition-transform hover:scale-125 active:scale-110" />
-            <div className="mt-1 whitespace-nowrap rounded bg-[#090909]/90 px-2 py-0.5 text-[10px] font-bold text-[#FFB347]">
-              Länsterberget
-            </div>
+        {/* Projektmarkörer — en prick per projekt */}
+        {loadState === "ok" &&
+          markerPositions.map(({ project, left, top }) => {
+            const isSelected = project.id === selectedProject?.id;
+            return (
+              <button
+                key={project.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedProject(isSelected ? null : project);
+                }}
+                className="absolute -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${left}%`, top: `${top}%`, zIndex: isSelected ? 20 : 10 }}
+                aria-label={project.name}
+              >
+                <div
+                  className={`rounded-full border-2 border-[#090909] shadow-md transition-transform hover:scale-125 active:scale-110 ${isSelected ? "scale-150" : ""}`}
+                  style={{
+                    width: isSelected ? 14 : 10,
+                    height: isSelected ? 14 : 10,
+                    backgroundColor: projectStatusColor(project.status),
+                  }}
+                />
+              </button>
+            );
+          })}
+
+        {/* Laddningsöverlay */}
+        {loadState === "loading" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#090909]/70">
+            <p className="text-sm text-white/60">Laddar projekt…</p>
           </div>
-        </button>
+        )}
+
+        {/* Felöverlay */}
+        {loadState === "error" && (
+          <div className="absolute inset-x-4 top-4 rounded-xl bg-red-900/90 px-4 py-3 text-xs text-white shadow-xl">
+            <p className="font-bold">Kunde inte ladda projekt</p>
+            <p className="mt-0.5 text-white/70">{loadError}</p>
+          </div>
+        )}
 
         {/* Nedre toning mot projektkort */}
         <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#090909] to-transparent" />
       </div>
 
-      {/* Projektkort */}
+      {/* Projektkort (valt projekt) / tomt läge */}
       <div className="bg-[#090909] px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-4">
-        <div className="rounded-2xl border border-white/10 bg-[#131313] p-4">
-          <div className="flex items-start gap-3">
-            <span className="text-3xl leading-none">🌬️</span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#FFB347]">
-                Vindkraftsprojekt · Katrineholms Kommun
-              </p>
-              <h2 className="mt-0.5 text-base font-bold text-white">Länsterberget</h2>
-              <p className="mt-1 text-xs leading-relaxed text-white/60">
-                29 planerade vindkraftverk norr om Katrineholm. Placera verken
-                själv och se beräknad påverkan på hushåll och natur.
-              </p>
+        {selectedProject ? (
+          <div className="rounded-2xl border border-white/10 bg-[#131313] p-4">
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#FFB347]">
+                  {selectedProject.kommun ?? selectedProject.status}
+                </p>
+                <h2 className="mt-0.5 text-base font-bold leading-tight text-white">
+                  {selectedProject.name}
+                </h2>
+                <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-white/60">
+                  {selectedProject.turbineCountPlannedMin != null && (
+                    <span>
+                      {selectedProject.turbineCountPlannedMin}
+                      {selectedProject.turbineCountPlannedMax &&
+                        selectedProject.turbineCountPlannedMax !==
+                          selectedProject.turbineCountPlannedMin &&
+                        `–${selectedProject.turbineCountPlannedMax}`}{" "}
+                      planerade verk
+                    </span>
+                  )}
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                    style={{
+                      backgroundColor: projectStatusColor(selectedProject.status) + "25",
+                      color: projectStatusColor(selectedProject.status),
+                    }}
+                  >
+                    {selectedProject.status}
+                  </span>
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedProject(null)}
+                className="shrink-0 rounded-full bg-white/10 p-1.5 text-white/50 hover:bg-white/20 hover:text-white"
+                aria-label="Stäng"
+              >
+                ✕
+              </button>
             </div>
+            <button
+              onClick={() => onEnterEditor(selectedProject)}
+              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01]"
+            >
+              📐 Öppna projektet
+            </button>
           </div>
-          <button
-            onClick={onEnterEditor}
-            className="mt-4 w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01]"
-          >
-            📐 Öppna Ericsbergsplaneraren
-          </button>
-        </div>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-[#131313] px-4 py-3 text-center">
+            {loadState === "loading" ? (
+              <p className="text-sm text-white/50">Laddar svenska vindkraftsprojekt…</p>
+            ) : loadState === "error" ? (
+              <p className="text-sm text-white/50">Kontrollera nätverket och ladda om</p>
+            ) : (
+              <>
+                <p className="text-sm text-white/50">
+                  Tryck på ett projekt på kartan för att öppna det
+                </p>
+                <p className="mt-1 text-[10px] text-white/30">Laddade {projects.length} projekt</p>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 interface EditHandoff {
+  projectId?: string;
   projectName: string;
+  municipality?: string;
   turbines: { id: string; lat: number; lon: number }[];
   centerLat?: number | null;
   centerLng?: number | null;
+  /** GeoJSON-polygonens ytterring, om känd, som LatLon[]. */
+  boundary?: { lat: number; lon: number }[] | null;
   savedAt: number;
 }
 
-function consumeEditHandoff(): { projectName: string; turbines: PlacedTurbine[]; centerLat?: number | null; centerLng?: number | null } | null {
+/** Typ som används som React-state — speglar EditHandoff men med PlacedTurbine[]. */
+type ActiveEditHandoff = {
+  projectId?: string;
+  projectName: string;
+  municipality?: string;
+  turbines: PlacedTurbine[];
+  centerLat?: number | null;
+  centerLng?: number | null;
+  boundary?: LatLon[] | null;
+};
+
+function consumeEditHandoff(): ActiveEditHandoff | null {
   try {
     const raw = localStorage.getItem(EDIT_HANDOFF_KEY);
     if (!raw) return null;
@@ -170,10 +354,13 @@ function consumeEditHandoff(): { projectName: string; turbines: PlacedTurbine[];
     }
     localStorage.removeItem(EDIT_HANDOFF_KEY);
     return {
+      projectId: data.projectId,
       projectName: data.projectName,
+      municipality: data.municipality,
       turbines: data.turbines.map((t) => ({ id: t.id, lat: t.lat, lon: t.lon })),
       centerLat: data.centerLat ?? null,
       centerLng: data.centerLng ?? null,
+      boundary: data.boundary ?? null,
     };
   } catch {
     return null;
@@ -227,7 +414,7 @@ const RECOMPUTE_DELAY_MS = 700;
 
 export default function PlaceTurbines() {
   const [, navigate] = useLocation();
-  const [editHandoff] = useState<{ projectName: string; turbines: PlacedTurbine[]; centerLat?: number | null; centerLng?: number | null } | null>(consumeEditHandoff);
+  const [editHandoff, setEditHandoff] = useState<ActiveEditHandoff | null>(consumeEditHandoff);
   // Välkomstläge: sant när användaren navigerade hit "fresh" från hemvyn via
   // openSverigekartan() på native — inte via AR-handoff. Flaggan konsumeras
   // engångs ur sessionStorage. Om välkomstläge: tom karta som startläge.
@@ -252,6 +439,16 @@ export default function PlaceTurbines() {
   const [boundaryEditMode, setBoundaryEditMode] = useState(false);
   const [editableBoundary, setEditableBoundary] = useState<LatLon[]>(() => getActiveBoundary());
   const [boundaryVersion, setBoundaryVersion] = useState(0);
+
+  // Initialisera/uppdatera editableBoundary från projektets polygon när
+  // editHandoff sätts — antingen vid mount (från localStorage) eller direkt
+  // från NationalViews "Öppna projektet". Kör inte om editHandoff saknar polygon.
+  useEffect(() => {
+    if (editHandoff?.boundary && editHandoff.boundary.length >= 3) {
+      setEditableBoundary(editHandoff.boundary);
+      setBoundaryVersion((v) => v + 1);
+    }
+  }, [editHandoff]);
   const [boundarySavedFlash, setBoundarySavedFlash] = useState(false);
   const [currentLatSpan, setCurrentLatSpan] = useState<number>(0.25);
   const [locationContext, setLocationContext] = useState<LocationContext | null>(null);
@@ -509,11 +706,22 @@ export default function PlaceTurbines() {
   if (showWelcome) {
     return (
       <NationalView
-        onEnterEditor={() => {
-          if (!editHandoff) {
-            setTurbines(DEFAULT_TURBINES);
-            setCommittedTurbines(DEFAULT_TURBINES);
-          }
+        onEnterEditor={(project) => {
+          // Bygg upp editHandoff från det valda API-projektet.
+          // boundary sätts från polygon om tillgänglig (summary-läge ger null →
+          // editableBoundary-effekten ovan används inte; editor startar utan gräns).
+          const boundary = apiPolygonToLatLon(project.polygon ?? null);
+          setEditHandoff({
+            projectId: String(project.id),
+            projectName: project.name,
+            municipality: project.kommun ?? undefined,
+            turbines: [],
+            centerLat: project.centerLat ?? null,
+            centerLng: project.centerLng ?? null,
+            boundary,
+          });
+          setTurbines([]);
+          setCommittedTurbines([]);
           setShowWelcome(false);
         }}
         onBack={() => navigate("/")}
@@ -527,11 +735,11 @@ export default function PlaceTurbines() {
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <div>
           <p className="text-xs font-semibold tracking-wide text-[#FFB347]">
-            {editHandoff ? "REDIGERA VINDKRAFTSPROJEKTET" : "PLACERA VINDKRAFTVERKEN SJÄLV"}
+            {editHandoff ? "REDIGERA PLACERING" : "PLACERA VINDKRAFTVERKEN SJÄLV"}
           </p>
           <p className="text-sm text-white/70">
             {editHandoff
-              ? `${editHandoff.projectName} · klicka på ett verk för att flytta/ta bort`
+              ? `${editHandoff.projectName}${editHandoff.municipality ? ` · ${editHandoff.municipality}` : ""} · klicka på ett verk för att flytta/ta bort`
               : "Ericsbergs marker · klicka på kartan för att placera · tryck på ett verk för att flytta/ta bort"}
           </p>
         </div>

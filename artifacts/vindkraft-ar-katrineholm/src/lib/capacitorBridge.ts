@@ -30,6 +30,10 @@ export function openSverigekartan(): void {
     if (externalBase) {
       window.open(`${externalBase}/vindkraft-karta/`, "_system");
     } else {
+      // Stoppa kameran explicit innan navigering: CSS-bakgrunden återställs
+      // omedelbart (synkront) inuti stopNativeCameraPreview, medan
+      // CameraPreview.stop() avslutas asynkront bakom kulisserna.
+      void stopNativeCameraPreview();
       // Flagga att PlaceTurbines ska starta i välkomstläge (tom karta, ingen
       // återställning av föregående session) och navigera dit via hash-routing.
       sessionStorage.setItem("vindkollen:placeraFresh", "1");

@@ -1,0 +1,79 @@
+The Sweden map behavior is still incorrect.
+
+The intended product behavior is:
+
+1. Sverigekartan is the main overview
+- It must show all available wind power projects in Sweden, not only Länsterberget/Ericsberg.
+- Load the full project dataset used by the web version.
+- Each project must appear as a marker with its own name, coordinates, turbine count and project metadata.
+- Do not hardcode Ericsberg or Länsterberget as the only project.
+
+2. Zoom controls the transition into edit mode
+- The map must remain in Sweden overview mode when zoomed out.
+- When the user selects a project or zooms in sufficiently around a project, transition into that project's detailed map/edit mode.
+- Use the selected project ID from the marker or nearest project in view.
+- Do not open edit mode automatically for Ericsberg.
+- The threshold should be explicit, for example when zoom >= the project-detail threshold.
+- If several projects are visible, require the user to select one before entering edit mode.
+
+3. Generic project editor
+Replace all Ericsberg-specific naming and logic.
+
+Incorrect:
+- “Öppna Ericsbergsplaneraren”
+- fixed Ericsberg boundary/data
+- fixed Ericsberg project title
+
+Correct:
+- “Öppna projektet”
+- “Redigera placering”
+- load boundary, turbines and metadata dynamically from selectedProjectId
+- the same editor must work for every project in Sweden
+
+The editor route/state should receive a project ID, for example:
+- /vindkraft-karta/?project=<id>
+or equivalent internal router state.
+
+The editor must then load:
+- selected project name
+- municipality
+- boundary polygon
+- existing turbines
+- editable turbine placement
+- scoring data
+- AR view for that selected project
+
+4. Fix project data loading
+The native map currently shows only one project.
+Verify:
+- the complete project list is included in dist-native
+- no API call is failing under capacitor://localhost
+- no web-only relative URL is used
+- bundled JSON/static data paths resolve correctly
+- filtering is not accidentally limited to Ericsberg/Länsterberget
+- add a visible diagnostic such as “Loaded X projects” and log all project IDs
+
+5. Camera lifecycle
+When navigating from AR to the map, stop CameraPreview completely.
+The camera must only run while the AR scene is active.
+
+On route change away from AR:
+- stop CameraPreview
+- remove motion/compass listeners
+- clear geolocation watch if it is AR-specific
+- restore the normal opaque background
+
+When entering AR again:
+- restart CameraPreview cleanly
+
+This prevents the camera image from remaining behind the map view.
+
+6. Labels
+Change all visible text from Ericsberg-specific wording to generic project wording:
+- “Öppna Ericsbergsplaneraren” → “Öppna projektet”
+- “Ericsbergs marker” → selected project name/boundary
+- “Tillbaka till Sverigekartan” remains valid
+
+7. Build label
+Increment the temporary visible build label to:
+🧪 Native TEST 6 – Multi-project map
