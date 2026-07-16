@@ -1,0 +1,137 @@
+Svara ja, men be den åtgärda flera saker i samma kontrollerade omgång.
+
+Klistra in detta till Replit Agent:
+
+⸻
+
+Ja. Åtgärda nu följande i denna ordning:
+
+1. R1 — Sverigekartan ska öppnas internt i appen
+
+Ta bort:
+
+VITE_PUBLIC_APP_URL=...
+
+från .env.native.
+
+Behåll:
+
+VITE_API_BASE_URL=...
+
+Sverigekartan ska i native alltid öppnas internt via:
+
+/#/placera
+
+och inte öppna Safari.
+
+Verifiera efter ändringen att knappen:
+
+🗺️ Sverigekartan – Öppna kartverktyg
+
+öppnar NationalMapView/PlaceTurbines inne i appen.
+
+2. P2 — Kompaskalibreringsbannern
+
+Byt den hårdkodade positionen:
+
+style={{ top: "5rem" }}
+
+mot samma dynamiska beräkning som används för statusbannern:
+
+style={{
+  top: `${topBarHeight + debugStripHeight + 10}px`,
+}}
+
+Kontrollera att bannern inte täcker toppbaren på:
+
+* iPhone SE
+* iPhone mini
+* iPhone med Dynamic Island
+* stående och liggande läge
+
+3. P1 — Safe area i PermissionGate
+
+Byt ut den nuvarande vertikala paddingen så att safe area respekteras.
+
+Använd exempelvis:
+
+pt-[max(2.5rem,env(safe-area-inset-top))]
+pb-[max(2.5rem,env(safe-area-inset-bottom))]
+
+i stället för enbart:
+
+py-10
+
+Kontrollera att logga och BUILD_LABEL inte ligger under notch eller Dynamic Island.
+
+4. P4 — NativeDiagnostics safe area
+
+Ändra debugpanelen så att den inte hamnar under Home Indicator.
+
+Använd exempelvis:
+
+style={{
+  bottom: "max(1rem, env(safe-area-inset-bottom))",
+}}
+
+eller motsvarande Tailwind-lösning.
+
+5. P3 — GeoJSON-export i native
+
+Ändra inte till Filesystem/Share-plugin ännu.
+
+Gör i stället en säker lösning med modal och textarea:
+
+* På webben får nuvarande nedladdning fortsätta fungera.
+* På native ska GeoJSON visas i en modal med en readonly <textarea>.
+* Lägg till knapp för att kopiera GeoJSON-texten till urklipp.
+* Visa tydlig bekräftelse när kopieringen lyckas.
+* Om Clipboard API misslyckas, markera texten så att användaren kan kopiera manuellt.
+
+Detta ska bara påverka native. Webbexporten ska inte försämras.
+
+6. P5 — Stale kommentar
+
+Uppdatera eller ta bort kommentaren som felaktigt hänvisar till den borttagna z-40-overlayen.
+
+7. R2 — API-adress
+
+Behåll tillfälligt den nuvarande fungerande dev-tunnel-adressen i:
+
+VITE_API_BASE_URL
+
+men lägg en tydlig kommentar i exempelkonfiguration eller dokumentation om att den måste bytas till en stabil deployad .replit.app- eller produktionsdomän före TestFlight/App Store.
+
+Lägg inte in någon påhittad produktionsadress.
+
+Verifiering
+
+Kör efter ändringarna:
+
+pnpm typecheck
+pnpm native:build
+npx cap sync ios
+
+Verifiera särskilt:
+
+1. Sverigekartan öppnas internt och inte i Safari.
+2. Live-API:t returnerar 3585 projekt.
+3. Datakällan växlar till live/API.
+4. Kompaskalibreringsbannern hamnar under toppbaren.
+5. PermissionGate respekterar notch och Dynamic Island.
+6. NativeDiagnostics ligger ovanför Home Indicator.
+7. GeoJSON-export visar modal på native.
+8. GeoJSON-export laddar fortfarande ner fil på webben.
+9. AR-vyn, Katrineholmsvyn och övriga kartfunktioner fungerar som tidigare.
+10. Typecheck och native-build är gröna.
+
+Gör en Git-commit och redovisa:
+
+* vilka filer som ändrades
+* vad som ändrades i varje fil
+* resultatet från typecheck
+* resultatet från native-build
+* commit-hash
+* eventuella kvarvarande problem
+
+⸻

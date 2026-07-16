@@ -42,8 +42,8 @@ export function NativeDiagnostics() {
 
   return (
     <div
-      className="fixed bottom-4 left-2 z-[9999] max-w-[95vw] rounded-xl bg-black/90 text-xs text-white shadow-2xl ring-1 ring-white/20 backdrop-blur-sm"
-      style={{ fontFamily: "monospace" }}
+      className="fixed left-2 z-[9999] max-w-[95vw] rounded-xl bg-black/90 text-xs text-white shadow-2xl ring-1 ring-white/20 backdrop-blur-sm"
+      style={{ fontFamily: "monospace", bottom: "max(1rem, env(safe-area-inset-bottom))" }}
     >
       {/* Header / toggle */}
       <button

@@ -1365,7 +1365,7 @@ export default function Home() {
           {arSessionVisible && compassAccuracyDeg !== null && compassAccuracyDeg > 20 && (
             <div
               className="pointer-events-none absolute inset-x-4 z-[45] rounded-xl bg-orange-950/90 px-4 py-3 shadow-xl backdrop-blur-sm"
-              style={{ top: "5rem" }}
+              style={{ top: `${topBarHeight + debugStripHeight + 10}px` }}
             >
               <p className="text-sm font-semibold text-orange-200">🧭 Kalibrera kompassen</p>
               <p className="mt-0.5 text-xs text-white/80">
@@ -1578,10 +1578,11 @@ export default function Home() {
             </div>
           )}
 
-          {/* Top bar — z-45: MÅSTE ligga ovanför inomhus-/fri sikt-overlayen
-              (z-40, se nedan) annars visas den "framför" (ovanpå, döljande)
-              statusbadgarna precis som produktkravet beskriver för
-              knapparna. Ligger fortfarande under pilen/målbekräftelsen (z-50).
+          {/* Top bar — z-45: MÅSTE ligga ovanför statusbanners (z-30) och
+              under pilen/målbekräftelsen (z-50). OBS: den tidigare
+              skärmtäckande svarta inomhus-overlayen (bg-black/85 z-40) är
+              borttagen (Juli 2026-fix) — verken visas alltid, bara dämpade.
+              Se kommentaren vid ARScene.hideAll / INDOOR_DIM_FACTOR.
               Juli 2026-fix: gated bakom `arSessionVisible` istället för att
               vara helt ovillkorad — annars hann HUD:en (badges, knappar) med
               tid ritas ovanpå `LoadingSequence`s laddnings-/kalibrerings-
@@ -1715,8 +1716,8 @@ export default function Home() {
           )}
 
           {/* Bottom controls — z-[45] av samma anledning som topp-baren ovan:
-              får ALDRIG hamna bakom (visuellt dolda av) inomhus-overlayen
-              (z-40). Dessa knappar ("Jag vill skriva på", "Fotomontage",
+              MÅSTE ligga ovanför statusbanners (z-30) och under pilen (z-50).
+              Knappar ("Jag vill skriva på", "Fotomontage",
               "Visa karta", "Om projektet", "Placera vindkraftverken själv")
               måste alltid synas och gå att trycka på.
               Juli 2026-fix: precis som topp-baren, gated bakom

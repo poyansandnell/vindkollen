@@ -19,7 +19,7 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
 
   return (
     <div
-      className={`absolute inset-0 z-30 flex flex-col justify-between overflow-y-auto bg-[#090909] px-6 text-white ${inApp ? "py-5" : "py-10"}`}
+      className={`absolute inset-0 z-30 flex flex-col justify-between overflow-y-auto bg-[#090909] px-6 text-white ${inApp ? "pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]" : "pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))]"}`}
     >
       <div className="mx-auto w-full max-w-md text-center">
         {/*

@@ -186,6 +186,8 @@ export default function PlaceTurbines() {
   const [currentLatSpan, setCurrentLatSpan] = useState<number>(0.25);
   const [locationContext, setLocationContext] = useState<LocationContext | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
+  const [geoJsonModalText, setGeoJsonModalText] = useState<string | null>(null);
+  const [geoJsonCopied, setGeoJsonCopied] = useState(false);
 
   const turbinesRef = useRef(turbines);
   turbinesRef.current = turbines;
@@ -422,13 +424,21 @@ export default function PlaceTurbines() {
 
   function handleExportBoundaryGeoJson() {
     const geoJson = boundaryToGeoJson(boundaryEditMode ? editableBoundary : getActiveBoundary());
-    const blob = new Blob([JSON.stringify(geoJson, null, 2)], { type: "application/geo+json" });
-    const url = URL.createObjectURL(blob);
-    // <a download> nollställs tyst i iOS Safari/installerad PWA-standalone-läge
-    // (se .agents/memory/pdf-download-attribute-ios-pwa.md) — öppna i en ny
-    // flik istället så OS:ets dela/spara-blad tar över på alla plattformar.
-    window.open(url, "_blank");
-    window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+    const text = JSON.stringify(geoJson, null, 2);
+    if (isNative()) {
+      // Capacitor WKWebView blockerar window.open med _blank för Blob-URL:er —
+      // visa GeoJSON-texten i en modal med kopieringsknapp istället.
+      setGeoJsonModalText(text);
+      setGeoJsonCopied(false);
+    } else {
+      // Webb/PWA: öppna i ny flik — <a download> nollställs tyst i iOS Safari/PWA
+      // (se .agents/memory/pdf-download-attribute-ios-pwa.md), ny-flik-metoden
+      // låter OS:ets dela/spara-blad ta över på alla plattformar.
+      const blob = new Blob([text], { type: "application/geo+json" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
   }
 
   // Nationell landningssida: visas när användaren öppnar Sverigekartan
@@ -864,6 +874,50 @@ export default function PlaceTurbines() {
           </div>
         )}
       </div>
+
+      {/* GeoJSON-export modal — visas enbart på native (Capacitor WKWebView
+          blockerar window.open+Blob-URL:er); på webben används ny-flik-export
+          direkt i handleExportBoundaryGeoJson ovan. */}
+      {geoJsonModalText !== null && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:items-center sm:pb-0">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#141414] px-5 py-5 text-white shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-semibold">Exportera gräns (GeoJSON)</p>
+              <button
+                onClick={() => setGeoJsonModalText(null)}
+                aria-label="Stäng GeoJSON-export"
+                className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70 hover:bg-white/20"
+              >
+                ✕ Stäng
+              </button>
+            </div>
+            <textarea
+              readOnly
+              value={geoJsonModalText}
+              className="mb-3 h-44 w-full resize-none rounded-xl bg-black/50 p-3 font-mono text-[11px] leading-relaxed text-white/80 ring-1 ring-white/10"
+              onFocus={(e) => e.currentTarget.select()}
+            />
+            <button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(geoJsonModalText);
+                  setGeoJsonCopied(true);
+                  window.setTimeout(() => setGeoJsonCopied(false), 2500);
+                } catch {
+                  // Clipboard API misslyckades — textytan är readonly och
+                  // autofokusas på focus-event, användaren kan markera manuellt.
+                }
+              }}
+              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-semibold text-[#090909] transition hover:bg-[#FFB347]"
+            >
+              {geoJsonCopied ? "✓ Kopierat!" : "📋 Kopiera GeoJSON"}
+            </button>
+            <p className="mt-2 text-center text-[11px] text-white/40">
+              Klistra in i en GeoJSON-visare, t.ex. geojson.io
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Login-gate modal */}
       {showLoginGate && (
