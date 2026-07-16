@@ -2,71 +2,102 @@
 # =============================================================================
 # ios-setup.sh — Vindkollen iOS Info.plist privacy strings
 #
-# Skriver in obligatoriska NSUsageDescription-nycklar i
-# ios/App/App/Info.plist med PlistBuddy (macOS-verktyg).
+# Skriver in och verifierar obligatoriska NSUsageDescription-nycklar i
+# ios/App/App/Info.plist med PlistBuddy (inbyggt macOS-verktyg).
 #
-# Körs automatiskt av:
-#   pnpm native:ios   (efter cap sync ios, före cap open ios)
-#   pnpm native:plist (manuellt, t.ex. efter cap add ios)
+# KÖRS AUTOMATISKT AV:
+#   pnpm native:ios          →  efter cap sync ios, före cap open ios
+#   pnpm native:sync         →  efter cap sync (alla plattformar)
+#   pnpm native:cap-add-ios  →  direkt efter cap add ios
+#   pnpm native:plist        →  manuellt, t.ex. vid återställning av ios/
 #
-# Körs manuellt om du återskapar ios/-mappen:
-#   cd artifacts/vindkraft-ar-katrineholm
-#   bash scripts/ios-setup.sh
+# IDEMPOTENT: Add-or-Set — lägger till nyckeln om den saknas,
+# uppdaterar värdet om den redan finns. Säkert att köra hur många gånger
+# som helst utan risk för duplicering.
 #
-# Skriptet är idempotent — Add-or-Set: lägger till nyckeln om den saknas,
-# uppdaterar värdet om den redan finns. Säkert att köra flera gånger.
+# VERIFIERING: Efter skrivning läser skriptet tillbaka varje nyckel från
+# filen och avslutar med exit 1 om något saknas.
 # =============================================================================
 
-set -e
+set -euo pipefail
 
-PLIST="ios/App/App/Info.plist"
+# ── Sökväg ────────────────────────────────────────────────────────────────────
+
+PLIST="${PLIST_PATH:-ios/App/App/Info.plist}"
+BUDDY="/usr/libexec/PlistBuddy"
+
+# ── Kontroll att filen finns ──────────────────────────────────────────────────
 
 if [ ! -f "$PLIST" ]; then
-  echo "❌  Hittade inte $PLIST"
-  echo "   Kör först: pnpm exec cap add ios"
+  echo ""
+  echo "❌  Info.plist hittades inte: $PLIST"
+  echo "   Kör först: pnpm native:cap-add-ios"
+  echo "   (eller: pnpm exec cap add ios && pnpm native:plist)"
+  echo ""
   exit 1
 fi
 
-echo "📝  Skriver privacy strings till $PLIST …"
+# ── Hjälpfunktion: Add-or-Set (idempotent) ────────────────────────────────────
 
-# NSCameraUsageDescription
-/usr/libexec/PlistBuddy -c \
-  "Add :NSCameraUsageDescription string 'Vindkollen behöver använda kameran för att visa vindkraftverken i AR.'" \
-  "$PLIST" 2>/dev/null || \
-/usr/libexec/PlistBuddy -c \
-  "Set :NSCameraUsageDescription 'Vindkollen behöver använda kameran för att visa vindkraftverken i AR.'" \
-  "$PLIST"
+plist_set() {
+  local key="$1"
+  local value="$2"
+  # Försök Add; om nyckeln redan finns ger PlistBuddy exit 1 → kör Set istället
+  "$BUDDY" -c "Add :${key} string ${value}" "$PLIST" 2>/dev/null \
+    || "$BUDDY" -c "Set :${key} ${value}" "$PLIST"
+}
 
-# NSLocationWhenInUseUsageDescription
-/usr/libexec/PlistBuddy -c \
-  "Add :NSLocationWhenInUseUsageDescription string 'Vindkollen behöver din position för att beräkna avstånd och riktning till vindkraftverken.'" \
-  "$PLIST" 2>/dev/null || \
-/usr/libexec/PlistBuddy -c \
-  "Set :NSLocationWhenInUseUsageDescription 'Vindkollen behöver din position för att beräkna avstånd och riktning till vindkraftverken.'" \
-  "$PLIST"
+# ── Skriv privacy strings ─────────────────────────────────────────────────────
 
-# NSMotionUsageDescription
-/usr/libexec/PlistBuddy -c \
-  "Add :NSMotionUsageDescription string 'Vindkollen behöver använda rörelsesensorer och kompass för att visa rätt riktning i AR.'" \
-  "$PLIST" 2>/dev/null || \
-/usr/libexec/PlistBuddy -c \
-  "Set :NSMotionUsageDescription 'Vindkollen behöver använda rörelsesensorer och kompass för att visa rätt riktning i AR.'" \
-  "$PLIST"
+echo ""
+echo "📝  Skriver iOS privacy strings till: $PLIST"
+echo ""
 
-# NSMicrophoneUsageDescription
-# Krävs av @capacitor-community/camera-preview på iOS — plugin begär
-# mikrofonbehörighet även om appen inte spelar in ljud.
-/usr/libexec/PlistBuddy -c \
-  "Add :NSMicrophoneUsageDescription string 'Vindkollen behöver mikrofonbehörighet för kamerafunktionen i AR-läget.'" \
-  "$PLIST" 2>/dev/null || \
-/usr/libexec/PlistBuddy -c \
-  "Set :NSMicrophoneUsageDescription 'Vindkollen behöver mikrofonbehörighet för kamerafunktionen i AR-läget.'" \
-  "$PLIST"
+plist_set "NSCameraUsageDescription" \
+  "Vindkollen behöver använda kameran för att visa vindkraftverken i AR."
 
-echo "✅  Privacy strings klara:"
-echo "   NSCameraUsageDescription"
-echo "   NSLocationWhenInUseUsageDescription"
-echo "   NSMotionUsageDescription"
-echo "   NSMicrophoneUsageDescription"
+plist_set "NSLocationWhenInUseUsageDescription" \
+  "Vindkollen behöver din position för att beräkna avstånd och riktning till vindkraftverken."
+
+plist_set "NSMotionUsageDescription" \
+  "Vindkollen behöver använda rörelsesensorer och kompass för att visa rätt riktning i AR."
+
+plist_set "NSMicrophoneUsageDescription" \
+  "Vindkollen behöver mikrofonbehörighet för kamerafunktionen i AR-läget."
+
+# ── Verifiering: läs tillbaka varje nyckel ────────────────────────────────────
+
+echo "🔍  Verifierar att nycklarna finns i filen …"
+echo ""
+
+ERRORS=0
+
+verify_key() {
+  local key="$1"
+  local label="$2"
+  local value
+  value=$("$BUDDY" -c "Print :${key}" "$PLIST" 2>/dev/null || echo "")
+  if [ -z "$value" ]; then
+    echo "   ❌  SAKNAS: $key"
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "   ✅  $label"
+  fi
+}
+
+verify_key "NSCameraUsageDescription"             "camera"
+verify_key "NSLocationWhenInUseUsageDescription"  "location"
+verify_key "NSMotionUsageDescription"             "motion"
+verify_key "NSMicrophoneUsageDescription"         "microphone"
+
+echo ""
+
+if [ "$ERRORS" -gt 0 ]; then
+  echo "❌  $ERRORS nyckel(ar) saknas i $PLIST — kontrollera PlistBuddy-output ovan."
+  exit 1
+fi
+
+echo "iOS privacy keys verified: camera, location, motion, microphone"
 echo ""
 echo "   Verifiera i Xcode: App target → Info → Custom iOS Target Properties"
+echo ""
