@@ -691,6 +691,14 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   // opacitet) är detta talet som produktkravets "Synliga verk: antal"-fält
   // ska visa.
   const trueVisibleTurbineCountRef = useRef(0);
+  // Kamerarörelseinterpolation (slerp): sensor-kvaternionen (`quaternionRef`)
+  // uppdateras i sensorhändelseloopen och kan ha kvarvarande mikro-brus även
+  // efter utjämning. Kameran interpoleras MJUKT mot det senaste sensor-
+  // värdet varje bildruta istället för att snäppa till det direkt — vid 60fps
+  // och tau=0.07s rör sig kameran 20% av vägen per bildruta, vilket tar
+  // ~3τ ≈ 210ms till 95%, så verkliga rörelser följer sömlöst medan
+  // sub-graders sensorbrus virtuellt försvinner visuellt.
+  const cameraTargetQuatRef = useRef(new THREE.Quaternion());
 
   // "Visible=true": loggas EN gång när `visible`-propen (arSessionVisible i
   // Home.tsx) faktiskt slår om till true — se produktkravets punkt 2.
@@ -1409,7 +1417,17 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // Kamerans riktning styrs helt av enhetens sensorer (gir/pitch/roll),
       // så att verken förblir fast förankrade i verkligheten/horisonten
       // istället för att följa skärmen när telefonen tiltas.
-      state.camera.quaternion.copy(quaternionRef.current);
+      // Slerp-interpolation (mjuk körning mot sensorkvaternionen): i stället
+      // för att snäppa direkt interpoleras kameran mjukt varje bildruta,
+      // vilket filtrerar bort residuellt sensorbrus (sub-graders skimmer
+      // vid stilla hållning) utan att påverka respons vid verkliga vridningar.
+      // tau=0.07s → 95% av vägen nått vid ~210ms, omärklig lagg i praktiken.
+      cameraTargetQuatRef.current.copy(quaternionRef.current);
+      {
+        const CAMERA_SLERP_TAU = 0.07;
+        const slerpFactor = dt > 0 ? 1 - Math.exp(-dt / CAMERA_SLERP_TAU) : 1;
+        state.camera.quaternion.slerp(cameraTargetQuatRef.current, slerpFactor);
+      }
       // Juli 2026-fix (TREDJE kritiska buggrapporten — trolig rotorsak):
       // `matrixWorldInverse` uppdateras normalt bara inuti
       // `WebGLRenderer.render()`, som körs i SLUTET av denna funktion. Utan

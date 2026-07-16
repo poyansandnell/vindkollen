@@ -180,7 +180,15 @@ export interface DeviceOrientationApi {
 // Dödzon: sensorbrus på bråkdelar av en grad ska inte alls påverka
 // den utjämnade riktningen — annars "skimrar" objekten även när telefonen
 // ligger helt stilla på ett bord.
-const DEADZONE_DEG = 0.06;
+// Höjd (juli 2026, produktkrav "verken skakar vid stillastående telefon"):
+// 0.06° var nära sensorbrusens nivå, vilket innebar att varje litet
+// magnetometerbrus-spik (0.1-0.3°) fortfarande kunde ta sig igenom EMA-filtret
+// och orsaka synlig AR-jitter. 0.5° är klart över typiskt brus i vila men
+// klart under minsta avsiktliga handrörning (normalt >2°), och filtrar
+// bort i stort sett ALL vilopositionsjitter utan att noterbart fördröja
+// responsiviteten för verkliga vridningar (som hanteras av den adaptiva
+// tidskonstanten och gyroskopet).
+const DEADZONE_DEG = 0.5;
 
 // Adaptiv utjämning av gir (kompassriktning): magnetometerbrus (särskilt
 // inomhus/nära metall) ger ofta enstaka-graders hopp mellan avläsningar

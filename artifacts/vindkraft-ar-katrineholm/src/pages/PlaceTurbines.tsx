@@ -19,10 +19,137 @@ import {
   setCustomBoundary,
   type LatLon,
 } from "@/lib/ericsbergArea";
+import { lon2tileX, lat2tileY, ESRI_WORLD_IMAGERY_URL } from "@/lib/webMercatorTiles";
 
 const SAVED_KEY = "vindkraft-ar-katrineholm:savedPlacements";
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
 const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
+
+// ─── NationalView ──────────────────────────────────────────────────────────
+// Nationell vindkraftöversikt som visas när användaren öppnar Sverigekartan
+// från AR-hemvyn. Visar Sverigekarta med satellitbild (ESRI zoom 5) och
+// markör för Länsterbergets-projektet. Projektet väljs → Ericsberg-editorn.
+//
+// Zoom 5 → 3×4 plattor täcker Sverige (lon 0-33.75°E, lat ~55-69°N):
+//   x: 16 (0°), 17 (11.25°), 18 (22.5°)
+//   y:  7 (≈69°N),  8 (≈66°N),  9 (≈61°N), 10 (≈55°N)
+const NATIONAL_ZOOM = 5;
+const NATIONAL_X1 = 16,
+  NATIONAL_X2 = 18;
+const NATIONAL_Y1 = 7,
+  NATIONAL_Y2 = 10;
+// Ericsberget/Länsterberget — ungefärligt centrum för OX2-projektområdet
+const ERICSBERG_MARKER_LAT = 58.97;
+const ERICSBERG_MARKER_LON = 16.27;
+
+function NationalView({ onEnterEditor, onBack }: { onEnterEditor: () => void; onBack: () => void }) {
+  const tiles = useMemo(() => {
+    const cols = NATIONAL_X2 - NATIONAL_X1 + 1;
+    const rows = NATIONAL_Y2 - NATIONAL_Y1 + 1;
+    const result: { key: string; url: string; left: number; top: number; width: number; height: number }[] = [];
+    for (let tx = NATIONAL_X1; tx <= NATIONAL_X2; tx++) {
+      for (let ty = NATIONAL_Y1; ty <= NATIONAL_Y2; ty++) {
+        result.push({
+          key: `${NATIONAL_ZOOM}-${tx}-${ty}`,
+          url: ESRI_WORLD_IMAGERY_URL(NATIONAL_ZOOM, tx, ty),
+          left: ((tx - NATIONAL_X1) / cols) * 100,
+          top: ((ty - NATIONAL_Y1) / rows) * 100,
+          width: (1 / cols) * 100,
+          height: (1 / rows) * 100,
+        });
+      }
+    }
+    return result;
+  }, []);
+
+  // WebMercator-fraktionell plattposition → procentuell position i kartan
+  const markerLeft =
+    ((lon2tileX(ERICSBERG_MARKER_LON, NATIONAL_ZOOM) - NATIONAL_X1) / (NATIONAL_X2 - NATIONAL_X1 + 1)) * 100;
+  const markerTop =
+    ((lat2tileY(ERICSBERG_MARKER_LAT, NATIONAL_ZOOM) - NATIONAL_Y1) / (NATIONAL_Y2 - NATIONAL_Y1 + 1)) * 100;
+
+  return (
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
+      {/* Sidhuvud */}
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 pt-[max(env(safe-area-inset-top),12px)]">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#FFB347]">
+            Vindkraft i Sverige
+          </p>
+          <h1 className="text-sm font-bold text-white">Välj ett projekt att utforska</h1>
+        </div>
+        <button
+          onClick={onBack}
+          className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/20"
+        >
+          ← Tillbaka
+        </button>
+      </div>
+
+      {/* Sverigekarta — satellitbild zoom 5, 3 × 4 ESRI-plattor */}
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-[#0d0d0d]">
+        {tiles.map((tile) => (
+          <img
+            key={tile.key}
+            src={tile.url}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute select-none"
+            style={{
+              left: `${tile.left}%`,
+              top: `${tile.top}%`,
+              width: `${tile.width}%`,
+              height: `${tile.height}%`,
+            }}
+          />
+        ))}
+
+        {/* Länsterbergets-projekts kartmarkör */}
+        <button
+          onClick={onEnterEditor}
+          className="absolute -translate-x-1/2 -translate-y-1/2"
+          style={{ left: `${markerLeft}%`, top: `${markerTop}%` }}
+          aria-label="Öppna Länsterberget vindkraftsprojekt"
+        >
+          <div className="flex flex-col items-center">
+            <div className="h-4 w-4 rounded-full border-2 border-white bg-[#FF8B01] shadow-lg shadow-black/60 transition-transform hover:scale-125 active:scale-110" />
+            <div className="mt-1 whitespace-nowrap rounded bg-[#090909]/90 px-2 py-0.5 text-[10px] font-bold text-[#FFB347]">
+              Länsterberget
+            </div>
+          </div>
+        </button>
+
+        {/* Nedre toning mot projektkort */}
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#090909] to-transparent" />
+      </div>
+
+      {/* Projektkort */}
+      <div className="bg-[#090909] px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-4">
+        <div className="rounded-2xl border border-white/10 bg-[#131313] p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-3xl leading-none">🌬️</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#FFB347]">
+                Vindkraftsprojekt · Katrineholms Kommun
+              </p>
+              <h2 className="mt-0.5 text-base font-bold text-white">Länsterberget</h2>
+              <p className="mt-1 text-xs leading-relaxed text-white/60">
+                29 planerade vindkraftverk norr om Katrineholm. Placera verken
+                själv och se beräknad påverkan på hushåll och natur.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onEnterEditor}
+            className="mt-4 w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01]"
+          >
+            📐 Öppna Ericsbergsplaneraren
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface EditHandoff {
   projectName: string;
@@ -374,37 +501,28 @@ export default function PlaceTurbines() {
     window.setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
 
+  // Nationell landningssida: visas när användaren öppnar Sverigekartan
+  // "fresh" från hemvyn (sessionStorage-flagga). PlacementMap monteras INTE
+  // — den monteras alltid färsk vid övergången till editorn, vilket garanterar
+  // att den börjar på rätt Ericsberg-zoomnivå och att inga tiles laddas i
+  // onödan bakom overlayen.
+  if (showWelcome) {
+    return (
+      <NationalView
+        onEnterEditor={() => {
+          if (!editHandoff) {
+            setTurbines(DEFAULT_TURBINES);
+            setCommittedTurbines(DEFAULT_TURBINES);
+          }
+          setShowWelcome(false);
+        }}
+        onBack={() => navigate("/")}
+      />
+    );
+  }
+
   return (
     <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
-
-      {/* Välkomst-overlay: visas när användaren öppnar Sverigekartan "fresh"
-          från hemvyn på native (flagga satt av openSverigekartan i capacitorBridge).
-          Kartan renderas bakom overlayen men är synlig som bakgrund.
-          Klicka "Öppna planeraren" för att ta bort overlayen och börja placera. */}
-      {showWelcome && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#090909]/92 px-6 py-10 backdrop-blur-sm">
-          <div className="w-full max-w-xs text-center">
-            <p className="mb-5 text-5xl">🗺️</p>
-            <h1 className="mb-2 text-2xl font-bold text-white">Sverigekartan</h1>
-            <p className="mb-8 text-sm leading-relaxed text-white/60">
-              Placera vindkraftverk var du vill i Sverige och se beräknad
-              påverkan på hushåll, natur och kommunens planering.
-            </p>
-            <button
-              onClick={() => setShowWelcome(false)}
-              className="mb-3 w-full rounded-full bg-[#FF8B01] py-3.5 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347]"
-            >
-              📐 Öppna Ericsbergsplaneraren
-            </button>
-            <button
-              onClick={() => navigate("/")}
-              className="w-full rounded-full border border-white/20 bg-white/5 py-3 text-sm text-white/70 transition hover:bg-white/10"
-            >
-              ← Tillbaka till AR-vyn
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <div>
@@ -523,7 +641,6 @@ export default function PlaceTurbines() {
                 latSpan: Math.min(maxLat - minLat + pad * 2, 2.0),
               };
             })()
-            : showWelcome ? { centerLat: 62.5, centerLon: 15.0, latSpan: 8 }
             : undefined
           }
           onMove={handleMove}

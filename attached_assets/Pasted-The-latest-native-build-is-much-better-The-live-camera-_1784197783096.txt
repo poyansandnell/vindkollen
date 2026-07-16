@@ -1,0 +1,62 @@
+The latest native build is much better. The live camera is visible and the AR turbines render correctly.
+
+Four issues remain:
+
+1. Sverigekartan still does not open
+The current “Sverigekartan” page is only a placeholder and still shows:
+“Öppna Ericsbergsplaneraren”.
+
+Required behavior:
+- Tapping Sverigekartan from the AR home must open the real Sweden overview map component.
+- Do not show the Ericsberg planner as the default.
+- The national map must be the initial view.
+- The user should then select a project/location.
+- Only after selecting Ericsberg should the Ericsberg editor open.
+- Remove the temporary “Öppna Ericsbergsplaneraren” landing page unless it is used as a separate project detail page.
+
+2. Ericsberg editor/map does not load correctly
+The editor opens with a mostly black map area and no usable map content.
+
+Please verify:
+- the map component actually mounts
+- Mapbox/MapLibre styles and tiles load in Capacitor
+- required CSS is included in the native build
+- no web-only asset URL or relative path breaks inside capacitor://localhost
+- resize() is called after the view becomes visible
+- the map container has a real pixel height and width
+- no parent element has display:none or zero height during initialization
+
+Add visible error output if map initialization fails.
+
+3. AR turbines jitter while the phone is held still
+Please stabilize sensor fusion.
+
+Implement:
+- low-pass filtering for heading/yaw
+- circular smoothing for compass angles around 0/360 degrees
+- a dead zone so changes below 1–2 degrees are ignored
+- average several recent compass samples
+- ignore GPS position changes smaller than 1–2 metres
+- interpolate model movement instead of snapping instantly
+- do not recreate or reposition all turbines on every raw sensor event
+
+Add diagnostics for:
+- raw heading
+- filtered heading
+- raw position
+- filtered position
+- applied yaw delta
+
+4. Compass calibration
+The native iOS compass calibration screen did not appear.
+
+Do not rely on iOS showing it automatically.
+If heading accuracy is poor or unstable:
+- show an in-app message asking the user to move the phone in a figure-eight motion
+- hide the message once heading accuracy is acceptable and stable
+- continue automatically once calibrated
+
+Also:
+- keep all four iOS privacy keys permanently in ios/App/App/Info.plist
+- increment the visible label to:
+🧪 Native TEST 5 – Sweden Map + Stabilization

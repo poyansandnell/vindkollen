@@ -450,6 +450,22 @@ export default function Home() {
   const MIN_SKY_RATIO = 0.15;
   const hasEnoughSky = sky.skyRatio >= MIN_SKY_RATIO;
 
+  // Kompassnoggrannhet (iOS `webkitCompassAccuracy`): visas som en
+  // kalibreringsbanner i AR-sessionen när iOS rapporterar dålig
+  // magnetometermätning (> 20°). Pollas var 2:a sekund från ref-värdet —
+  // inga React renders sker av sensorns rå event-ström.
+  const [compassAccuracyDeg, setCompassAccuracyDeg] = useState<number | null>(null);
+  useEffect(() => {
+    if (!started) {
+      setCompassAccuracyDeg(null);
+      return;
+    }
+    const id = setInterval(() => {
+      setCompassAccuracyDeg(orientation.headingAccuracyDegRef.current);
+    }, 2000);
+    return () => clearInterval(id);
+  }, [started, orientation.headingAccuracyDegRef]);
+
   // Juli 2026-fix (fjärde buggrapporten): "de försvann direkt" — `sky.indoors`
   // (kamera-heuristikens hysteresis) kunde tidigare slå om till "inomhus" och
   // dämpa/rödmarkera verken på samma bildruta som kameran råkade svepa förbi
@@ -1259,7 +1275,7 @@ export default function Home() {
               onComplete={handleLoadingSequenceComplete}
               calibrationPhase={orientation.calibrationPhase}
               calibrationProgress={orientation.calibrationProgress}
-              skipCalibration={!orientation.supported || Boolean(orientation.error) || isNative()}
+              skipCalibration={!orientation.supported || Boolean(orientation.error)}
             />
           )}
 
@@ -1317,6 +1333,24 @@ export default function Home() {
               compassQualityPercent={arTracking.compassQualityPercent}
               onTargetChange={setNearestOnTarget}
             />
+          )}
+
+          {/* Kompasskalibreringsbanner: visas i AR-sessionen när iOS rapporterar
+              dålig magnetometermätning (webkitCompassAccuracy > 20°). Z-index
+              45 = ovanför inomhus-overlay (z-40) men under pilpekaren (z-50). */}
+          {arSessionVisible && compassAccuracyDeg !== null && compassAccuracyDeg > 20 && (
+            <div
+              className="pointer-events-none absolute inset-x-4 z-[45] rounded-xl bg-orange-950/90 px-4 py-3 shadow-xl backdrop-blur-sm"
+              style={{ top: "5rem" }}
+            >
+              <p className="text-sm font-semibold text-orange-200">🧭 Kalibrera kompassen</p>
+              <p className="mt-0.5 text-xs text-white/80">
+                Vinkla telefonen i ett ∞-mönster för bättre noggrannhet
+              </p>
+              <p className="mt-0.5 text-[10px] text-orange-400">
+                Osäkerhet: ±{Math.round(compassAccuracyDeg)}°
+              </p>
+            </div>
           )}
 
           {/* Juli 2026-fix (produktfeedback, ny omgång): föregående fix gated
