@@ -190,8 +190,15 @@ export default function PlaceTurbines() {
   // läser den aktiva gränsen via `getActiveBoundary()` (modulnivå-state, inte
   // ett argument), så en sparad/återställd gräns måste explicit trigga om den
   // annars memoiserade omräkningen.
+  // `ctx`-parametern styr bl.a. om "Utanför Ericsbergs marker"-kontrollen
+  // körs. I editHandoff-läge (nationellt/Sverigeläge) är gränsen inte
+  // relevant — vi skickar alltid en (tom) sentinel så att kontrollen
+  // hoppas över oavsett om `locationContext` ännu laddats klart.
   const result = useMemo(
-    () => scorePlacement(committedTurbines, editHandoff && locationContext ? locationContext : undefined),
+    () => scorePlacement(
+      committedTurbines,
+      editHandoff ? (locationContext ?? { settlements: [], protectedAreas: [] }) : undefined,
+    ),
     [committedTurbines, boundaryVersion, editHandoff, locationContext],
   );
 

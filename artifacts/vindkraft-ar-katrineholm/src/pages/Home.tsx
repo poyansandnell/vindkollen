@@ -1259,7 +1259,7 @@ export default function Home() {
               onComplete={handleLoadingSequenceComplete}
               calibrationPhase={orientation.calibrationPhase}
               calibrationProgress={orientation.calibrationProgress}
-              skipCalibration={!orientation.supported || Boolean(orientation.error)}
+              skipCalibration={!orientation.supported || Boolean(orientation.error) || isNative()}
             />
           )}
 

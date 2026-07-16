@@ -235,7 +235,7 @@ export default function Home() {
   }
 
   return (
-    <div className="relative h-[100dvh] w-full overflow-hidden bg-background" style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
+    <div className="relative h-[100dvh] w-full overflow-hidden overscroll-none bg-background">
       <MapCanvas
         key={flyToken}
         mapboxToken={mapboxToken}
@@ -252,7 +252,10 @@ export default function Home() {
         onSightResultsChange={setSightResultsInfo}
       />
 
-      <div className="absolute top-3 left-3 right-3 sm:right-auto flex flex-col gap-2 z-10 min-w-0">
+      <div
+        className="absolute left-3 right-3 sm:right-auto flex flex-col gap-2 z-10 min-w-0"
+        style={{ top: "calc(0.75rem + env(safe-area-inset-top))" }}
+      >
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <div className="flex-1 min-w-0">
             <SearchBox

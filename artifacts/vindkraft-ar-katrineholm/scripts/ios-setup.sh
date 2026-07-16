@@ -53,9 +53,20 @@ echo "📝  Skriver privacy strings till $PLIST …"
   "Set :NSMotionUsageDescription 'Vindkollen behöver använda rörelsesensorer och kompass för att visa rätt riktning i AR.'" \
   "$PLIST"
 
+# NSMicrophoneUsageDescription
+# Krävs av @capacitor-community/camera-preview på iOS — plugin begär
+# mikrofonbehörighet även om appen inte spelar in ljud.
+/usr/libexec/PlistBuddy -c \
+  "Add :NSMicrophoneUsageDescription string 'Vindkollen behöver mikrofontillstånd för kamerafunktionen i AR-vyn.'" \
+  "$PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c \
+  "Set :NSMicrophoneUsageDescription 'Vindkollen behöver mikrofontillstånd för kamerafunktionen i AR-vyn.'" \
+  "$PLIST"
+
 echo "✅  Privacy strings klara:"
 echo "   NSCameraUsageDescription"
 echo "   NSLocationWhenInUseUsageDescription"
 echo "   NSMotionUsageDescription"
+echo "   NSMicrophoneUsageDescription"
 echo ""
 echo "   Verifiera i Xcode: App target → Info → Custom iOS Target Properties"
