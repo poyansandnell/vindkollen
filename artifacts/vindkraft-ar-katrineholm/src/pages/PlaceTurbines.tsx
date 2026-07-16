@@ -757,13 +757,13 @@ export default function PlaceTurbines() {
         )}
 
         {currentLatSpan > 1.2 && (
-          <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-3 bg-black/85 px-4 py-3 shadow-xl backdrop-blur-sm">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-3 bg-black/85 px-4 py-3 shadow-xl backdrop-blur-sm">
             <p className="text-sm font-medium text-white/90">
               🗺️ Vill du gå tillbaka till Sverigekartan?
             </p>
             <button
               onClick={openSverigekartan}
-              className="shrink-0 rounded-full bg-[#FF8B01] px-4 py-1.5 text-xs font-semibold text-[#090909] hover:bg-[#FFB347]"
+              className="pointer-events-auto shrink-0 rounded-full bg-[#FF8B01] px-4 py-1.5 text-xs font-semibold text-[#090909] hover:bg-[#FFB347]"
             >
               Ja, gå tillbaka
             </button>
@@ -796,7 +796,7 @@ export default function PlaceTurbines() {
       />
       </div>
 
-      <div className="border-t border-white/10 bg-[#0d0d0d] px-4 py-3">
+      <div className="border-t border-white/10 bg-[#0d0d0d] px-4 pt-3 pb-[max(env(safe-area-inset-bottom),12px)]">
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={handleReset}

@@ -303,14 +303,20 @@ export function NationalMapView({
       if (layersAdded) return;
       layersAdded = true;
 
+      // Use bundled projects as eager fallback — filteredProjectsRef may still be []
+      // when the load event fires because React state updates haven't yet propagated
+      // through a re-render (the projects effect and ref-sync effect run after paint).
+      const initData = filteredProjectsRef.current.length > 0
+        ? filteredProjectsRef.current
+        : BUNDLED_PROJECTS.filter(p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number');
       map.addSource(SOURCE_ID, {
         type: 'geojson',
-        data: buildGeoJSON(filteredProjectsRef.current),
+        data: buildGeoJSON(initData),
         cluster: true,
         clusterMaxZoom: 8,
         clusterRadius: 55,
       });
-      addLog(`Source "${SOURCE_ID}" added (${filteredProjectsRef.current.length} proj)`, { sourceAdded: true });
+      addLog(`Source "${SOURCE_ID}" added (${initData.length} proj)`, { sourceAdded: true });
 
       map.addLayer({
         id: 'clusters',
@@ -384,6 +390,13 @@ export function NationalMapView({
       });
       addLog('Layers added (clusters · points · labels)', { layerAdded: true });
 
+      // fitBounds to Sweden after layers are ready — more reliable than center+zoom
+      // in the Map() constructor on iOS where the canvas may not have its final size yet.
+      map.fitBounds(
+        [[10.5, 55.2], [24.2, 69.1]] as [[number, number], [number, number]],
+        { padding: 20, maxZoom: 6, duration: 0, animate: false },
+      );
+
       mapReadyRef.current = true;
 
       map.on('click', 'clusters', e => {
@@ -453,12 +466,20 @@ export function NationalMapView({
       }
     });
 
-    // Automatic fallback on first error — but only switch once
+    // Only switch to fallback on STYLE-LEVEL errors, not individual tile failures.
+    // Tile errors (ev.sourceId is set) are common on iOS/Capacitor due to ATS/CORS
+    // restrictions on arcgisonline.com — logging them is enough, switching style
+    // would destroy the project layers unnecessarily.
     let fallbackSwitched = false;
     map.on('error', e => {
-      const msg = (e as unknown as { error?: { message?: string } }).error?.message
-        ?? String((e as unknown as { error?: unknown }).error ?? 'unknown error');
-      addLog(`ERROR: ${msg}`, { lastError: msg });
+      const ev = e as unknown as { sourceId?: string; error?: { message?: string } | unknown };
+      const msg = (ev.error as { message?: string } | undefined)?.message ?? String(ev.error ?? 'unknown');
+      if (ev.sourceId) {
+        // Tile / source-data error — normal on iOS, keep current style
+        addLog(`Tile error (${ev.sourceId}): ${msg.slice(0, 80)}`);
+        return;
+      }
+      addLog(`STYLE ERROR: ${msg}`, { lastError: msg });
       if (!fallbackSwitched) {
         fallbackSwitched = true;
         addLog('→ switching to OSM fallback style', { usingFallback: true });
@@ -589,7 +610,9 @@ export function NationalMapView({
         </button>
 
         {/* MapLibre runtime diagnostics — visas alltid på skärmen (för felsökning på iOS) */}
-        <div className="absolute bottom-0 left-0 right-0 z-20 max-h-[55%] overflow-y-auto bg-black/85 text-[10px] font-mono text-white/90 backdrop-blur-sm">
+        {/* Outer wrapper: pointer-events-none so the map stays pannable underneath */}
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-20">
+        <div className="pointer-events-auto max-h-[55%] overflow-y-auto bg-black/85 text-[10px] font-mono text-white/90 backdrop-blur-sm">
           {/* Header row */}
           <div className="flex items-center justify-between border-b border-white/20 px-2 py-1">
             <span className="font-bold text-[#FFB347]">MapLibre diagnostik</span>
@@ -654,6 +677,7 @@ export function NationalMapView({
             </div>
           )}
         </div>
+        </div>{/* /pointer-events-none outer wrapper */}
       </div>
 
       {/* Projektkort */}
