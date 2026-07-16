@@ -609,6 +609,7 @@ export default function PlaceTurbines() {
         <PlacementMap
           turbines={turbines}
           colorTurbines={committedTurbines}
+          isGenericMode={!!editHandoff}
           initialView={
             editHandoff ? (() => {
               if (editHandoff.turbines.length === 0) {

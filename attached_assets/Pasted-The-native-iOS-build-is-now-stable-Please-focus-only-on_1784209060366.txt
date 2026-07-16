@@ -1,0 +1,109 @@
+The native iOS build is now stable. Please focus only on these three remaining issues.
+
+1. Sweden map is blank/black
+
+The Sweden map screen loads its header and filter controls, but the map area remains completely black.
+
+Please add explicit diagnostics and fix the actual map initialization.
+
+Verify all of the following:
+
+- MapLibre CSS is imported in the native build
+- the map container has non-zero width and height before map initialization
+- the map style URL is a valid absolute HTTPS URL in Capacitor
+- no relative URL is resolving against capacitor://localhost
+- style JSON, tiles, sprites and glyph URLs are reachable from the iPhone
+- the map is not hidden behind an opaque overlay
+- map.resize() is called after the view becomes visible
+- map.fitBounds() runs only after the map style has loaded
+- map initialization errors are shown visibly in the UI
+
+Add temporary diagnostics:
+- map container width/height
+- style URL
+- map initialized true/false
+- style loaded true/false
+- project source added true/false
+- last map error
+- number of projects and turbines loaded
+
+Use a working fallback style if the production style fails.
+
+Do not leave the user with a black map. If initialization fails, show a clear error card with the exact reason and a retry button.
+
+2. Generic editor still does not work
+
+The project editor opens, but it is not usable and still appears tied to Katrineholm.
+
+Please make the editor fully project-driven.
+
+The editor must receive selectedProjectId and load:
+- selected project name
+- municipality
+- project center
+- boundary polygon
+- turbine dataset
+- editable turbine positions
+- scoring configuration
+
+Remove all remaining hardcoded Katrineholm/Ericsberg values from the generic editor.
+
+Add visible temporary diagnostics in the editor:
+- selectedProjectId
+- project name
+- municipality
+- turbine count
+- boundary point count
+- map initialized
+- editor mode active
+- last loading error
+
+If the selected project lacks editable data:
+show:
+“Detta projekt har ännu inget detaljerat redigeringsunderlag.”
+
+Do not show an empty editor.
+
+Also verify that map gestures work in the editor:
+- pan
+- pinch zoom
+- tap to place turbine
+- tap turbine to select
+- drag selected turbine
+- remove selected turbine
+
+3. Lock orientation during compass calibration
+
+During compass calibration the UI rotates between portrait and landscape when the user moves the phone in a figure-eight motion. This makes calibration confusing.
+
+Required behavior:
+- while compass calibration is active, lock the app UI to portrait orientation
+- allow the physical device to be moved freely without rotating the interface
+- after calibration completes or is dismissed, restore the app’s normal orientation behavior
+
+For native iOS, use the appropriate Capacitor/native orientation API or iOS orientation lock.
+Do not rely only on CSS media queries.
+
+The calibration overlay should stay fixed in portrait and remain readable while the phone is moved.
+
+Also:
+- prevent the AR overlay from relayout/reflowing during calibration
+- hide non-essential controls while calibration is active
+- keep only the calibration instruction visible
+
+4. Remove remaining Katrineholm-only UI from nationwide views
+
+The nationwide Sweden map and generic editor must not default to Katrineholm.
+
+Only show Katrineholm-specific text when selectedProject.municipality === "Katrineholm".
+
+5. Build marker
+
+Increment the visible build label to:
+
+Native TEST 10 – Map loading + generic editor + calibration lock
+
+Run:
+- typecheck
+- native build
+- iOS sync verification

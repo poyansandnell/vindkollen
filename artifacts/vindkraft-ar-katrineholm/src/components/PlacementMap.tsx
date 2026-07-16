@@ -59,6 +59,15 @@ interface PlacementMapProps {
   onVertexDrag?: (index: number, lat: number, lon: number) => void;
   onVertexRemove?: (index: number) => void;
   onVertexAdd?: (lat: number, lon: number) => void;
+  /**
+   * Döljer alla Katrineholm-specifika overlay-element (Katrineholm-etiketten,
+   * Ericsbergs slott-knappen, hushållsklustren, Ericsbergs mark-polygonen) och
+   * byter ut Ericsberg-referenserna i info-rutan mot generiska texter.
+   *
+   * Sätt till `true` när redigeraren används för ett nationellt projekt
+   * (editHandoff != null), dvs. inte i Katrineholms-läge.
+   */
+  isGenericMode?: boolean;
 }
 
 const MAX_TILES = 48;
@@ -180,6 +189,7 @@ export function PlacementMap({
   onVertexDrag,
   onVertexRemove,
   onVertexAdd,
+  isGenericMode = false,
 }: PlacementMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 1, height: 1 });
@@ -666,12 +676,12 @@ export function PlacementMap({
           );
         })}
 
-        {HOUSEHOLD_CLUSTERS.map((h) => {
+        {!isGenericMode && HOUSEHOLD_CLUSTERS.map((h) => {
           const p = project(h.lat, h.lon);
           return <ellipse key={h.id} cx={p.x} cy={p.y} rx={aspectX} ry={1} fill="#ffffff" stroke="#0d0d0d" strokeWidth="0.25" />;
         })}
 
-        {(() => {
+        {!isGenericMode && (() => {
           const p = project(KATRINEHOLM_CENTER.lat, KATRINEHOLM_CENTER.lon);
           return (
             <rect
@@ -687,7 +697,7 @@ export function PlacementMap({
           );
         })()}
 
-        <rect x={castlePoint.x - 1.3} y={castlePoint.y - 1.3} width="2.6" height="2.6" fill="#FFB347" stroke="#000" strokeWidth="0.3" />
+        {!isGenericMode && <rect x={castlePoint.x - 1.3} y={castlePoint.y - 1.3} width="2.6" height="2.6" fill="#FFB347" stroke="#000" strokeWidth="0.3" />}
 
         {moveAnim &&
           (() => {
@@ -737,7 +747,7 @@ export function PlacementMap({
       </svg>
 
       <div className="pointer-events-none absolute inset-0">
-        {showHouseholdLabels && HOUSEHOLD_CLUSTERS.map((h) => {
+        {!isGenericMode && showHouseholdLabels && HOUSEHOLD_CLUSTERS.map((h) => {
           const p = project(h.lat, h.lon);
           return (
             <div
@@ -750,7 +760,7 @@ export function PlacementMap({
           );
         })}
 
-        {(() => {
+        {!isGenericMode && (() => {
           const p = project(KATRINEHOLM_CENTER.lat, KATRINEHOLM_CENTER.lon);
           return (
             <div
@@ -762,42 +772,46 @@ export function PlacementMap({
           );
         })()}
 
-        <div
-          className="pointer-events-auto absolute -translate-x-1/2 -translate-y-full cursor-pointer whitespace-nowrap rounded-md border border-[#FFB347]/60 bg-black/75 px-1.5 py-0.5 text-[10px] font-medium text-white"
-          style={{ left: `${castlePoint.x}%`, top: `${castlePoint.y}%` }}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            setCastleOpen((v) => !v);
-            setMenu(null);
-            setInfoId(null);
-          }}
-        >
-          🏰 Ericsbergs slott
-        </div>
+        {!isGenericMode && (
+          <>
+            <div
+              className="pointer-events-auto absolute -translate-x-1/2 -translate-y-full cursor-pointer whitespace-nowrap rounded-md border border-[#FFB347]/60 bg-black/75 px-1.5 py-0.5 text-[10px] font-medium text-white"
+              style={{ left: `${castlePoint.x}%`, top: `${castlePoint.y}%` }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                setCastleOpen((v) => !v);
+                setMenu(null);
+                setInfoId(null);
+              }}
+            >
+              🏰 Ericsbergs slott
+            </div>
 
-        {castleOpen && (
-          <div
-            className="pointer-events-auto absolute z-10 w-56 -translate-x-1/2 translate-y-2 rounded-xl border border-white/15 bg-[#111] p-3 text-xs text-white shadow-xl"
-            style={{ left: `${castlePoint.x}%`, top: `${castlePoint.y}%` }}
-          >
-            <p className="text-sm font-semibold text-[#FFB347]">Ericsbergs slott</p>
-            <p className="mt-1 text-white/80">Markägare: Caroline Bonde</p>
-            <p className="mt-1 text-white/50">
-              Runt egendomen löper den markerade placeringsgränsen för vindkraftprojektet.
-            </p>
-            {onToggleEstateBoundary && (
-              <button
-                className={`mt-2 w-full rounded-full px-3 py-1.5 text-center text-[11px] font-medium transition ${
-                  showEstateBoundary
-                    ? "bg-[#FFB347] text-[#090909] hover:bg-[#FF8B01]"
-                    : "border border-white/20 bg-white/5 hover:bg-white/10"
-                }`}
-                onClick={(e) => { e.stopPropagation(); onToggleEstateBoundary(); }}
+            {castleOpen && (
+              <div
+                className="pointer-events-auto absolute z-10 w-56 -translate-x-1/2 translate-y-2 rounded-xl border border-white/15 bg-[#111] p-3 text-xs text-white shadow-xl"
+                style={{ left: `${castlePoint.x}%`, top: `${castlePoint.y}%` }}
               >
-                {showEstateBoundary ? "Dölj Ericsbergs mark" : "Visa Ericsbergs mark"}
-              </button>
+                <p className="text-sm font-semibold text-[#FFB347]">Ericsbergs slott</p>
+                <p className="mt-1 text-white/80">Markägare: Caroline Bonde</p>
+                <p className="mt-1 text-white/50">
+                  Runt egendomen löper den markerade placeringsgränsen för vindkraftprojektet.
+                </p>
+                {onToggleEstateBoundary && (
+                  <button
+                    className={`mt-2 w-full rounded-full px-3 py-1.5 text-center text-[11px] font-medium transition ${
+                      showEstateBoundary
+                        ? "bg-[#FFB347] text-[#090909] hover:bg-[#FF8B01]"
+                        : "border border-white/20 bg-white/5 hover:bg-white/10"
+                    }`}
+                    onClick={(e) => { e.stopPropagation(); onToggleEstateBoundary(); }}
+                  >
+                    {showEstateBoundary ? "Dölj Ericsbergs mark" : "Visa Ericsbergs mark"}
+                  </button>
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
 
         {showTurbineLabels && turbines.map((t, i) => {
@@ -882,7 +896,9 @@ export function PlacementMap({
               Position: {infoTurbine.lat.toFixed(5)}, {infoTurbine.lon.toFixed(5)}
             </p>
             {outsideBoundaryIds.includes(infoTurbine.id) && (
-              <p className="mt-1 text-red-300">Ligger utanför Ericsbergs placeringsområde.</p>
+              <p className="mt-1 text-red-300">
+                {isGenericMode ? "Ligger utanför markerat placeringsområde." : "Ligger utanför Ericsbergs placeringsområde."}
+              </p>
             )}
             <button
               className="mt-2 w-full rounded-full bg-white/10 py-1.5 text-center hover:bg-white/20"

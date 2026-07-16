@@ -4,7 +4,7 @@ import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { openSverigekartan } from "@/lib/capacitorBridge";
 
 /** Ändra denna sträng inför varje ny native-testbygge. Ta bort raden inför release. */
-const BUILD_LABEL = "🧪 Native TEST 9 – Real map + turbine clustering + municipality campaigns";
+const BUILD_LABEL = "🧪 Native TEST 10 – Map loading + generic editor + calibration lock";
 
 interface PermissionGateProps {
   onStart: () => void;

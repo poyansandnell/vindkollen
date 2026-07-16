@@ -197,9 +197,20 @@ export function NationalMapView({
 
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
 
-    // ResizeObserver so the map fills its flex container correctly
+    // ResizeObserver so the map fills its flex container correctly.
+    // On iOS WKWebView the initial layout often isn't committed when MapLibre
+    // first queries the canvas size, resulting in a 0×0 (black) canvas.
+    // Calling resize() once immediately and again after a short delay ensures
+    // the canvas picks up the real container dimensions regardless of timing.
     const ro = new ResizeObserver(() => { map.resize(); });
     if (containerRef.current) ro.observe(containerRef.current);
+    // First forced resize — handles the common case where the flex container
+    // already has its correct size by the time we register the observer but
+    // MapLibre hasn't queried it yet.
+    map.resize();
+    // Second forced resize after a tick — catches slower WKWebView layouts
+    // where the container height is still 0 at synchronous call time.
+    const resizeTimerId = setTimeout(() => { map.resize(); }, 150);
 
     map.on('load', () => {
       // GeoJSON source with MapLibre clustering (handles thousands of markers natively)
@@ -328,6 +339,7 @@ export function NationalMapView({
     });
 
     return () => {
+      clearTimeout(resizeTimerId);
       ro.disconnect();
       mapReadyRef.current = false;
       map.remove();

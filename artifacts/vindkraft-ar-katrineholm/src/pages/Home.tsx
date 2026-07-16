@@ -43,8 +43,10 @@ import { KATRINEHOLM_PROJECT } from "@/lib/bundledProjects";
 import {
   captureNativeCameraPhoto,
   isNative,
+  lockPortraitOrientation,
   openSverigekartan,
   requestAllPermissionsSequentially,
+  unlockOrientation,
 } from "@/lib/capacitorBridge";
 import { NativeDiagnostics } from "@/components/NativeDiagnostics";
 
@@ -469,6 +471,24 @@ export default function Home() {
     }, 2000);
     return () => clearInterval(id);
   }, [started, orientation.headingAccuracyDegRef]);
+
+  // Orientationslås under kompasskalibrering: låser porträttläge när
+  // kompassen behöver kalibreras (accuracy > 20°) så att en oavsiktlig
+  // skärmrotation inte avbryter figur-8-rörelsen. Låser upp igen så snart
+  // kompassen är kalibrerad (accuracy ≤ 20° eller null = ej mätt).
+  // Wrapped i try/catch via capacitorBridge — iOS Safari stöder inte
+  // screen.orientation.lock() och kastar NotSupportedError tyst.
+  useEffect(() => {
+    const needsLock = compassAccuracyDeg !== null && compassAccuracyDeg > 20;
+    if (needsLock) {
+      lockPortraitOrientation();
+    } else {
+      unlockOrientation();
+    }
+    return () => {
+      unlockOrientation();
+    };
+  }, [compassAccuracyDeg]);
 
   // Juli 2026-fix (fjärde buggrapporten): "de försvann direkt" — `sky.indoors`
   // (kamera-heuristikens hysteresis) kunde tidigare slå om till "inomhus" och

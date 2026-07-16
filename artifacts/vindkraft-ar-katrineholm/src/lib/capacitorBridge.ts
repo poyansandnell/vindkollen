@@ -318,6 +318,54 @@ export async function watchNativePosition(
 }
 
 // ---------------------------------------------------------------------------
+// Skärmorientering — låser/låser upp porträttläge under kompasskalibrering
+// ---------------------------------------------------------------------------
+
+/**
+ * Försöker låsa skärmen i porträttläge (portrait-primary).
+ *
+ * Använder Screen Orientation Web API (`screen.orientation.lock()`):
+ * - Fungerar i Android Chrome / Android PWA och i de flesta moderata
+ *   webbläsare som stöder standarden.
+ * - iOS Safari stödjer INTE `screen.orientation.lock()` — kastar ett
+ *   `NotSupportedError` som vi fångar tyst.  På ett framtida build kan
+ *   detta ersättas med `@capacitor/screen-orientation`-plugin.
+ *
+ * Anropas från Home.tsx när kompasskalibreringsbannern visas, för att
+ * förhindra att en landskapsrotation avbryter kalibreringsrörelsen.
+ */
+export function lockPortraitOrientation(): void {
+  try {
+    // screen.orientation.lock is a W3C Screen Orientation API — present in
+    // Android Chrome and some PWA contexts but NOT in iOS Safari (throws
+    // NotSupportedError). Cast to `unknown` to avoid the TS lib mismatch.
+    const so = typeof screen !== "undefined" ? (screen.orientation as unknown as Record<string, unknown>) : null;
+    if (so && typeof so["lock"] === "function") {
+      void (so["lock"] as (o: string) => Promise<void>)("portrait-primary").catch(() => {
+        // Kastas normalt på iOS Safari och i webbläsare som inte stöder låsning.
+      });
+    }
+  } catch {
+    // Ignorera — orientationslåsning är alltid best-effort.
+  }
+}
+
+/**
+ * Låser upp skärmorientering om den var låst av `lockPortraitOrientation()`.
+ * No-op om skärmen inte stöder orientationslåsning.
+ */
+export function unlockOrientation(): void {
+  try {
+    const so = typeof screen !== "undefined" ? (screen.orientation as unknown as Record<string, unknown>) : null;
+    if (so && typeof so["unlock"] === "function") {
+      (so["unlock"] as () => void)();
+    }
+  } catch {
+    // Ignorera.
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Diagnostik (synlig i NativeDiagnostics-panelen på enheten)
 // ---------------------------------------------------------------------------
 
