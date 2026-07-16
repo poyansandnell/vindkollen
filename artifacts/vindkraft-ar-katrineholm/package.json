@@ -12,7 +12,7 @@
     "native:plist": "bash scripts/ios-setup.sh",
     "native:cap-add-ios": "cap add ios && pnpm native:plist",
     "native:sync": "pnpm native:build && cap sync && ([ ! -f ios/App/App/Info.plist ] || pnpm native:plist)",
-    "native:ios": "pnpm native:build && cap sync ios && pnpm native:plist && cap open ios",
+    "native:ios": "pnpm native:build && ([ -d ios ] || cap add ios) && cap sync ios && pnpm native:plist && cap open ios",
     "native:android": "pnpm native:build && cap sync android && cap open android"
   },
   "devDependencies": {
