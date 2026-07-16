@@ -16,6 +16,10 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchAutoHide: false,
     },
+    // Krävs för att @capacitor/geolocation ska fungera korrekt på iOS/Android
+    Geolocation: {},
+    // Krävs för att trigga kamerabehörighetsdialogen via @capacitor/camera
+    Camera: {},
   },
 };
 

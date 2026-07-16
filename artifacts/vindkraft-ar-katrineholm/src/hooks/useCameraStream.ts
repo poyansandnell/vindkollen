@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { requestNativeCameraPermission } from "../lib/capacitorBridge";
 
 export interface CameraState {
   stream: MediaStream | null;
@@ -29,14 +30,8 @@ export function useCameraStream(enabled: boolean): CameraState {
     let cancelled = false;
     setState((s) => ({ ...s, loading: true }));
 
-    // Egen "vakthund"-timer, samma mönster som `useGeolocation.ts`. Vissa
-    // användare (rapporterat: "det bara tuggar", evig snurra på "Startar
-    // kameran…") har fastnat på obestämd tid utan att `getUserMedia`
-    // någonsin vare sig lyckas eller kastar ett fel — troligen p.g.a. en
-    // hängande kamerabehörighetsdialog, en kamera upptagen av en annan
-    // process/flik, eller ett OS-/webbläsarspecifikt hårdvaruproblem. Utan
-    // denna vakthund fanns ingen väg framåt för de användarna: inget
-    // felmeddelande, ingen "Försök igen"-knapp, bara en evig spinner.
+    // Vakthund — garanterar ett felmeddelande + retry-knapp om getUserMedia
+    // hänger (kamerabehörighetsdialog hänger, kamera upptagen, m.m.).
     let gotStream = false;
     const watchdogId = window.setTimeout(() => {
       if (gotStream || cancelled) return;
@@ -52,10 +47,31 @@ export function useCameraStream(enabled: boolean): CameraState {
     }, 15000);
 
     async function start() {
+      // --- Capacitor native: begär kamerabehörighet via iOS-systemdialog ---
+      // getUserMedia i WKWebView kräver att appen explicit frågar om
+      // kamerabehörighet via Capacitor-plugin INNAN API:et anropas,
+      // annars misslyckas det tyst med "not supported" eller "error".
+      const permissionGranted = await requestNativeCameraPermission();
+      if (cancelled) return;
+
+      if (!permissionGranted) {
+        gotStream = true;
+        window.clearTimeout(watchdogId);
+        setState({
+          stream: null,
+          error: "Kamerabehörighet nekad. Öppna Inställningar → Vindkollen → Kamera och tillåt åtkomst.",
+          loading: false,
+        });
+        return;
+      }
+
       if (!navigator.mediaDevices?.getUserMedia) {
+        gotStream = true;
+        window.clearTimeout(watchdogId);
         setState({ stream: null, error: "Kameran stöds inte i den här webbläsaren.", loading: false });
         return;
       }
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -76,7 +92,7 @@ export function useCameraStream(enabled: boolean): CameraState {
         const name = err instanceof Error ? err.name : "";
         const message =
           name === "NotAllowedError" || name === "PermissionDeniedError"
-            ? "Kamerabehörighet nekad. Tillåt Kamera för den här sidan i webbläsarens inställningar och ladda om."
+            ? "Kamerabehörighet nekad. Öppna Inställningar → Vindkollen → Kamera och tillåt åtkomst."
             : name === "NotFoundError" || name === "DevicesNotFoundError"
               ? "Ingen kamera hittades på enheten."
               : name === "NotReadableError"

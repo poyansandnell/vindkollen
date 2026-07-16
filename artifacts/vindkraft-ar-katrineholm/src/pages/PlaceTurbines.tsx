@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { apiUrl } from "@/lib/apiUrl";
+import { openSverigekartan } from "@/lib/capacitorBridge";
 import { PlacementMap } from "@/components/PlacementMap";
 import { PlacementScorePanel } from "@/components/PlacementScorePanel";
 import {
@@ -380,7 +381,7 @@ export default function PlaceTurbines() {
             {isAuthenticated ? "☁️ Mina projekt" : "📁 Lokala projekt"}
           </button>
           <button
-            onClick={() => { window.location.href = "/vindkraft-karta/"; }}
+            onClick={openSverigekartan}
             className="rounded-full bg-white/10 px-4 py-1.5 text-sm text-white hover:bg-white/20"
           >
             🗺️ Kartan
@@ -603,7 +604,7 @@ export default function PlaceTurbines() {
               🗺️ Vill du gå tillbaka till Sverigekartan?
             </p>
             <button
-              onClick={() => { window.location.href = "/vindkraft-karta/"; }}
+              onClick={openSverigekartan}
               className="shrink-0 rounded-full bg-[#FF8B01] px-4 py-1.5 text-xs font-semibold text-[#090909] hover:bg-[#FFB347]"
             >
               Ja, gå tillbaka

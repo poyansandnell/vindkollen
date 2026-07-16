@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { requestNativeGeolocationPermission } from "../lib/capacitorBridge";
 
 export interface GeoState {
   lat: number | null;
@@ -38,20 +39,9 @@ export function useGeolocation(enabled: boolean): GeoState {
     setRetryToken((t) => t + 1);
   }, []);
 
-  // Läser proaktivt av platsbehörighetens status via Permissions API, oavsett
-  // om vi redan gjort ett getCurrentPosition/watchPosition-anrop. Detta gör
-  // att appen känner till "denied" direkt (t.ex. för att visa rätt vägledning)
-  // istället för att behöva vänta på ett explicit felmeddelande, och
-  // reagerar även om användaren ändrar behörigheten i webbläsarens
-  // inställningar medan sidan är öppen.
+  // Läser proaktivt av platsbehörighetens status via Permissions API,
+  // oavsett om vi redan gjort ett watchPosition-anrop.
   useEffect(() => {
-    // OBS: körs oberoende av `enabled` (till skillnad från nedanstående
-    // effekt som faktiskt startar watchPosition) — att fråga Permissions
-    // API:et kostar ingenting och kräver ingen behörighetsdialog i sig, så
-    // vi kan visa "Platsbehörighet redan nekad"-vägledning direkt på
-    // startskärmen, innan användaren ens hunnit trycka "Starta visualisering"
-    // en gång, istället för att de måste trycka och se en förvirrande
-    // snurra/väntan först.
     if (!navigator.permissions?.query) return;
 
     let cancelled = false;
@@ -85,16 +75,8 @@ export function useGeolocation(enabled: boolean): GeoState {
 
     setState((s) => ({ ...s, loading: true }));
 
-    // Egen "vakthund"-timer utöver `timeout`-optionen nedan. `timeout` i
-    // watchPosition-anropet är kända för att INTE vara pålitligt över alla
-    // plattformar — framför allt i iOS Safari/hemskärms-PWA (standalone-
-    // läge) har det förekommit att varken success- eller error-callbacken
-    // någonsin anropas om den allra första positioneringen misslyckas
-    // internt, vilket lämnar appen i en evig "Hämtar GPS-position…"-snurra
-    // utan felmeddelande eller möjlighet att försöka igen. Denna timer
-    // garanterar att användaren alltid får ett fel + en "Försök igen"-knapp
-    // efter som mest 20 sekunder, oavsett om webbläsarens egna callbacks
-    // någonsin triggas.
+    // Vakthund — garanterar att användaren alltid får ett fel + retry-knapp
+    // efter max 20 sekunder om watchPosition aldrig svarar (känt iOS-problem).
     let gotFix = false;
     const watchdogId = window.setTimeout(() => {
       if (gotFix) return;
@@ -104,46 +86,70 @@ export function useGeolocation(enabled: boolean): GeoState {
           ...s,
           loading: false,
           error:
-            "Det tog för lång tid att hämta din position. Kontrollera att Plats/GPS är påslaget för webbläsaren och försök igen.",
+            "Det tog för lång tid att hämta din position. Kontrollera att Plats/GPS är påslaget för Vindkollen i Inställningar och försök igen.",
         };
       });
     }, 20000);
 
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        gotFix = true;
+    // --- Capacitor native: begär platsbehörighet via iOS-systemdialog ---
+    // navigator.geolocation.watchPosition i WKWebView kräver att appen
+    // explicit begär platsbehörighet via Capacitor-plugin INNAN anropet,
+    // annars misslyckas det utan att någon dialog visas.
+    let watchStarted = false;
+
+    void requestNativeGeolocationPermission().then((granted) => {
+      if (watchStarted) return; // Effect redan avmonterad
+      watchStarted = true;
+
+      if (!granted) {
         window.clearTimeout(watchdogId);
         setState((s) => ({
           ...s,
-          lat: pos.coords.latitude,
-          lon: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-          error: null,
-          permissionDenied: false,
           loading: false,
+          error: "Platsbehörighet nekad. Öppna Inställningar → Vindkollen → Plats och välj 'Vid användning av appen'.",
+          permissionDenied: true,
+          permissionState: "denied",
         }));
-      },
-      (err) => {
-        const permissionDenied = err.code === err.PERMISSION_DENIED;
-        const message = permissionDenied
-          ? "Platsbehörighet nekad. Tillåt Plats för den här sidan i webbläsarens inställningar och försök igen."
-          : err.code === err.POSITION_UNAVAILABLE
-            ? "Kunde inte fastställa din position just nu. Kontrollera att GPS är påslaget."
-            : err.code === err.TIMEOUT
-              ? "Det tog för lång tid att hämta din position. Försök igen utomhus med fri sikt mot himlen."
-              : err.message || "Kunde inte hämta position.";
-        setState((s) => ({
-          ...s,
-          loading: false,
-          error: message,
-          permissionDenied,
-          permissionState: permissionDenied ? "denied" : s.permissionState,
-        }));
-      },
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 },
-    );
+        return;
+      }
+
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          gotFix = true;
+          window.clearTimeout(watchdogId);
+          setState((s) => ({
+            ...s,
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            error: null,
+            permissionDenied: false,
+            loading: false,
+          }));
+        },
+        (err) => {
+          const permissionDenied = err.code === err.PERMISSION_DENIED;
+          const message = permissionDenied
+            ? "Platsbehörighet nekad. Öppna Inställningar → Vindkollen → Plats och välj 'Vid användning av appen'."
+            : err.code === err.POSITION_UNAVAILABLE
+              ? "Kunde inte fastställa din position just nu. Kontrollera att GPS är påslaget."
+              : err.code === err.TIMEOUT
+                ? "Det tog för lång tid att hämta din position. Försök igen utomhus med fri sikt mot himlen."
+                : err.message || "Kunde inte hämta position.";
+          setState((s) => ({
+            ...s,
+            loading: false,
+            error: message,
+            permissionDenied,
+            permissionState: permissionDenied ? "denied" : s.permissionState,
+          }));
+        },
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 },
+      );
+    });
 
     return () => {
+      watchStarted = true; // Stoppar promise-callbacken om den ännu inte kört
       window.clearTimeout(watchdogId);
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);

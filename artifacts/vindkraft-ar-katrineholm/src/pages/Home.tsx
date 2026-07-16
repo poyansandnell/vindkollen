@@ -39,6 +39,7 @@ import { estimateNoiseImpact } from "@/lib/noiseImpact";
 import { useWindDirection } from "@/hooks/useWindDirection";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
 import { KATRINEHOLM_CENTER } from "@/lib/ericsbergArea";
+import { openSverigekartan } from "@/lib/capacitorBridge";
 
 const PHOTO_WATERMARK_TEXT = "Katrineholm FRAMÅT – Vindkraft AR";
 const PHOTO_DISCLAIMER_TEXT = "Fotomontage/visualisering. GPS, kompass, terräng, väder och sikt kan påverka precisionen.";
@@ -1704,7 +1705,7 @@ export default function Home() {
                   </button>
                 </div>
                 <button
-                  onClick={() => { window.location.href = "/vindkraft-karta/"; }}
+                  onClick={openSverigekartan}
                   className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
                 >
                   🗺️ Sverigekartan – Öppna kartverktyg

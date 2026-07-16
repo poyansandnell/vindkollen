@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
+import { openSverigekartan } from "@/lib/capacitorBridge";
 
 interface PermissionGateProps {
   onStart: () => void;
@@ -119,7 +120,7 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
               {starting ? "Startar…" : "📷 Starta AR"}
             </button>
             <button
-              onClick={() => { window.location.href = "/vindkraft-karta/"; }}
+              onClick={openSverigekartan}
               disabled={starting}
               className="w-full rounded-full border border-white/20 bg-white/5 py-3.5 text-sm font-medium text-white transition hover:bg-white/10 disabled:opacity-60"
             >

@@ -84,8 +84,10 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
+    "@capacitor/camera": "^8.2.1",
     "@capacitor/cli": "^8.4.2",
     "@capacitor/core": "^8.4.2",
+    "@capacitor/geolocation": "^8.2.0",
     "@capacitor/ios": "^8.4.2",
     "proj4": "^2.20.9",
     "three": "^0.185.1"
