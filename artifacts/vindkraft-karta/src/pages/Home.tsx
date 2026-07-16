@@ -254,7 +254,7 @@ export default function Home() {
 
       <div
         className="absolute left-3 right-3 sm:right-auto flex flex-col gap-2 z-10 min-w-0"
-        style={{ top: "calc(0.75rem + env(safe-area-inset-top))" }}
+        style={{ top: "max(env(safe-area-inset-top), 0.75rem)" }}
       >
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <div className="flex-1 min-w-0">
@@ -310,7 +310,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-2">
+      <div className="absolute left-3 z-10 flex flex-col items-start gap-2" style={{ bottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
         {focusPoint && (
           <div className="bg-background/95 rounded-md px-3 py-2 shadow-sm text-sm">
             <span className="font-medium">{focusPoint.label ?? "Vald plats"}</span>

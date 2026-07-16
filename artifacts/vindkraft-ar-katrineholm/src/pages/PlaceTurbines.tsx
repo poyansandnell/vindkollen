@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { apiUrl } from "@/lib/apiUrl";
-import { openSverigekartan } from "@/lib/capacitorBridge";
+import { consumeFreshPlaceraFlag, openSverigekartan } from "@/lib/capacitorBridge";
 import { PlacementMap } from "@/components/PlacementMap";
 import { PlacementScorePanel } from "@/components/PlacementScorePanel";
 import {
@@ -101,7 +101,14 @@ const RECOMPUTE_DELAY_MS = 700;
 export default function PlaceTurbines() {
   const [, navigate] = useLocation();
   const [editHandoff] = useState<{ projectName: string; turbines: PlacedTurbine[]; centerLat?: number | null; centerLng?: number | null } | null>(consumeEditHandoff);
-  const initialTurbines = editHandoff?.turbines ?? DEFAULT_TURBINES;
+  // Välkomstläge: sant när användaren navigerade hit "fresh" från hemvyn via
+  // openSverigekartan() på native — inte via AR-handoff. Flaggan konsumeras
+  // engångs ur sessionStorage. Om välkomstläge: tom karta som startläge.
+  const [showWelcome, setShowWelcome] = useState<boolean>(() => {
+    const fresh = consumeFreshPlaceraFlag();
+    return fresh && !editHandoff;
+  });
+  const initialTurbines = editHandoff?.turbines ?? (showWelcome ? [] : DEFAULT_TURBINES);
   const [turbines, setTurbines] = useState<PlacedTurbine[]>(initialTurbines);
   const [committedTurbines, setCommittedTurbines] = useState<PlacedTurbine[]>(initialTurbines);
   const { isAuthenticated, login } = useAuth();
@@ -369,6 +376,36 @@ export default function PlaceTurbines() {
 
   return (
     <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
+
+      {/* Välkomst-overlay: visas när användaren öppnar Sverigekartan "fresh"
+          från hemvyn på native (flagga satt av openSverigekartan i capacitorBridge).
+          Kartan renderas bakom overlayen men är synlig som bakgrund.
+          Klicka "Öppna planeraren" för att ta bort overlayen och börja placera. */}
+      {showWelcome && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#090909]/92 px-6 py-10 backdrop-blur-sm">
+          <div className="w-full max-w-xs text-center">
+            <p className="mb-5 text-5xl">🗺️</p>
+            <h1 className="mb-2 text-2xl font-bold text-white">Sverigekartan</h1>
+            <p className="mb-8 text-sm leading-relaxed text-white/60">
+              Placera vindkraftverk var du vill i Sverige och se beräknad
+              påverkan på hushåll, natur och kommunens planering.
+            </p>
+            <button
+              onClick={() => setShowWelcome(false)}
+              className="mb-3 w-full rounded-full bg-[#FF8B01] py-3.5 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347]"
+            >
+              📐 Öppna Ericsbergsplaneraren
+            </button>
+            <button
+              onClick={() => navigate("/")}
+              className="w-full rounded-full border border-white/20 bg-white/5 py-3 text-sm text-white/70 transition hover:bg-white/10"
+            >
+              ← Tillbaka till AR-vyn
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <div>
           <p className="text-xs font-semibold tracking-wide text-[#FFB347]">
@@ -468,23 +505,27 @@ export default function PlaceTurbines() {
         <PlacementMap
           turbines={turbines}
           colorTurbines={committedTurbines}
-          initialView={editHandoff ? (() => {
-            if (editHandoff.turbines.length === 0) {
-              const lat = editHandoff.centerLat ?? 62.5;
-              const lon = editHandoff.centerLng ?? 15.5;
-              return { centerLat: lat, centerLon: lon, latSpan: 0.3 };
-            }
-            const lats = editHandoff.turbines.map((t) => t.lat);
-            const lons = editHandoff.turbines.map((t) => t.lon);
-            const minLat = Math.min(...lats);
-            const maxLat = Math.max(...lats);
-            const pad = Math.max((maxLat - minLat) * 0.25, 0.06);
-            return {
-              centerLat: (minLat + maxLat) / 2,
-              centerLon: (Math.min(...lons) + Math.max(...lons)) / 2,
-              latSpan: Math.min(maxLat - minLat + pad * 2, 2.0),
-            };
-          })() : undefined}
+          initialView={
+            editHandoff ? (() => {
+              if (editHandoff.turbines.length === 0) {
+                const lat = editHandoff.centerLat ?? 62.5;
+                const lon = editHandoff.centerLng ?? 15.5;
+                return { centerLat: lat, centerLon: lon, latSpan: 0.3 };
+              }
+              const lats = editHandoff.turbines.map((t) => t.lat);
+              const lons = editHandoff.turbines.map((t) => t.lon);
+              const minLat = Math.min(...lats);
+              const maxLat = Math.max(...lats);
+              const pad = Math.max((maxLat - minLat) * 0.25, 0.06);
+              return {
+                centerLat: (minLat + maxLat) / 2,
+                centerLon: (Math.min(...lons) + Math.max(...lons)) / 2,
+                latSpan: Math.min(maxLat - minLat + pad * 2, 2.0),
+              };
+            })()
+            : showWelcome ? { centerLat: 62.5, centerLon: 15.0, latSpan: 8 }
+            : undefined
+          }
           onMove={handleMove}
           onAdd={handleAdd}
           onRemove={handleRemove}

@@ -1242,7 +1242,7 @@ export default function Home() {
   }, [camera.nativePreview]);
 
   return (
-    <div className="relative h-[100dvh] w-full overflow-hidden bg-[#090909] text-white">
+    <div className={`relative h-[100dvh] w-full overflow-hidden text-white ${camera.nativePreview ? "bg-transparent" : "bg-[#090909]"}`}>
       {!started && (
         <PermissionGate
           onStart={handleStart}

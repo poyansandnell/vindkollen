@@ -418,3 +418,18 @@
     inset: -1px;
   }
 }
+
+/* Mobile viewport baseline — förhindrar horisontell overflow och
+   rubber-band-scroll på iOS Safari/Capacitor WebView.
+   Dessa regler är additiva och påverkar inte desktop-layouten ovanför 768 px. */
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+body {
+  overscroll-behavior: none;
+}

@@ -1,0 +1,77 @@
+Great progress: the native AR flow now works and camera, microphone, location and compass permissions all succeed.
+
+There are now three remaining native iOS issues.
+
+1. Camera preview is running but the live camera image is not visible
+
+In the AR scene:
+- CameraPreview is true
+- turbines render correctly
+- GPS and compass work
+- but the background remains black
+
+Please fix native iOS camera compositing:
+
+- Make html, body, #root and the AR page background transparent when CameraPreview is active.
+- Remove all black/opaque backgrounds covering the native camera layer.
+- Ensure the Capacitor WebView itself is transparent on iOS.
+- Verify CameraPreview.start uses the correct behindWebView setting.
+- Ensure the Three.js canvas has alpha enabled and uses a transparent clear color.
+- Only keep the normal black background on web/simulator fallback, not over the native camera preview.
+- Confirm the live camera image is visible behind the turbine models on a physical iPhone.
+
+Also note: regular iOS screenshots currently appear to capture the WebView but not the camera layer correctly. If this is a limitation of behindWebView camera preview, add an in-app “Take AR screenshot” button that captures/merges the camera frame and AR overlay into one image.
+
+2. Sverigekartan opens directly in Ericsberg edit mode
+
+Tapping “Sverigekartan – Öppna kartverktyg” should open the national overview map first, not immediately enter the Ericsberg placement editor.
+
+Required behavior:
+- Default route/view: the full Sweden map overview.
+- The user then selects a project/location.
+- Only after selecting Ericsberg should the editor/placement view open.
+- Do not restore the previous editor state automatically when entering from the Home screen.
+- Add an explicit “Till Sverigekartan” or back button from the editor.
+
+3. Mobile map layout still does not fit the iPhone screen
+
+On iPhone:
+- the title overlaps the status bar/Dynamic Island
+- top menu buttons are partially outside the viewport
+- not all controls are reachable
+- the page can move a few pixels vertically as if the viewport height is wrong
+
+Please fix specifically for native iOS:
+
+- use padding-top: max(env(safe-area-inset-top), 12px)
+- use padding-bottom: max(env(safe-area-inset-bottom), 12px)
+- use min-height: 100dvh, not 100vh
+- set html, body, #root to width: 100%, min-height: 100dvh, overflow-x: hidden
+- prevent the whole document from rubber-banding while still allowing intended content scrolling
+- make the top navigation horizontally scrollable or wrap into multiple rows
+- ensure no fixed-width desktop container exceeds 100vw
+- set min-width: 0 on all flex/grid children
+- keep all map controls and action buttons inside the safe area
+- test at 390x844 and 430x932
+- preserve the desktop layout above 768 px
+
+4. Persist all iOS privacy keys
+
+The active plist is ios/App/App/Info.plist. Permanently ensure the setup script inserts:
+
+NSCameraUsageDescription
+Vindkollen behöver använda kameran för att visa vindkraftverken i AR.
+
+NSLocationWhenInUseUsageDescription
+Vindkollen behöver din position för att beräkna avstånd och riktning till vindkraftverken.
+
+NSMotionUsageDescription
+Vindkollen behöver använda rörelsesensorer och kompass för att visa rätt riktning i AR.
+
+NSMicrophoneUsageDescription
+Vindkollen behöver mikrofonbehörighet för kamerafunktionen i AR-läget.
+
+These must survive cap sync and recreating the ios folder.
+
+Please increment the visible build label to:
+🧪 Native TEST 4 – Camera + Map

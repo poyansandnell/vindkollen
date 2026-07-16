@@ -30,12 +30,25 @@ export function openSverigekartan(): void {
     if (externalBase) {
       window.open(`${externalBase}/vindkraft-karta/`, "_system");
     } else {
-      // Hash-routing: navigera till det inbyggda placeringsverktyget
+      // Flagga att PlaceTurbines ska starta i välkomstläge (tom karta, ingen
+      // återställning av föregående session) och navigera dit via hash-routing.
+      sessionStorage.setItem("vindkollen:placeraFresh", "1");
       window.location.hash = "/placera";
     }
   } else {
     window.location.href = "/vindkraft-karta/";
   }
+}
+
+/**
+ * Konsumerar flaggan som `openSverigekartan()` sätter när den navigerar till
+ * `/placera` från hemvyn på native. Returnerar `true` en gång (vid den första
+ * mount av PlaceTurbines efter navigeringen) och tar bort flaggan.
+ */
+export function consumeFreshPlaceraFlag(): boolean {
+  const val = sessionStorage.getItem("vindkollen:placeraFresh") === "1";
+  if (val) sessionStorage.removeItem("vindkollen:placeraFresh");
+  return val;
 }
 
 // ---------------------------------------------------------------------------
@@ -75,8 +88,11 @@ export async function startNativeCameraPreview(): Promise<boolean> {
       enableZoom: false,
     });
     _cameraPreviewActive = true;
+    // Gör hela DOM-stacken transparent så att native CameraPreview-lagret syns.
     document.body.style.backgroundColor = "transparent";
     document.documentElement.style.backgroundColor = "transparent";
+    const root = document.getElementById("root");
+    if (root) root.style.background = "transparent";
     console.log("[Vindkollen] CameraPreview started");
     return true;
   } catch (err) {
@@ -93,6 +109,8 @@ export async function stopNativeCameraPreview(): Promise<void> {
   _cameraPreviewActive = false;
   document.body.style.backgroundColor = "";
   document.documentElement.style.backgroundColor = "";
+  const root = document.getElementById("root");
+  if (root) root.style.background = "";
   if (!isNative()) return;
   try {
     const { CameraPreview } = await import("@capacitor-community/camera-preview");

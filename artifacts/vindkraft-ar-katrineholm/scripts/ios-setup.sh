@@ -57,10 +57,10 @@ echo "📝  Skriver privacy strings till $PLIST …"
 # Krävs av @capacitor-community/camera-preview på iOS — plugin begär
 # mikrofonbehörighet även om appen inte spelar in ljud.
 /usr/libexec/PlistBuddy -c \
-  "Add :NSMicrophoneUsageDescription string 'Vindkollen behöver mikrofontillstånd för kamerafunktionen i AR-vyn.'" \
+  "Add :NSMicrophoneUsageDescription string 'Vindkollen behöver mikrofonbehörighet för kamerafunktionen i AR-läget.'" \
   "$PLIST" 2>/dev/null || \
 /usr/libexec/PlistBuddy -c \
-  "Set :NSMicrophoneUsageDescription 'Vindkollen behöver mikrofontillstånd för kamerafunktionen i AR-vyn.'" \
+  "Set :NSMicrophoneUsageDescription 'Vindkollen behöver mikrofonbehörighet för kamerafunktionen i AR-läget.'" \
   "$PLIST"
 
 echo "✅  Privacy strings klara:"

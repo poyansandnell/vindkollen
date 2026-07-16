@@ -8,6 +8,10 @@ const config: CapacitorConfig = {
   bundledWebRuntime: false,
   ios: {
     contentInset: "always",
+    // Gör WKWebView transparent så att native CameraPreview-lagret bakom syns igenom.
+    // Krävs tillsammans med CameraPreview.start({ toBack: true }) och att alla
+    // HTML-element saknar ogenomskinlig bakgrundsfärg när kameran är aktiv.
+    backgroundColor: "#00000000",
   },
   android: {
     allowMixedContent: false,
