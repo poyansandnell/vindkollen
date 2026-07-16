@@ -132,6 +132,9 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
             <p className="text-center text-[11px] text-white/30">
               Fungerar bäst utomhus, i dagsljus eller kväll, med fri sikt mot horisonten.
             </p>
+            <p className="text-center text-[11px] font-bold text-[#FF8B01]">
+              Vindkollen TEST 123
+            </p>
           </>
         )}
       </div>
