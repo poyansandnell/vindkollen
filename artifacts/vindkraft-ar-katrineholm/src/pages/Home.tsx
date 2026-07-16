@@ -1598,13 +1598,17 @@ export default function Home() {
                 `justify-content: flex-end` tillsammans med `overflow-x-auto`
                 är en känd Chrome-bugg som gör innehåll som "skjuts ut" åt
                 vänster om den synliga rutan helt onåbart via scroll. */}
-            <div className="flex items-start gap-2">
-              <div className="shrink-0">
+            {/* TEST 8 rad 1: titel + turbinantal på egen rad, separerat från statusbadgarna */}
+            <div className="flex items-center justify-between">
+              <div>
                 <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKOLLEN AR</p>
                 <p className="text-sm text-white/90">
                   {usingCustomPlacement ? "Vindkollen" : "Katrineholm"} · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}
                 </p>
               </div>
+            </div>
+            {/* TEST 8 rad 2: statusbadgar (GPS/Kompass/dBA/Infraljud) på egen rad */}
+            <div className="flex flex-wrap items-center gap-1.5">
               {/* Juli 2026-fix (produktfeedback, ny omgång): "man borde ha röd
                   indikation på kompassen så man ständigt ser status" —
                   `CompassStabilityBadge` fanns redan och är redan alltid
@@ -1634,31 +1638,14 @@ export default function Home() {
                   pixlar högst upp — helt synligt, ingen gissad scroll
                   krävs. Bytt till `flex-wrap` (ingen `overflow-x-auto`/
                   `whitespace-nowrap`/dold scrollbar längre). */}
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 pb-0.5">
-                <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
-                <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
-                {/* Juli 2026-fix (produktfeedback, ännu en omgång: "nu har vi
-                    glömt informationen om infraljudet"): dBA-badgen och
-                    Infraljud-badgen är HÄLSO-/säkerhetsrelaterad information
-                    (ljudnivå + infraljudspåverkan), inte teknisk
-                    sensordebug-status — de hör hemma i den alltid synliga
-                    raden, inte gömda bakom "Mer status". Bara de rent
-                    tekniska trackingbadgarna (AR-stabilitet%, Fri sikt) är
-                    kvar bakom den hopfällda knappen, se raden nedan. */}
-                <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
-                <NoiseImpactBadge
-                  result={noiseImpact}
-                  expanded={showNoiseImpact}
-                  onToggle={() => setShowNoiseImpact((v) => !v)}
-                />
-                {/* Juli 2026-fix (produktfeedback, ny omgång: "gör det
-                    smartare, tar för mycket plats"): de två rent tekniska
-                    trackingbadgarna (AR-stabilitet%, Fri sikt) flyttades
-                    bakom denna hopfällda knapp istället för att alltid
-                    rendera en extra rad. GPS/Kompass/dBA/Infraljud (de fyra
-                    som är antingen kritiska för sensorstatus eller hälso-/
-                    säkerhetsrelevanta) förblir alltid synliga. */}
-              </div>
+              <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
+              <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
+              <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
+              <NoiseImpactBadge
+                result={noiseImpact}
+                expanded={showNoiseImpact}
+                onToggle={() => setShowNoiseImpact((v) => !v)}
+              />
             </div>
             {showStatusDetails && (
               <div className="flex flex-wrap items-center gap-1.5 pl-0.5">
@@ -1666,37 +1653,35 @@ export default function Home() {
                 <LineOfSightStatus status={lineOfSightStatus} />
               </div>
             )}
-            {/* Nattläge/Ljudnivå/Ljud ute + Mer status + gear på SAMMA rad */}
-            <div className="flex items-center gap-2">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                {nightMode && (
-                  <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-2.5 py-1 text-[11px] text-red-200">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-                    Nattläge
-                  </span>
-                )}
-                {ready && (
-                  <button
-                    onClick={() => setShowSoundLevel((v) => !v)}
-                    aria-pressed={showSoundLevel}
-                    className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
-                  >
-                    🔊 Ljudnivå
-                  </button>
-                )}
+            {/* TEST 8 rad 3: [Nattläge] [Ljudnivå] [Ljud ute/inne] [Mer status] [⚙️] — all i flex-wrap */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {nightMode && (
+                <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-2.5 py-1 text-[11px] text-red-200">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                  Nattläge
+                </span>
+              )}
+              {ready && (
                 <button
-                  onClick={() => setSoundEnvironment((v) => (v === "ute" ? "inne" : "ute"))}
-                  aria-pressed={soundEnvironment === "inne"}
+                  onClick={() => setShowSoundLevel((v) => !v)}
+                  aria-pressed={showSoundLevel}
                   className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
                 >
-                  {soundEnvironment === "ute" ? "🔊 Ljud ute" : "🔈 Ljud inne"}
+                  🔊 Ljudnivå
                 </button>
-              </div>
+              )}
+              <button
+                onClick={() => setSoundEnvironment((v) => (v === "ute" ? "inne" : "ute"))}
+                aria-pressed={soundEnvironment === "inne"}
+                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
+              >
+                {soundEnvironment === "ute" ? "🔊 Ljud ute" : "🔈 Ljud inne"}
+              </button>
               <button
                 onClick={() => setShowStatusDetails((v) => !v)}
                 aria-pressed={showStatusDetails}
                 aria-label={showStatusDetails ? "Dölj fler statusdetaljer" : "Visa fler statusdetaljer"}
-                className="shrink-0 rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-white/20"
+                className="rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-white/20"
               >
                 {showStatusDetails ? "▴ Mindre" : "▾ Mer status"}
               </button>
@@ -1704,7 +1689,7 @@ export default function Home() {
                 onClick={() => setShowControls(true)}
                 aria-pressed={showControls}
                 aria-label="Visningsinställningar"
-                className="shrink-0 rounded-full bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+                className="rounded-full bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
               >
                 ⚙️
               </button>

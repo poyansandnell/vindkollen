@@ -58,7 +58,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10001,
     name: "Länsterberget",
-    status: "samråd",
+    status: "consultation",
     kommun: "Katrineholm",
     region: "Södermanland",
     turbineCountPlannedMin: 29,
@@ -79,7 +79,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10002,
     name: "Hultema",
-    status: "beviljat",
+    status: "permitted",
     kommun: "Mjölby",
     region: "Östergötland",
     turbineCountPlannedMin: 22,
@@ -92,7 +92,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10003,
     name: "Kårehamn",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Borgholm",
     region: "Kalmar",
     turbineCountPlannedMin: 16,
@@ -105,7 +105,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10004,
     name: "Lemnhult",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Vetlanda",
     region: "Jönköping",
     turbineCountPlannedMin: 31,
@@ -118,7 +118,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10005,
     name: "Fälla vindpark",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Hässleholm",
     region: "Skåne",
     turbineCountPlannedMin: 23,
@@ -130,7 +130,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10006,
     name: "Lillgrund",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Malmö",
     region: "Skåne",
     turbineCountPlannedMin: 48,
@@ -143,7 +143,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10007,
     name: "Blekinge Offshore",
-    status: "beviljat",
+    status: "permitted",
     kommun: "Sölvesborg",
     region: "Blekinge",
     turbineCountPlannedMin: 700,
@@ -156,7 +156,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10008,
     name: "Hjuleberg",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Falkenberg",
     region: "Halland",
     turbineCountPlannedMin: 18,
@@ -169,7 +169,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10009,
     name: "Hällevadsholm",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Mellerud",
     region: "Västra Götaland",
     turbineCountPlannedMin: 25,
@@ -181,7 +181,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10010,
     name: "Hedared",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Borås",
     region: "Västra Götaland",
     turbineCountPlannedMin: 24,
@@ -194,7 +194,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10011,
     name: "Bäckhammar",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Kristinehamn",
     region: "Värmland",
     turbineCountPlannedMin: 8,
@@ -207,7 +207,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10012,
     name: "Näsudden vindpark",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Gotland",
     region: "Gotland",
     turbineCountPlannedMin: 45,
@@ -220,7 +220,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10013,
     name: "Jädraås",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Ockelbo",
     region: "Gävleborg",
     turbineCountPlannedMin: 66,
@@ -232,7 +232,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10014,
     name: "Storgrundet",
-    status: "beviljat",
+    status: "permitted",
     kommun: "Söderhamn",
     region: "Gävleborg",
     turbineCountPlannedMin: 30,
@@ -244,7 +244,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10015,
     name: "Svartkläppen",
-    status: "aktuellt",
+    status: "proposed",
     kommun: "Ljusdal",
     region: "Gävleborg",
     turbineCountPlannedMin: 32,
@@ -257,7 +257,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10016,
     name: "Salsjön",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Sundsvall",
     region: "Västernorrland",
     turbineCountPlannedMin: 22,
@@ -270,7 +270,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10017,
     name: "Bergebo",
-    status: "beviljat",
+    status: "permitted",
     kommun: "Härjedalen",
     region: "Jämtland",
     turbineCountPlannedMin: 97,
@@ -283,7 +283,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10018,
     name: "Blakliden-Fäbodberget",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Åsele",
     region: "Västerbotten",
     turbineCountPlannedMin: 84,
@@ -296,7 +296,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10019,
     name: "Markbygden ETT",
-    status: "driftsatt",
+    status: "operational",
     kommun: "Piteå",
     region: "Norrbotten",
     turbineCountPlannedMin: 179,
@@ -308,7 +308,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   {
     id: 10020,
     name: "Uljabuouda",
-    status: "beviljat",
+    status: "permitted",
     kommun: "Arjeplog",
     region: "Norrbotten",
     turbineCountPlannedMin: 72,

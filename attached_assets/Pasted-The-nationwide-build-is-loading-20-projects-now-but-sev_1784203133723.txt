@@ -1,0 +1,165 @@
+The nationwide build is loading 20 projects now, but several important issues remain.
+
+1. Project classification is wrong
+
+The Sweden overview appears to show projects that are already built/operational, while the app should primarily show planned or proposed wind power projects.
+
+Please add an explicit project status field:
+
+status:
+- planned
+- proposed
+- consultation
+- permitted
+- under_construction
+- operational
+- cancelled
+
+Default Sweden overview filter:
+- show planned
+- proposed
+- consultation
+- permitted
+- under_construction
+- hide operational unless the user enables “Visa befintliga verk”
+
+Use distinct marker colors:
+- orange/red = planned/proposed
+- yellow = permitted/under construction
+- green = operational
+- grey = cancelled
+
+Add a filter control:
+- Planerade
+- Pågående
+- Befintliga
+- Alla
+
+Do not infer status from marker color or missing metadata. Store it explicitly per project.
+
+2. Sweden map must be interactive
+
+The national map currently behaves like a static image with project dots.
+
+Required:
+- pinch zoom
+- drag/pan
+- double-tap zoom
+- project markers remain anchored correctly
+- tap marker to select
+- selected marker opens a project summary card
+- zooming in should reveal project name labels
+- when sufficiently zoomed in around one selected project, allow opening its detail/editor mode
+
+Use MapLibre/Mapbox or the existing interactive map implementation, not a static background image with absolute-positioned dots.
+
+3. Project editor is empty after selecting a project
+
+The generic editor opens, but the project map/data is blank.
+
+Please verify that selectedProjectId is passed correctly and that the editor loads:
+
+- project metadata
+- project center coordinates
+- boundary polygon
+- existing/planned turbines
+- editable turbine positions
+- scoring data
+- map style and tiles
+
+Add visible diagnostics in the editor:
+
+- selectedProjectId
+- selected project name
+- turbine count loaded
+- boundary point count
+- map initialized true/false
+- last loading error
+
+If a project has no editable boundary or turbine dataset, do not open an empty editor. Show:
+
+“Detta projekt har ännu inget detaljerat redigeringsunderlag.”
+
+and offer:
+- View project information
+- Open AR overview
+- Back to Sweden map
+
+4. AR top controls are still cluttered
+
+The controls overlap and consume too much space.
+
+Rebuild the top layout for mobile:
+
+Header:
+- project/municipality name
+- turbine count
+
+Status row:
+- GPS
+- Compass
+- dBA
+- Infrasound
+
+Nearest-turbine row:
+- “Du tittar mot närmaste verk”
+- distance
+- bearing
+
+Controls row:
+- Ljudnivå
+- Ljud av/på
+- Mer status
+- Settings
+
+Requirements:
+- maximum three compact rows
+- no overlap
+- no absolute positioning for normal controls
+- each row width <= 100vw
+- use flex-wrap or horizontal scrolling only where necessary
+- respect safe-area-inset-top
+- raw FPS/debug text hidden by default
+- Native Diagnostics collapsed by default
+
+5. Referendum modal must not sit behind AR controls
+
+The campaign/form modal currently opens underneath the sound card and bottom menu.
+
+When any modal is open:
+- pause or hide floating AR cards
+- hide sound card
+- hide bottom action buttons
+- hide diagnostics
+- show a full-screen overlay with a higher z-index
+- lock background scrolling
+- keep only the modal visible and interactive
+
+The modal should use:
+position: fixed;
+inset: 0;
+z-index: very high;
+overflow-y: auto;
+padding-top/bottom: safe-area values;
+
+On close, restore the AR interface.
+
+6. Local campaign logic
+
+The referendum form must only appear for the Katrineholm project.
+
+Do not show it globally.
+
+Use project-level config:
+campaign.enabled === true
+
+For all other projects:
+- hide referendum CTA
+- hide local Katrineholm text
+- show only generic nationwide information
+
+7. Build marker
+
+Increment to:
+
+Native TEST 8 – Project filters + interactive Sweden map + editor fix

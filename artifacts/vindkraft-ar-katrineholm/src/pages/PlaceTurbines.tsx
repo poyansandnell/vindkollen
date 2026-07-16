@@ -45,19 +45,33 @@ function apiPolygonToLatLon(polygon: ApiProjectArea["polygon"]): LatLon[] | null
   return (ring as [number, number][]).map(([lon, lat]) => ({ lat, lon }));
 }
 
-/** Status → markörfärg (orange = aktuellt/samråd, grön = beviljat/driftsatt, grå = övrigt). */
+/** Status → markörfärg. orange = planerat/samråd, gul = beviljat/byggnation, grön = driftsatt, grå = avbrutet. */
 function projectStatusColor(status: string): string {
-  if (status === "beviljat" || status === "driftsatt") return "#22c55e";
-  if (status === "aktuellt" || status === "samråd") return "#FF8B01";
-  return "#94a3b8";
+  if (status === "operational") return "#22c55e";
+  if (status === "cancelled") return "#94a3b8";
+  if (status === "permitted" || status === "under_construction") return "#eab308";
+  return "#FF8B01"; // planned / proposed / consultation
+}
+
+/** Statusvärde → svensk etikett för visning. */
+function statusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    planned: "Planerat",
+    proposed: "Föreslaget",
+    consultation: "Samråd",
+    permitted: "Beviljat",
+    under_construction: "Under byggnation",
+    operational: "Driftsatt",
+    cancelled: "Avbrutet",
+  };
+  return labels[status] ?? status;
 }
 
 // ─── NationalView ──────────────────────────────────────────────────────────
-// Hämtar ALLA vindkraftsprojekt från /api/wind/project-areas (Sverige-bbox)
-// och visar dem som klickbara markörer på en ESRI-satellitbild (zoom 5).
-// Välj ett projekt → visa projektkort → "Öppna projektet" → editor.
+// Sverigeöversikt med interaktiv karta (pan/zoom/pinch/dubbeltryck) och
+// statusfilter. Visar bundlade + API-hämtade projekt som klickbara markörer.
 //
-// Zoom 5 → 3×4 plattor täcker Sverige (lon 0-33.75°E, lat ~55-69°N):
+// Zoom 5 → 3×4 ESRI-plattor täcker Sverige (lon 0-33.75°E, lat ~55-69°N):
 //   x: 16 (0°), 17 (11.25°), 18 (22.5°)
 //   y:  7 (≈69°N),  8 (≈66°N),  9 (≈61°N), 10 (≈55°N)
 const NATIONAL_ZOOM = 5;
@@ -65,6 +79,25 @@ const NATIONAL_X1 = 16,
   NATIONAL_X2 = 18;
 const NATIONAL_Y1 = 7,
   NATIONAL_Y2 = 10;
+
+type FilterMode = "aktuella" | "planerade" | "pågående" | "befintliga" | "alla";
+
+const FILTER_LABELS: Record<FilterMode, string> = {
+  aktuella: "Aktuella",
+  planerade: "Planerade",
+  pågående: "Pågående",
+  befintliga: "Befintliga",
+  alla: "Alla",
+};
+
+function getFilterStatuses(mode: FilterMode): string[] | null {
+  if (mode === "alla") return null;
+  if (mode === "planerade") return ["planned", "proposed", "consultation"];
+  if (mode === "pågående") return ["permitted", "under_construction"];
+  if (mode === "befintliga") return ["operational"];
+  // "aktuella" = allt utom operational och cancelled (default)
+  return ["planned", "proposed", "consultation", "permitted", "under_construction"];
+}
 
 function NationalView({
   onEnterEditor,
@@ -96,6 +129,16 @@ function NationalView({
   const [loadState, setLoadState] = useState<"loading" | "ok" | "error">("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<ApiProjectArea | null>(null);
+  const [filterMode, setFilterMode] = useState<FilterMode>("aktuella");
+
+  // ── Pan/zoom state ─────────────────────────────────────────────────────────
+  const [mapView, setMapView] = useState({ tx: 0, ty: 0, scale: 1 });
+  const mapViewRef = useRef({ tx: 0, ty: 0, scale: 1 });
+  useEffect(() => { mapViewRef.current = mapView; }, [mapView]);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  /** Förhindrar click-to-deselect direkt efter en drag-gest. */
+  const wasDragRef = useRef(false);
+  function clampScale(s: number) { return Math.max(0.7, Math.min(8, s)); }
 
   useEffect(() => {
     let cancelled = false;
@@ -160,16 +203,117 @@ function NationalView({
     };
   }, []);
 
+  // ── Interaktiv karta: native touch/wheel/mouse ────────────────────────────
+  // Registreras som native listeners (inte React synthetic) för att kunna
+  // använda {passive:false} på touchmove och wheel där vi kallar preventDefault.
+  useEffect(() => {
+    const nullableEl = mapContainerRef.current;
+    if (!nullableEl) return;
+    // Re-bind as non-null so TypeScript propagates the narrowing into closures
+    const el: HTMLDivElement = nullableEl;
+    let tdx = 0, tdy = 0, tdtx = 0, tdty = 0, tdMoved = false;
+    let pinchDist = 0, pinchMidX = 0, pinchMidY = 0;
+    let lastTap = 0;
+    let msx = 0, msy = 0, mstx = 0, msty = 0, mouseDown = false;
+
+    function two(t: TouchList) {
+      const dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+      return { dist: Math.sqrt(dx * dx + dy * dy), mx: (t[0].clientX + t[1].clientX) / 2, my: (t[0].clientY + t[1].clientY) / 2 };
+    }
+
+    function onTS(e: TouchEvent) {
+      if (e.touches.length === 1) {
+        tdx = e.touches[0].clientX; tdy = e.touches[0].clientY;
+        tdtx = mapViewRef.current.tx; tdty = mapViewRef.current.ty;
+        tdMoved = false;
+        const now = Date.now();
+        if (now - lastTap < 280) {
+          const r = el.getBoundingClientRect();
+          const px = e.touches[0].clientX - r.left, py = e.touches[0].clientY - r.top;
+          setMapView(v => { const ns = clampScale(v.scale < 3 ? v.scale * 2 : 1), f = ns / v.scale; return { tx: px - f * (px - v.tx), ty: py - f * (py - v.ty), scale: ns }; });
+        }
+        lastTap = now;
+      } else if (e.touches.length === 2) {
+        const i = two(e.touches); pinchDist = i.dist; pinchMidX = i.mx; pinchMidY = i.my;
+      }
+    }
+
+    function onTM(e: TouchEvent) {
+      if (e.touches.length === 1) {
+        const dx = e.touches[0].clientX - tdx, dy = e.touches[0].clientY - tdy;
+        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) { tdMoved = true; wasDragRef.current = true; }
+        if (tdMoved) { e.preventDefault(); setMapView(v => ({ ...v, tx: tdtx + dx, ty: tdty + dy })); }
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        const i = two(e.touches), r = el.getBoundingClientRect();
+        const sf = pinchDist > 0 ? i.dist / pinchDist : 1;
+        const px = i.mx - r.left, py = i.my - r.top;
+        setMapView(v => { const ns = clampScale(v.scale * sf), f = ns / v.scale; return { tx: px - f * (px - v.tx) + (i.mx - pinchMidX), ty: py - f * (py - v.ty) + (i.my - pinchMidY), scale: ns }; });
+        pinchDist = i.dist; pinchMidX = i.mx; pinchMidY = i.my;
+      }
+    }
+
+    function onMD(e: MouseEvent) {
+      if (e.button !== 0) return;
+      mouseDown = true; msx = e.clientX; msy = e.clientY;
+      mstx = mapViewRef.current.tx; msty = mapViewRef.current.ty;
+    }
+    function onMM(e: MouseEvent) {
+      if (!mouseDown) return;
+      const dx = e.clientX - msx, dy = e.clientY - msy;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) wasDragRef.current = true;
+      if (wasDragRef.current) setMapView(v => ({ ...v, tx: mstx + dx, ty: msty + dy }));
+    }
+    function onMU() { mouseDown = false; }
+
+    function onW(e: WheelEvent) {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const px = e.clientX - r.left, py = e.clientY - r.top;
+      const f0 = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+      setMapView(v => { const ns = clampScale(v.scale * f0), f = ns / v.scale; return { tx: px - f * (px - v.tx), ty: py - f * (py - v.ty), scale: ns }; });
+    }
+
+    el.addEventListener("touchstart", onTS, { passive: true });
+    el.addEventListener("touchmove", onTM, { passive: false });
+    el.addEventListener("wheel", onW, { passive: false });
+    el.addEventListener("mousedown", onMD);
+    window.addEventListener("mousemove", onMM);
+    window.addEventListener("mouseup", onMU);
+    return () => {
+      el.removeEventListener("touchstart", onTS);
+      el.removeEventListener("touchmove", onTM);
+      el.removeEventListener("wheel", onW);
+      el.removeEventListener("mousedown", onMD);
+      window.removeEventListener("mousemove", onMM);
+      window.removeEventListener("mouseup", onMU);
+    };
+  }, []);
+
+  // Filtrera projekt baserat på statusfilter
+  const filteredProjects = useMemo(() => {
+    const allowed = getFilterStatuses(filterMode);
+    return projects.filter(
+      (p) =>
+        typeof p.centerLat === "number" &&
+        typeof p.centerLng === "number" &&
+        (allowed === null || allowed.includes(p.status)),
+    );
+  }, [projects, filterMode]);
+
   // Beräkna markörspositioner i WebMercator-koordinater → procent av kartarea
   const markerPositions = useMemo(
     () =>
-      projects.map((p) => ({
+      filteredProjects.map((p) => ({
         project: p,
         left: ((lon2tileX(p.centerLng!, NATIONAL_ZOOM) - NATIONAL_X1) / (NATIONAL_X2 - NATIONAL_X1 + 1)) * 100,
         top: ((lat2tileY(p.centerLat!, NATIONAL_ZOOM) - NATIONAL_Y1) / (NATIONAL_Y2 - NATIONAL_Y1 + 1)) * 100,
       })),
-    [projects],
+    [filteredProjects],
   );
+
+  // Visa projektnamn som etiketter när zoomnivån är tillräckligt hög
+  const showLabels = mapView.scale >= 2;
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
@@ -184,7 +328,7 @@ function NationalView({
               ? "Laddar projekt…"
               : loadState === "error"
                 ? "Laddningsfel"
-                : `${projects.length} vindkraftsprojekt`}
+                : `${filteredProjects.length} av ${projects.length} projekt`}
           </h1>
         </div>
         <button
@@ -195,53 +339,104 @@ function NationalView({
         </button>
       </div>
 
-      {/* Sverigekarta — satellitbild zoom 5, 3 × 4 ESRI-plattor + projektmarkörer */}
-      <div
-        className="relative min-h-0 flex-1 overflow-hidden bg-[#0d0d0d]"
-        onClick={() => setSelectedProject(null)}
-      >
-        {tiles.map((tile) => (
-          <img
-            key={tile.key}
-            src={tile.url}
-            alt=""
-            draggable={false}
-            className="pointer-events-none absolute select-none"
-            style={{
-              left: `${tile.left}%`,
-              top: `${tile.top}%`,
-              width: `${tile.width}%`,
-              height: `${tile.height}%`,
-            }}
-          />
+      {/* Statusfilter-pills */}
+      <div className="flex gap-2 overflow-x-auto border-b border-white/10 px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {(["aktuella", "planerade", "pågående", "befintliga", "alla"] as FilterMode[]).map((mode) => (
+          <button
+            key={mode}
+            onClick={() => setFilterMode(mode)}
+            className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              filterMode === mode
+                ? "bg-[#FF8B01] text-[#090909]"
+                : "bg-white/10 text-white hover:bg-white/20"
+            }`}
+          >
+            {FILTER_LABELS[mode]}
+          </button>
         ))}
+      </div>
 
-        {/* Projektmarkörer — en prick per projekt */}
-        {loadState === "ok" &&
-          markerPositions.map(({ project, left, top }) => {
-            const isSelected = project.id === selectedProject?.id;
-            return (
-              <button
-                key={project.id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedProject(isSelected ? null : project);
-                }}
-                className="absolute -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${left}%`, top: `${top}%`, zIndex: isSelected ? 20 : 10 }}
-                aria-label={project.name}
-              >
+      {/* Interaktiv karta — ESRI-satellit med pan/zoom/pinch/dubbeltryck */}
+      <div
+        ref={mapContainerRef}
+        className="relative min-h-0 flex-1 select-none overflow-hidden bg-[#0d0d0d]"
+        style={{ cursor: "grab" }}
+        onClick={() => {
+          if (wasDragRef.current) { wasDragRef.current = false; return; }
+          setSelectedProject(null);
+        }}
+      >
+        {/* Transformerat lager: tiles + markörer rör sig tillsammans vid pan/zoom */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            transform: `translate(${mapView.tx}px, ${mapView.ty}px) scale(${mapView.scale})`,
+            transformOrigin: "0 0",
+            willChange: "transform",
+          }}
+        >
+          {/* Satellit-tiles */}
+          {tiles.map((tile) => (
+            <img
+              key={tile.key}
+              src={tile.url}
+              alt=""
+              draggable={false}
+              className="pointer-events-none absolute select-none"
+              style={{
+                left: `${tile.left}%`,
+                top: `${tile.top}%`,
+                width: `${tile.width}%`,
+                height: `${tile.height}%`,
+              }}
+            />
+          ))}
+
+          {/* Projektmarkörer */}
+          {loadState === "ok" &&
+            markerPositions.map(({ project, left, top }) => {
+              const isSelected = project.id === selectedProject?.id;
+              const color = projectStatusColor(project.status);
+              return (
                 <div
-                  className={`rounded-full border-2 border-[#090909] shadow-md transition-transform hover:scale-125 active:scale-110 ${isSelected ? "scale-150" : ""}`}
-                  style={{
-                    width: isSelected ? 14 : 10,
-                    height: isSelected ? 14 : 10,
-                    backgroundColor: projectStatusColor(project.status),
-                  }}
-                />
-              </button>
-            );
-          })}
+                  key={project.id}
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
+                  style={{ left: `${left}%`, top: `${top}%`, zIndex: isSelected ? 20 : 10 }}
+                >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (wasDragRef.current) { wasDragRef.current = false; return; }
+                      setSelectedProject(isSelected ? null : project);
+                    }}
+                    aria-label={project.name}
+                    className="flex flex-col items-center"
+                  >
+                    <div
+                      className={`rounded-full border-2 border-[#090909] shadow-md transition-transform ${
+                        isSelected ? "scale-[2.5]" : "hover:scale-150 active:scale-125"
+                      }`}
+                      style={{ width: 10, height: 10, backgroundColor: color }}
+                    />
+                    {showLabels && (
+                      <span
+                        className="whitespace-nowrap rounded px-1 font-semibold leading-tight shadow"
+                        style={{
+                          backgroundColor: "#090909cc",
+                          color,
+                          fontSize: `${Math.max(7, 11 / mapView.scale)}px`,
+                          marginTop: `${Math.max(1, 3 / mapView.scale)}px`,
+                        }}
+                      >
+                        {project.name}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+        </div>
 
         {/* Laddningsöverlay */}
         {loadState === "loading" && (
@@ -258,18 +453,46 @@ function NationalView({
           </div>
         )}
 
+        {/* Zoom-knappar (övre höger) */}
+        <div className="absolute right-3 top-3 flex flex-col gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const el = mapContainerRef.current;
+              const cx = (el?.clientWidth ?? 300) / 2, cy = (el?.clientHeight ?? 400) / 2;
+              setMapView(v => { const ns = clampScale(v.scale * 1.5), f = ns / v.scale; return { tx: cx - f * (cx - v.tx), ty: cy - f * (cy - v.ty), scale: ns }; });
+            }}
+            className="h-8 w-8 rounded-full bg-black/60 text-sm font-bold text-white shadow-lg backdrop-blur hover:bg-black/80"
+            aria-label="Zooma in"
+          >
+            +
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const el = mapContainerRef.current;
+              const cx = (el?.clientWidth ?? 300) / 2, cy = (el?.clientHeight ?? 400) / 2;
+              setMapView(v => { const ns = clampScale(v.scale / 1.5), f = ns / v.scale; return { tx: cx - f * (cx - v.tx), ty: cy - f * (cy - v.ty), scale: ns }; });
+            }}
+            className="h-8 w-8 rounded-full bg-black/60 text-sm font-bold text-white shadow-lg backdrop-blur hover:bg-black/80"
+            aria-label="Zooma ut"
+          >
+            −
+          </button>
+        </div>
+
         {/* Nedre toning mot projektkort */}
         <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#090909] to-transparent" />
       </div>
 
-      {/* Projektkort (valt projekt) / tomt läge */}
+      {/* Projektkort (valt projekt) / hjälptext */}
       <div className="bg-[#090909] px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-4">
         {selectedProject ? (
           <div className="rounded-2xl border border-white/10 bg-[#131313] p-4">
             <div className="mb-3 flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-[#FFB347]">
-                  {selectedProject.kommun ?? selectedProject.status}
+                  {selectedProject.kommun ?? ""}
                 </p>
                 <h2 className="mt-0.5 text-base font-bold leading-tight text-white">
                   {selectedProject.name}
@@ -282,7 +505,7 @@ function NationalView({
                         selectedProject.turbineCountPlannedMax !==
                           selectedProject.turbineCountPlannedMin &&
                         `–${selectedProject.turbineCountPlannedMax}`}{" "}
-                      planerade verk
+                      {selectedProject.status === "operational" ? "befintliga verk" : "planerade verk"}
                     </span>
                   )}
                   <span
@@ -292,7 +515,7 @@ function NationalView({
                       color: projectStatusColor(selectedProject.status),
                     }}
                   >
-                    {selectedProject.status}
+                    {statusLabel(selectedProject.status)}
                   </span>
                 </p>
               </div>
@@ -319,10 +542,10 @@ function NationalView({
               <p className="text-sm text-white/50">Kontrollera nätverket och ladda om</p>
             ) : (
               <>
-                <p className="text-sm text-white/50">
-                  Tryck på ett projekt på kartan för att öppna det
+                <p className="text-sm text-white/50">Tryck på ett projekt på kartan</p>
+                <p className="mt-1 text-[10px] text-white/30">
+                  Visar {filteredProjects.length} av {projects.length} projekt
                 </p>
-                <p className="mt-1 text-[10px] text-white/30">Laddade {projects.length} projekt</p>
               </>
             )}
           </div>
@@ -741,6 +964,57 @@ export default function PlaceTurbines() {
     );
   }
 
+  // Tomt redigeringsläge — projekt utan detaljerat redigeringsunderlag i appen
+  if (editHandoff && !editHandoff.boundary) {
+    return (
+      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
+        <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3 pt-[max(env(safe-area-inset-top),12px)]">
+          <div>
+            <p className="text-xs font-semibold tracking-wide text-[#FFB347]">REDIGERA PLACERING</p>
+            <p className="text-sm text-white/70">{editHandoff.projectName}</p>
+          </div>
+          <button
+            onClick={() => setShowWelcome(true)}
+            className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/20"
+          >
+            ← Karta
+          </button>
+        </div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-8 text-center">
+          <div className="text-5xl">🗺️</div>
+          <div>
+            <p className="text-lg font-semibold text-white">Inget redigeringsunderlag</p>
+            <p className="mt-2 text-sm leading-relaxed text-white/60">
+              {editHandoff.projectName} har ännu inget detaljerat redigeringsunderlag tillgängligt i appen.
+            </p>
+          </div>
+          {/* Diagnostik — synlig för att underlätta felsökning */}
+          <div className="w-full rounded-xl bg-white/5 px-4 py-3 text-left text-xs text-white/40">
+            <p>Projekt-ID: {editHandoff.projectId ?? "–"}</p>
+            <p>Projekt: {editHandoff.projectName}</p>
+            {editHandoff.municipality && <p>Kommun: {editHandoff.municipality}</p>}
+            <p>Gränspunkter: 0</p>
+            <p>Verk (laddade): {editHandoff.turbines.length}</p>
+            <p>
+              Koordinater:{" "}
+              {editHandoff.centerLat != null
+                ? `${editHandoff.centerLat.toFixed(4)}, ${editHandoff.centerLng?.toFixed(4)}`
+                : "–"}
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-2">
+            <button
+              onClick={() => setShowWelcome(true)}
+              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20"
+            >
+              ← Tillbaka till Sverigekartan
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
 
@@ -752,7 +1026,7 @@ export default function PlaceTurbines() {
           <p className="text-sm text-white/70">
             {editHandoff
               ? `${editHandoff.projectName}${editHandoff.municipality ? ` · ${editHandoff.municipality}` : ""} · klicka på ett verk för att flytta/ta bort`
-              : "Ericsbergs marker · klicka på kartan för att placera · tryck på ett verk för att flytta/ta bort"}
+              : "Klicka på kartan för att placera vindkraftverken · tryck på ett verk för att flytta/ta bort"}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

@@ -79,7 +79,7 @@ export function PetitionModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="absolute inset-0 z-40 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">
+    <div className="fixed inset-0 z-[200] flex items-end justify-center overflow-y-auto bg-black/70 backdrop-blur-sm sm:items-center">
       <div className="w-full max-w-md rounded-t-3xl bg-[#111111] p-6 shadow-2xl sm:rounded-3xl">
         <div className="mb-4 flex items-start justify-between">
           <div>
