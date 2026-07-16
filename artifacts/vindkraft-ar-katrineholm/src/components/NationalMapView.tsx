@@ -125,6 +125,30 @@ const DIAG_INIT: DiagState = {
   log: [],
 };
 
+// ─── API / data-source diagnostics ───────────────────────────────────────────
+
+interface ApiDiagState {
+  native: boolean;
+  buildId: string;
+  apiBase: string;
+  apiFullUrl: string;
+  apiHttpStatus: number | null;
+  apiProjectCount: number;
+  lastApiError: string | null;
+  apiSource: 'bundled' | 'fetching' | 'live' | 'error';
+}
+
+const API_DIAG_INIT: ApiDiagState = {
+  native: false,
+  buildId: '',
+  apiBase: '',
+  apiFullUrl: '',
+  apiHttpStatus: null,
+  apiProjectCount: 0,
+  lastApiError: null,
+  apiSource: 'bundled',
+};
+
 // ─── GeoJSON ──────────────────────────────────────────────────────────────────
 
 interface ProjectFeature {
@@ -184,38 +208,104 @@ export function NationalMapView({
   const filteredProjectsRef = useRef<ApiProjectArea[]>([]);
 
   const [projects, setProjects] = useState<ApiProjectArea[]>([]);
-  const [loadState, setLoadState] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [loadState, setLoadState] = useState<'loading' | 'bundled-loading-live' | 'live' | 'live-error'>('loading');
   const [dataSource, setDataSource] = useState<'bundled' | 'api'>('bundled');
   const [selectedProject, setSelectedProject] = useState<ApiProjectArea | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>('aktuella');
   const [diag, setDiag] = useState<DiagState>({ ...DIAG_INIT });
   const [diagExpanded, setDiagExpanded] = useState(true);
+  const [apiDiag, setApiDiag] = useState<ApiDiagState>({ ...API_DIAG_INIT });
 
   // ── Load projects ───────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
+    const native = isNative();
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';
+    const buildId = (import.meta.env.VITE_BUILD_ID as string | undefined) ?? 'dev';
+    const apiPath = '/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25';
+    // Native-appen körs från capacitor://localhost — relativa URL:er fungerar inte.
+    // apiUrl() sätter absolut bas om VITE_API_BASE_URL är definierad, annars relativ.
+    const url = apiUrl(apiPath);
+
+    // 1. Visa bundlad data omedelbart
     const bundled = BUNDLED_PROJECTS.filter(
       p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number'
     );
     setProjects(bundled);
-    setLoadState('ok');
+    setLoadState('bundled-loading-live');
     setDataSource('bundled');
+    setApiDiag({
+      native,
+      buildId,
+      apiBase,
+      apiFullUrl: url,
+      apiHttpStatus: null,
+      apiProjectCount: bundled.length,
+      lastApiError: null,
+      apiSource: 'fetching',
+    });
 
-    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';
-    if (isNative() && !apiBase) return;
+    if (native && !apiBase) {
+      // Relativa URL:er fungerar inte i Capacitor — logga tydligt men försök ändå,
+      // så att felet syns i diagnostikpanelen på iPhone.
+      const warn = 'VITE_API_BASE_URL saknas i native-bygget — relativ URL fungerar inte i Capacitor';
+      console.warn('[NationalMap]', warn, { url, native });
+      setApiDiag(prev => ({ ...prev, lastApiError: warn }));
+    }
 
-    const url = apiUrl('/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25');
+    // 2. Hämta live-data
+    console.info('[NationalMap] Hämtar projekt', { native, apiBase, url, buildId, bundledCount: bundled.length });
+
+    let httpStatus: number | null = null;
     fetch(url)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<ApiProjectArea[]>; })
+      .then(r => {
+        httpStatus = r.status;
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        setApiDiag(prev => ({ ...prev, apiHttpStatus: r.status }));
+        return r.json() as Promise<ApiProjectArea[]>;
+      })
       .then(data => {
         if (cancelled) return;
         const ok = (Array.isArray(data) ? data : []).filter(
           p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number'
         );
-        if (ok.length > 0) { setProjects(ok); setDataSource('api'); }
+        console.info('[NationalMap] Live-data hämtad', { url, count: ok.length, native });
+        setApiDiag(prev => ({
+          ...prev,
+          apiHttpStatus: prev.apiHttpStatus ?? 200,
+          apiProjectCount: ok.length,
+          apiSource: ok.length > 0 ? 'live' : 'error',
+          lastApiError: ok.length === 0
+            ? 'API svarade OK men returnerade 0 giltiga projekt'
+            : null,
+        }));
+        if (ok.length > 0) {
+          setProjects(ok);
+          setDataSource('api');
+          setLoadState('live');
+        } else {
+          setLoadState('live-error');
+        }
       })
-      .catch(() => { /* bundled data still shown */ });
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error('[NationalMap] Projekt-API misslyckades', {
+          url,
+          error,
+          native,
+          httpStatus,
+          apiBase,
+        });
+        setLoadState('live-error');
+        setApiDiag(prev => ({
+          ...prev,
+          apiHttpStatus: httpStatus,
+          apiSource: 'error',
+          lastApiError: msg,
+        }));
+      });
 
     return () => { cancelled = true; };
   }, []);
@@ -534,6 +624,7 @@ export function NationalMapView({
     try {
       (map.getSource(SOURCE_ID) as GeoJSONSource | undefined)
         ?.setData(buildGeoJSON(filteredProjects) as Parameters<GeoJSONSource['setData']>[0]);
+      console.info('[NationalMap] MapLibre source updated with', filteredProjects.length, 'live projects');
     } catch { /* map may be mid-init */ }
   }, [filteredProjects]);
 
@@ -561,7 +652,9 @@ export function NationalMapView({
           <h1 className="text-sm font-bold text-white">
             {loadState === 'loading'
               ? 'Laddar projekt…'
-              : `${filteredProjects.length} projekt${turbineTotal > 0 ? ` · ${turbineTotal} verk` : ''}`}
+              : loadState === 'bundled-loading-live'
+                ? `${filteredProjects.length} projekt · hämtar live…`
+                : `${filteredProjects.length} projekt${turbineTotal > 0 ? ` · ${turbineTotal} verk` : ''}`}
           </h1>
         </div>
         <button
@@ -594,9 +687,9 @@ export function NationalMapView({
         {/* Kartbehållare — MapLibre monteras här */}
         <div ref={containerRef} className="absolute inset-0" />
 
-        {/* TEST 11 debug badge — permanent tills kartan fungerar på iPhone */}
+        {/* Debug badge — build-ID visas för att bekräfta rätt version på iPhone */}
         <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full bg-[#FF8B01] px-4 py-1 text-[11px] font-bold text-[#090909] shadow-lg">
-          TEST 11 MAP DEBUG
+          TEST 11 · {apiDiag.buildId || 'dev'}
         </div>
 
         {/* Återcentrera-knapp */}
@@ -624,7 +717,46 @@ export function NationalMapView({
             </button>
           </div>
 
-          {/* Status grid */}
+          {/* API / data-source diagnostics */}
+          <div className="border-b border-white/10 px-2 py-1">
+            <div className="mb-0.5 text-[8px] font-bold uppercase text-[#FFB347]/80">API & Datakälla</div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px]">
+              <span className={apiDiag.native ? 'text-[#FFB347]' : 'text-white/60'}>
+                Native: {apiDiag.native ? 'ja (Capacitor)' : 'nej (webb)'}
+              </span>
+              <span className="text-white/60">
+                Build: {apiDiag.buildId || '…'}
+              </span>
+              <span className="col-span-2 break-all text-white/50">
+                API-bas: {apiDiag.apiBase || '(relativ)'}
+              </span>
+              <span className="col-span-2 break-all text-white/50">
+                URL: {apiDiag.apiFullUrl || '…'}
+              </span>
+              <span className={
+                apiDiag.apiHttpStatus === 200 ? 'text-green-400'
+                : apiDiag.apiHttpStatus != null ? 'text-red-400'
+                : 'text-yellow-400'
+              }>
+                HTTP: {apiDiag.apiHttpStatus ?? '…'}
+              </span>
+              <span className={
+                apiDiag.apiSource === 'live' ? 'text-green-400'
+                : apiDiag.apiSource === 'error' ? 'text-red-400'
+                : apiDiag.apiSource === 'fetching' ? 'text-yellow-400'
+                : 'text-white/50'
+              }>
+                Källa: {apiDiag.apiSource} · {apiDiag.apiProjectCount} proj
+              </span>
+            </div>
+            {apiDiag.lastApiError && (
+              <div className="mt-0.5 break-all text-[9px] text-red-400">
+                ⚠ {apiDiag.lastApiError}
+              </div>
+            )}
+          </div>
+
+          {/* MapLibre status grid */}
           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 px-2 py-1 text-[9px]">
             <span className={diag.webGLSupported ? 'text-green-400' : 'text-red-400'}>
               WebGL: {diag.webGLSupported ? '✓' : '✗ NOT SUPPORTED'}
@@ -655,7 +787,7 @@ export function NationalMapView({
             )}
           </div>
 
-          {/* Error */}
+          {/* Map error */}
           {diag.lastError && (
             <div className="border-t border-red-500/30 bg-red-900/40 px-2 py-1">
               <span className="font-bold text-red-400">FEL: </span>
@@ -729,10 +861,19 @@ export function NationalMapView({
           </div>
         ) : (
           <div className="rounded-2xl border border-white/10 bg-[#131313] px-4 py-3 text-center">
-            {loadState === 'loading' ? (
-              <p className="text-sm text-white/50">Laddar projekt…</p>
+            {loadState === 'loading' || loadState === 'bundled-loading-live' ? (
+              <p className="text-sm text-white/50">
+                {loadState === 'bundled-loading-live'
+                  ? 'Visar pilotdataset – hämtar live-data…'
+                  : 'Laddar projekt…'}
+              </p>
             ) : (
               <>
+                {loadState === 'live-error' && (
+                  <p className="mb-1 text-[11px] text-yellow-400/90">
+                    ⚠️ Live-data kunde inte hämtas — pilotdataset visas
+                  </p>
+                )}
                 <p className="text-sm text-white/50">Tryck på ett projekt på kartan</p>
                 <p className="mt-1 text-[10px] text-white/30">
                   {filteredProjects.length} projekt · {turbineTotal} verk ·{' '}

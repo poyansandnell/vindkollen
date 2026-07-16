@@ -8,7 +8,7 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "native:build": "vite build --config vite.native.config.ts",
+    "native:build": "vite build --mode native --config vite.native.config.ts",
     "native:plist": "bash scripts/ios-setup.sh",
     "native:cap-add-ios": "cap add ios && pnpm native:plist",
     "native:sync": "pnpm native:build && cap sync && ([ ! -f ios/App/App/Info.plist ] || pnpm native:plist)",

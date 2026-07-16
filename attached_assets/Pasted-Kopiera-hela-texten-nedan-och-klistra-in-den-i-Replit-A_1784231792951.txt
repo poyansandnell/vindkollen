@@ -1,0 +1,363 @@
+Kopiera hela texten nedan och klistra in den i Replit Agent:
+
+⸻
+
+Jag behöver att du åtgärdar ett konkret fel i iPhone-versionen av Vindkollen. Ändra inte webbversionens fungerande funktionalitet och skriv inte om kartan från grunden.
+
+Problemet
+
+Webbversionen visar Sverigekartan och hämtar live-data korrekt.
+
+I iPhone-appen via Capacitor visar Sverigekartan däremot bara pilotdatasetet eller saknar den fullständiga projektinformationen.
+
+Jag har gått igenom koden och identifierat två konkreta orsaker.
+
+Orsak 1: Native-appen bygger från dist-native
+
+I capacitor.config.ts står:
+
+webDir: "dist-native"
+
+Det innebär att iOS-versionen måste byggas med projektets native-build:
+
+pnpm native:build
+
+En vanlig:
+
+pnpm run build
+
+bygger webbversionen och är inte rätt kommando för iOS.
+
+Säkerställ därför att hela native-flödet alltid använder:
+
+pnpm native:build
+npx cap sync ios
+
+eller projektets befintliga kommando:
+
+pnpm native:ios
+
+Kontrollera också att dist-native verkligen töms eller skrivs över vid varje native-build, så att inga gamla filer synkas till Xcode.
+
+Orsak 2: Native-versionen avbryter hämtningen av live-data
+
+I NationalMapView.tsx finns denna kod:
+
+const apiBase =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';
+if (isNative() && !apiBase) return;
+
+Det innebär att appen på iPhone helt avbryter API-anropet när VITE_API_BASE_URL saknas.
+
+Appen stannar då på:
+
+BUNDLED_PROJECTS
+
+och visar därför bara pilotdatasetet i stället för hela Sverigedatasetet.
+
+Webbversionen fungerar eftersom den kan använda en relativ adress som:
+
+/api/wind/project-areas
+
+Men i Capacitor körs appen från exempelvis:
+
+capacitor://localhost
+
+Därför kan native-versionen inte använda en relativ /api-adress. Den måste använda en absolut HTTPS-adress till produktionsservern.
+
+Uppgift
+
+Åtgärda detta så att iPhone-versionen alltid försöker hämta samma live-data som webbversionen.
+
+1. Kontrollera den riktiga produktionsadressen
+
+Ta reda på vilken publik HTTPS-domän som i dag svarar på endpointen:
+
+/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25
+
+Använd inte en påhittad domän.
+
+Verifiera endpointen med ett riktigt anrop innan du lägger in adressen.
+
+2. Konfigurera API-adressen för native-builden
+
+Lägg in korrekt VITE_API_BASE_URL för native-builden.
+
+Använd helst en separat miljöfil, exempelvis:
+
+.env.native
+
+med:
+
+VITE_API_BASE_URL=https://DEN-KORREKTA-PRODUKTIONSDOMÄNEN
+VITE_PUBLIC_APP_URL=https://DEN-KORREKTA-PRODUKTIONSDOMÄNEN
+
+Ändra native-scriptet så att rätt mode laddas:
+
+"native:build": "vite build --mode native --config vite.native.config.ts"
+
+Kontrollera att vite.native.config.ts verkligen använder Vites miljövariabler korrekt.
+
+Använd loadEnv om det behövs.
+
+Exempel på princip:
+
+import { defineConfig, loadEnv } from 'vite';
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  return {
+    define: {
+      'import.meta.env.VITE_API_BASE_URL': JSON.stringify(
+        env.VITE_API_BASE_URL
+      ),
+      'import.meta.env.VITE_PUBLIC_APP_URL': JSON.stringify(
+        env.VITE_PUBLIC_APP_URL
+      ),
+    },
+  };
+});
+
+Anpassa detta efter den befintliga konfigurationen. Dubblera inte variabler om Vite redan exponerar dem automatiskt.
+
+3. Behåll fallback, men försök alltid hämta live-data
+
+Behåll BUNDLED_PROJECTS som snabb fallback om internet eller API inte fungerar.
+
+Native-versionen ska däremot alltid försöka hämta live-data från den absoluta HTTPS-adressen.
+
+Ta inte bort fallbacken.
+
+Flödet ska vara:
+
+1. Visa bundlade projekt omedelbart.
+2. Hämta live-data.
+3. Ersätt fallback-datan när live-anropet lyckas.
+4. Visa tydligt fel om live-anropet misslyckas.
+
+4. Ta bort tyst felhantering
+
+I dag avslutas API-felet tyst:
+
+.catch(() => {
+  /* bundled data still shown */
+});
+
+Byt till riktig diagnostik.
+
+Logga minst:
+
+Native eller webb
+Slutlig API-URL
+HTTP-status
+Felmeddelande
+Antal bundlade projekt
+Antal hämtade live-projekt
+Aktiv datakälla: bundled eller api
+
+Exempel på princip:
+
+.catch(error => {
+  console.error('Projekt-API misslyckades', {
+    url,
+    error,
+    native: isNative(),
+  });
+});
+
+Lägg även till informationen i den befintliga diagnostikpanelen på Sverigekartan, så att den kan läsas direkt på fysisk iPhone.
+
+Diagnostiken ska visa:
+
+Build-ID
+Native: ja/nej
+API-bas
+Fullständig API-URL
+API-status
+Datakälla: bundled/api
+Antal projekt
+Senaste API-fel
+
+Visa inte hemliga nycklar eller känsliga miljövariabler.
+
+5. Lägg in ett tydligt build-ID
+
+Lägg in ett build-ID i native-builden, exempelvis:
+
+commit-hash + byggtid
+
+Build-ID:t ska visas i diagnostikpanelen.
+
+Syftet är att direkt kunna se på iPhone att den senaste GitHub-versionen verkligen är installerad.
+
+Använd helst den aktuella Git-commitens korta hash. Om den inte finns tillgänglig kan en byggtid användas som fallback.
+
+6. Kontrollera CORS för Capacitor
+
+Eftersom native-appen anropar en extern HTTPS-server från WKWebView måste backend acceptera Capacitor-origin.
+
+Kontrollera serverns CORS-inställningar för minst:
+
+capacitor://localhost
+
+och vid behov:
+
+ionic://localhost
+http://localhost
+https://localhost
+
+Tillåt bara de origins som faktiskt behövs.
+
+Använd inte wildcard tillsammans med credentials.
+
+Verifiera att ett anrop från iPhone/WKWebView inte blockeras av CORS.
+
+7. Kontrollera att endpointen inte kräver webbserverns session
+
+Projektlistan för Sverigekartan måste kunna hämtas av native-appen.
+
+Kontrollera därför om endpointen kräver:
+
+* Replit-session
+* cookie
+* webb-inloggning
+* CSRF-token
+* intern proxy
+* server-side forwarding
+
+Om endpointen kräver något av detta ska du skapa eller använda en säker publik läsendpoint för projektlistan.
+
+Gör inte hela administrations-API:t publikt. Endast nödvändig läsdata för kartan ska exponeras.
+
+8. Ändra inte MapLibre i onödan
+
+NationalMapView.tsx har redan:
+
+* MapLibre
+* ESRI-karttiles
+* OSM-fallback
+* WebGL-diagnostik
+* ResizeObserver
+* flera map.resize()
+* lokalt GeoJSON-lager
+* bundlat fallbackdataset
+
+Skriv därför inte om kartlösningen innan API-felet är löst.
+
+Projektpunkterna kommer från ett lokalt GeoJSON-lager och ska kunna visas även om satellitbilder eller karttiles tillfälligt misslyckas.
+
+Skilj i diagnostiken mellan:
+
+* karttile-fel
+* WebGL-fel
+* projekt-API-fel
+* fallbackdataset
+
+9. Kontrollera tidsproblemet i kartans datakälla
+
+Kartlagret skapas först med bundlad data i addProjectLayers().
+
+När live-data sedan hämtas ska denna effekt uppdatera source:
+
+useEffect(() => {
+  const map = mapRef.current;
+  if (!map || !mapReadyRef.current) return;
+  const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
+  source?.setData(buildGeoJSON(filteredProjects));
+}, [filteredProjects]);
+
+Verifiera att live-datan verkligen skrivs in i MapLibre-källan efter lyckat API-anrop.
+
+Lägg till logg som bekräftar:
+
+MapLibre source updated with X live projects
+
+Om live-data hämtas innan mapReadyRef.current blir true, säkerställ att den senaste datan ändå används när source skapas.
+
+10. Förbättra laddningsstatusen
+
+I dag sätts:
+
+setLoadState('ok');
+
+direkt efter att fallbackdatan lagts in.
+
+Det gör att användaren inte kan se om live-anropet fortfarande pågår eller har misslyckats.
+
+Ändra statusmodellen så att den skiljer mellan exempelvis:
+
+'bundled-loading-live'
+'live'
+'live-error'
+
+eller motsvarande tydliga tillstånd.
+
+Användargränssnittet ska kunna visa:
+
+Visar pilotdataset – hämtar live-data…
+
+eller:
+
+Live-data kunde inte hämtas. Pilotdataset visas.
+
+Den tekniska diagnostiken får vara detaljerad, men den vanliga användaren ska få ett enkelt och begripligt meddelande.
+
+Krav
+
+Lösningen måste:
+
+* fungera i vanlig webbläsare
+* fungera i Capacitor på fysisk iPhone
+* fungera utan Replits utvecklingsserver
+* använda rätt produktions-API
+* visa bundlad fallback om nätverket är nere
+* inte påverka AR-funktionen
+* inte påverka Katrineholmsvyn
+* inte försämra webbversionen
+* inte skriva om hela kartan
+* inte lägga in hemligheter i klientkoden
+* inte använda en påhittad API-domän
+
+Verifiering
+
+Kör från rätt appmapp:
+
+pnpm install
+pnpm typecheck
+pnpm native:build
+npx cap sync ios
+
+Om pnpm native:ios fungerar kan även det användas efter verifieringen.
+
+Kontrollera därefter:
+
+1. Att dist-native har byggts om.
+2. Att den senaste commitens build-ID visas.
+3. Att diagnostiken på iPhone visar Native: ja.
+4. Att diagnostiken visar den korrekta absoluta API-adressen.
+5. Att API-anropet ger HTTP 200.
+6. Att datakällan ändras från bundled till api.
+7. Att antalet projekt är större än pilotdatasetet.
+8. Att MapLibre-source uppdateras med live-datan.
+9. Att Sverigekartan fortfarande går att zooma och panorera.
+10. Att projektkortet går att öppna.
+11. Att webbversionen fortfarande fungerar efter ändringen.
+12. Att typecheck och native-build är gröna.
+
+Redovisa när du är klar
+
+Skriv exakt:
+
+1. Vad grundorsaken var.
+2. Vilken produktions-API-adress som används.
+3. Hur du verifierade att endpointen svarar.
+4. Vilka filer du ändrade.
+5. Vad som ändrades i varje fil.
+6. Resultatet från typecheck.
+7. Resultatet från native-build.
+8. Hur många projekt native-appen hämtar.
+9. Vilket build-ID som skapades.
+10. Eventuella kvarvarande begränsningar.
+
+Säg inte bara att problemet är löst. Visa de relevanta resultaten och gör en Git-commit med ändringarna.
+
+⸻
