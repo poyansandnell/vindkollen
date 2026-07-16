@@ -147,7 +147,13 @@ export default function PlaceTurbines() {
   // engångs ur sessionStorage. Om välkomstläge: tom karta som startläge.
   const [showWelcome, setShowWelcome] = useState<boolean>(() => {
     const fresh = consumeFreshPlaceraFlag();
-    return fresh && !editHandoff;
+    const hasHandoff = editHandoff !== null;
+    // På native: visa alltid Sverigekartan när det inte finns en sparad
+    // projektreferens i localStorage. Förhindrar tyst fallback till
+    // Katrineholms standardprojekt när sessionStorage-flaggan inte läses
+    // (t.ex. om komponenten redan är monterad vid navigering).
+    if (isNative() && !hasHandoff) return true;
+    return fresh && !hasHandoff;
   });
   const initialTurbines = editHandoff?.turbines ?? (showWelcome ? [] : DEFAULT_TURBINES);
   const [turbines, setTurbines] = useState<PlacedTurbine[]>(initialTurbines);

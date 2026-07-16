@@ -1,0 +1,132 @@
+Version 10 is installed on the physical iPhone, but the same core problems remain.
+
+Please stop making further UI changes until the actual runtime failures are diagnosed with logs.
+
+1. Sweden map is still completely black
+
+The header loads and the app reports:
+- 7 projects
+- 982 turbines
+- pilot dataset
+
+But the map itself is black.
+
+Add visible runtime diagnostics directly on the map screen:
+
+- MapLibre instance created: true/false
+- container width and height
+- style URL
+- style.load event fired: true/false
+- source added: true/false
+- layer added: true/false
+- last map error
+- last network/resource error
+- WebGL supported: true/false
+- canvas width/height
+
+Log every MapLibre event:
+- load
+- style.load
+- sourcedata
+- data
+- error
+- webglcontextlost
+- webglcontextrestored
+
+Do not hide errors in the console. Display the exact error text in a red debug panel on the iPhone.
+
+Most importantly:
+- verify the style URL works inside capacitor://localhost
+- verify sprite, glyph and tile URLs are absolute HTTPS URLs
+- test a minimal known-working MapLibre style first
+- if the production style fails, automatically switch to a simple fallback raster/OpenStreetMap style
+- call map.resize() after mount and after the screen becomes visible
+
+The task is only complete when the actual map is visible on a physical iPhone.
+
+2. Generic editor still shows Katrineholm
+
+The editor/map screen still displays:
+“Katrineholm · 29 verk”
+
+This proves selectedProjectId is not being used correctly.
+
+Add a visible debug section showing:
+- route
+- selectedProjectId
+- selected project name
+- selected municipality
+- turbine count loaded
+- boundary point count
+- source of data
+
+Remove every fallback that silently defaults to Katrineholm.
+
+If no selectedProjectId is available:
+- return to the Sweden map
+- show a clear error
+- do not open Katrineholm automatically
+
+3. Editor is still not interactive
+
+The project editor must not just show the old Katrineholm map.
+
+Verify:
+- pan works
+- pinch zoom works
+- tap places a turbine
+- selected turbine can be moved
+- selected turbine can be removed
+- save uses the currently selected project
+
+If a project lacks detailed editing data, show:
+“Detta projekt har ännu inget redigeringsunderlag.”
+
+Do not substitute Katrineholm data.
+
+4. AR controls still overlap
+
+The top controls still overlap labels and turbine markers.
+
+Use a strict mobile layout:
+
+Row 1:
+- project name and turbine count
+
+Row 2:
+- GPS
+- Compass
+- dBA
+- Infrasound
+
+Row 3:
+- nearest turbine information
+
+Row 4:
+- Sound level
+- Sound on/off
+- More status
+- Settings
+
+No absolute positioning for these controls.
+No overlapping elements.
+Hide raw diagnostics by default.
+
+5. Temporary build proof
+
+Change the visible version marker to exactly:
+
+Native TEST 11 – Map runtime diagnostics
+
+Also add a large temporary badge on the Sweden map:
+
+“TEST 11 MAP DEBUG”
+
+This confirms the physical phone is running the exact new build.
+
+Do not mark the task complete only because typecheck or native build passes.
+The acceptance criteria are:
+- real map visible on physical iPhone
+- selected project opens without defaulting to Katrineholm
+- editor either works or shows an explicit missing-data message
+- AR controls do not overlap

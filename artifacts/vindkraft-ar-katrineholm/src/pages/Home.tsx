@@ -1618,7 +1618,7 @@ export default function Home() {
                 `justify-content: flex-end` tillsammans med `overflow-x-auto`
                 är en känd Chrome-bugg som gör innehåll som "skjuts ut" åt
                 vänster om den synliga rutan helt onåbart via scroll. */}
-            {/* TEST 8 rad 1: titel + turbinantal på egen rad, separerat från statusbadgarna */}
+            {/* TEST 11 rad 1: Projektnamn + turbinantal */}
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKOLLEN AR</p>
@@ -1626,38 +1626,16 @@ export default function Home() {
                   {usingCustomPlacement ? "Vindkollen" : "Katrineholm"} · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}
                 </p>
               </div>
+              {nightMode && (
+                <span className="flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] text-red-200">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                  Nattläge
+                </span>
+              )}
             </div>
-            {/* TEST 8 rad 2: statusbadgar (GPS/Kompass/dBA/Infraljud) på egen rad */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {/* Juli 2026-fix (produktfeedback, ny omgång): "man borde ha röd
-                  indikation på kompassen så man ständigt ser status" —
-                  `CompassStabilityBadge` fanns redan och är redan alltid
-                  synlig/live (grön/gul/röd), men låg som TREDJE badge i denna
-                  horisontellt scrollbara rad, så på smala skärmar hamnade den
-                  ofta utanför synligt område (kräver en scroll-gest ingen vet
-                  om) — användaren såg bara GPS/AR-stabilitet och trodde
-                  kompassstatus bara fanns som den tillfälliga gula
-                  "Kompass svag"-bannern. Flyttad till PLATS 2 (direkt efter
-                  GPS) så den nästan alltid ryms inom den synliga bredden.
-
-                  Juli 2026-fix (ny omgång, produktfeedback: "en liten grön
-                  ruta syns inte helt uppe till höger"): badge-raden var
-                  fortfarande `overflow-x-auto`/`whitespace-nowrap` — dvs.
-                  badges som inte fick plats krävde en osynlig, ovetad
-                  scroll-gest för att nås, och visades i praktiken bara som
-                  en avklippt, förvirrande färgsliver (`ArStabilityBadge`,
-                  fjärde badgen) i högerkanten. Den ursprungliga oron kring
-                  `flex-wrap` (se den gamla kommentaren ovan, kvar för
-                  historik) gällde en tidigare version där topp-baren låg i
-                  en höjdbegränsad, klippt behållare — men `topBarRef`s
-                  `<div>` (se `Home.tsx`s `topBarHeight`-effekt) mäter och
-                  anpassar sig redan efter sin FAKTISKA innehållshöjd, och
-                  sitter som ett `position: absolute`-lager ovanpå resten av
-                  vyn (inte i ett höjdbegränsat flöde), så ett extra
-                  radbrott där badges inte får plats kostar bara några extra
-                  pixlar högst upp — helt synligt, ingen gissad scroll
-                  krävs. Bytt till `flex-wrap` (ingen `overflow-x-auto`/
-                  `whitespace-nowrap`/dold scrollbar längre). */}
+            {/* TEST 11 rad 2: GPS · Kompass · dBA · Infraljud (+ mer status om aktiv)
+                Använder flex utan radbrytning. Alla 4 badges ska alltid synas. */}
+            <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
               <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
               <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
@@ -1666,50 +1644,56 @@ export default function Home() {
                 expanded={showNoiseImpact}
                 onToggle={() => setShowNoiseImpact((v) => !v)}
               />
+              {showStatusDetails && (
+                <>
+                  <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
+                  <LineOfSightStatus status={lineOfSightStatus} />
+                </>
+              )}
             </div>
-            {showStatusDetails && (
-              <div className="flex flex-wrap items-center gap-1.5 pl-0.5">
-                <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
-                <LineOfSightStatus status={lineOfSightStatus} />
+            {/* TEST 11 rad 3: Närmaste verk-information */}
+            {nearestTurbineInfo && (
+              <div className="text-[11px] leading-none text-white/60">
+                🌬️ Närmaste verk ·{" "}
+                {nearestTurbineInfo.distanceM >= 1000
+                  ? `${(nearestTurbineInfo.distanceM / 1000).toFixed(1)} km`
+                  : `${Math.round(nearestTurbineInfo.distanceM)} m`}
+                {" · "}
+                {["N","NNÖ","NÖ","ÖNÖ","Ö","ÖSÖ","SÖ","SSÖ","S","SSV","SV","VSV","V","VNV","NV","NNV"][
+                  Math.round(((nearestTurbineInfo.bearingDeg % 360) + 360) % 360 / 22.5) % 16
+                ]}
               </div>
             )}
-            {/* TEST 8 rad 3: [Nattläge] [Ljudnivå] [Ljud ute/inne] [Mer status] [⚙️] — all i flex-wrap */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {nightMode && (
-                <span className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-2.5 py-1 text-[11px] text-red-200">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-                  Nattläge
-                </span>
-              )}
+            {/* TEST 11 rad 4: Ljud · Ljud ute/inne · Mer status · ⚙️ */}
+            <div className="flex items-center gap-1.5">
               {ready && (
                 <button
                   onClick={() => setShowSoundLevel((v) => !v)}
                   aria-pressed={showSoundLevel}
-                  className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
+                  className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
                 >
-                  🔊 Ljudnivå
+                  🔊 Ljud
                 </button>
               )}
               <button
                 onClick={() => setSoundEnvironment((v) => (v === "ute" ? "inne" : "ute"))}
                 aria-pressed={soundEnvironment === "inne"}
-                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
+                className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
               >
-                {soundEnvironment === "ute" ? "🔊 Ljud ute" : "🔈 Ljud inne"}
+                {soundEnvironment === "ute" ? "🔊 Ute" : "🔈 Inne"}
               </button>
               <button
                 onClick={() => setShowStatusDetails((v) => !v)}
                 aria-pressed={showStatusDetails}
                 aria-label={showStatusDetails ? "Dölj fler statusdetaljer" : "Visa fler statusdetaljer"}
-                className="rounded-full bg-white/10 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-white/20"
+                className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-white/20"
               >
-                {showStatusDetails ? "▴ Mindre" : "▾ Mer status"}
+                {showStatusDetails ? "▴ Status" : "▾ Status"}
               </button>
               <button
                 onClick={() => setShowControls(true)}
-                aria-pressed={showControls}
                 aria-label="Visningsinställningar"
-                className="rounded-full bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+                className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-white/20"
               >
                 ⚙️
               </button>

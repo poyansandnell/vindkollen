@@ -56,6 +56,7 @@ const MAP_STYLE: StyleSpecification = {
   sources: {
     satellite: {
       type: 'raster',
+      // Absolute HTTPS — works from both capacitor://localhost and http contexts.
       tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
       tileSize: 256,
       attribution: '© Esri',
@@ -66,6 +67,62 @@ const MAP_STYLE: StyleSpecification = {
     { id: 'bg', type: 'background', paint: { 'background-color': '#0a0a0a' } },
     { id: 'satellite', type: 'raster', source: 'satellite' },
   ],
+};
+
+// ─── Fallback style (OpenStreetMap raster) ────────────────────────────────────
+// Aktiveras automatiskt om ESRI-stilen ger ett MapLibre error-event.
+// Inga glyph-beroende textlager — fungerar utan tillgång till font-CDN.
+
+const FALLBACK_STYLE: StyleSpecification = {
+  version: 8,
+  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+      maxzoom: 19,
+    },
+  },
+  layers: [
+    { id: 'osm-bg', type: 'background', paint: { 'background-color': '#1a1a2e' } },
+    { id: 'osm-tiles', type: 'raster', source: 'osm' },
+  ],
+};
+
+// ─── Runtime diagnostics ─────────────────────────────────────────────────────
+
+interface DiagState {
+  webGLSupported: boolean;
+  mapCreated: boolean;
+  containerW: number;
+  containerH: number;
+  styleLoaded: boolean;
+  sourceAdded: boolean;
+  layerAdded: boolean;
+  canvasW: number;
+  canvasH: number;
+  lastError: string | null;
+  webGLContextLost: boolean;
+  usingFallback: boolean;
+  log: string[]; // newest first, max 25
+}
+
+const DIAG_INIT: DiagState = {
+  webGLSupported: false,
+  mapCreated: false,
+  containerW: 0,
+  containerH: 0,
+  styleLoaded: false,
+  sourceAdded: false,
+  layerAdded: false,
+  canvasW: 0,
+  canvasH: 0,
+  lastError: null,
+  webGLContextLost: false,
+  usingFallback: false,
+  log: [],
 };
 
 // ─── GeoJSON ──────────────────────────────────────────────────────────────────
@@ -131,6 +188,8 @@ export function NationalMapView({
   const [dataSource, setDataSource] = useState<'bundled' | 'api'>('bundled');
   const [selectedProject, setSelectedProject] = useState<ApiProjectArea | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>('aktuella');
+  const [diag, setDiag] = useState<DiagState>({ ...DIAG_INIT });
+  const [diagExpanded, setDiagExpanded] = useState(true);
 
   // ── Load projects ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -182,38 +241,68 @@ export function NationalMapView({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: MAP_STYLE,
-      center: SWEDEN_CENTER,
-      zoom: SWEDEN_ZOOM,
-      minZoom: 3,
-      maxZoom: 14,
-      attributionControl: false,
-      pitchWithRotate: false,
-      dragRotate: false,
+    const ts = () => new Date().toISOString().slice(11, 23);
+    const addLog = (msg: string, patch?: Partial<Omit<DiagState, 'log'>>) => {
+      setDiag(prev => ({
+        ...prev,
+        ...(patch ?? {}),
+        log: [`${ts()} ${msg}`, ...prev.log].slice(0, 25),
+      }));
+    };
+
+    // 1. WebGL support check — maplibregl.supported() removed in v5; use canvas probe
+    const webGLSupported = (() => {
+      try {
+        const c = document.createElement('canvas');
+        return !!(c.getContext('webgl2') ?? c.getContext('webgl') ?? c.getContext('experimental-webgl'));
+      } catch { return false; }
+    })();
+    if (!webGLSupported) {
+      addLog('WebGL NOT supported on this device — cannot create map', {
+        webGLSupported: false,
+        lastError: 'WebGL not supported',
+      });
+      return;
+    }
+
+    const container = containerRef.current;
+    const rect = container.getBoundingClientRect();
+    addLog(`Container: ${rect.width.toFixed(0)}×${rect.height.toFixed(0)}`, {
+      webGLSupported: true,
+      containerW: rect.width,
+      containerH: rect.height,
     });
+
+    // 2. Create map with primary (ESRI satellite) style
+    let map: maplibregl.Map;
+    try {
+      map = new maplibregl.Map({
+        container,
+        style: MAP_STYLE,
+        center: SWEDEN_CENTER,
+        zoom: SWEDEN_ZOOM,
+        minZoom: 3,
+        maxZoom: 14,
+        attributionControl: false,
+        pitchWithRotate: false,
+        dragRotate: false,
+      });
+    } catch (err) {
+      addLog(`Map() threw: ${String(err)}`, { lastError: String(err), mapCreated: false });
+      return;
+    }
     mapRef.current = map;
+    addLog('Map() created · style=ESRI satellite', { mapCreated: true });
 
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
 
-    // ResizeObserver so the map fills its flex container correctly.
-    // On iOS WKWebView the initial layout often isn't committed when MapLibre
-    // first queries the canvas size, resulting in a 0×0 (black) canvas.
-    // Calling resize() once immediately and again after a short delay ensures
-    // the canvas picks up the real container dimensions regardless of timing.
-    const ro = new ResizeObserver(() => { map.resize(); });
-    if (containerRef.current) ro.observe(containerRef.current);
-    // First forced resize — handles the common case where the flex container
-    // already has its correct size by the time we register the observer but
-    // MapLibre hasn't queried it yet.
-    map.resize();
-    // Second forced resize after a tick — catches slower WKWebView layouts
-    // where the container height is still 0 at synchronous call time.
-    const resizeTimerId = setTimeout(() => { map.resize(); }, 150);
+    // ── Helper: add project GeoJSON source + layers + click handlers ──────────
+    // Called once after initial load AND again if we switch to the fallback style.
+    let layersAdded = false;
+    function addProjectLayers() {
+      if (layersAdded) return;
+      layersAdded = true;
 
-    map.on('load', () => {
-      // GeoJSON source with MapLibre clustering (handles thousands of markers natively)
       map.addSource(SOURCE_ID, {
         type: 'geojson',
         data: buildGeoJSON(filteredProjectsRef.current),
@@ -221,8 +310,8 @@ export function NationalMapView({
         clusterMaxZoom: 8,
         clusterRadius: 55,
       });
+      addLog(`Source "${SOURCE_ID}" added (${filteredProjectsRef.current.length} proj)`, { sourceAdded: true });
 
-      // Cluster circles — orange/amber, size reflects count
       map.addLayer({
         id: 'clusters',
         type: 'circle',
@@ -236,8 +325,6 @@ export function NationalMapView({
           'circle-stroke-color': '#090909',
         },
       });
-
-      // Cluster count text
       map.addLayer({
         id: 'cluster-count',
         type: 'symbol',
@@ -250,8 +337,6 @@ export function NationalMapView({
         },
         paint: { 'text-color': '#090909' },
       });
-
-      // Individual project markers — color by status
       map.addLayer({
         id: 'unclustered-point',
         type: 'circle',
@@ -271,8 +356,6 @@ export function NationalMapView({
           'circle-opacity': 0.95,
         },
       });
-
-      // Project name labels — only at medium+ zoom
       map.addLayer({
         id: 'project-label',
         type: 'symbol',
@@ -299,12 +382,10 @@ export function NationalMapView({
           'text-halo-width': 1.5,
         },
       });
+      addLog('Layers added (clusters · points · labels)', { layerAdded: true });
 
       mapReadyRef.current = true;
 
-      // ── Click handlers ──────────────────────────────────────────────────────
-
-      // Cluster → expand zoom
       map.on('click', 'clusters', e => {
         const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
         if (!features.length) return;
@@ -315,8 +396,6 @@ export function NationalMapView({
           .then(zoom => { map.easeTo({ center: geom.coordinates, zoom: zoom + 0.5 }); })
           .catch(() => {});
       });
-
-      // Individual point → select project
       map.on('click', 'unclustered-point', e => {
         const feature = e.features?.[0];
         if (!feature?.properties) return;
@@ -324,22 +403,101 @@ export function NationalMapView({
         const p = projectsRef.current.find(x => String(x.id) === projectId) ?? null;
         setSelectedProject(prev => (prev && String(prev.id) === projectId ? null : p));
       });
-
-      // Empty area → deselect
       map.on('click', e => {
         const hits = map.queryRenderedFeatures(e.point, { layers: ['clusters', 'unclustered-point'] });
         if (!hits.length) setSelectedProject(null);
       });
-
-      // Cursor pointer on hover
       map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
       map.on('mouseenter', 'unclustered-point', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', 'unclustered-point', () => { map.getCanvas().style.cursor = ''; });
+    }
+
+    // 3. Event listeners — log everything to the diagnostic panel
+    let styleLoadCount = 0;
+    map.on('style.load', () => {
+      styleLoadCount++;
+      const canvas = map.getCanvas();
+      addLog(
+        `style.load #${styleLoadCount} · canvas ${canvas.width}×${canvas.height}`,
+        { styleLoaded: true, canvasW: canvas.width, canvasH: canvas.height },
+      );
+      // style.load #2+ = we just switched to the fallback style — re-add layers
+      if (styleLoadCount > 1) {
+        layersAdded = false;
+        mapReadyRef.current = false;
+        addProjectLayers();
+        map.resize();
+      }
     });
 
+    map.on('load', () => {
+      const canvas = map.getCanvas();
+      addLog(`load event · canvas ${canvas.width}×${canvas.height}`, {
+        canvasW: canvas.width,
+        canvasH: canvas.height,
+      });
+      addProjectLayers();
+      map.resize();
+    });
+
+    map.on('sourcedata', e => {
+      const src = (e as unknown as { sourceId?: string; isSourceLoaded?: boolean });
+      addLog(`sourcedata: ${src.sourceId ?? '?'} loaded=${String(src.isSourceLoaded ?? '?')}`);
+    });
+
+    map.on('data', e => {
+      const d = (e as unknown as { dataType?: string; sourceId?: string });
+      if (d.dataType && d.dataType !== 'other') {
+        addLog(`data: type=${d.dataType}${d.sourceId ? ` src=${d.sourceId}` : ''}`);
+      }
+    });
+
+    // Automatic fallback on first error — but only switch once
+    let fallbackSwitched = false;
+    map.on('error', e => {
+      const msg = (e as unknown as { error?: { message?: string } }).error?.message
+        ?? String((e as unknown as { error?: unknown }).error ?? 'unknown error');
+      addLog(`ERROR: ${msg}`, { lastError: msg });
+      if (!fallbackSwitched) {
+        fallbackSwitched = true;
+        addLog('→ switching to OSM fallback style', { usingFallback: true });
+        try { map.setStyle(FALLBACK_STYLE); } catch (err2) {
+          addLog(`setStyle(fallback) threw: ${String(err2)}`);
+        }
+      }
+    });
+
+    map.on('webglcontextlost', () => {
+      addLog('webglcontextlost!', { webGLContextLost: true });
+    });
+    map.on('webglcontextrestored', () => {
+      addLog('webglcontextrestored', { webGLContextLost: false });
+    });
+
+    // 4. Resize cascade — iOS WKWebView often has container size=0 at Map() time
+    const updateCanvasSize = () => {
+      const r = container.getBoundingClientRect();
+      const c = map.getCanvas();
+      setDiag(prev => ({
+        ...prev,
+        containerW: r.width,
+        containerH: r.height,
+        canvasW: c.width,
+        canvasH: c.height,
+      }));
+    };
+
+    const ro = new ResizeObserver(() => { map.resize(); updateCanvasSize(); });
+    ro.observe(container);
+
+    map.resize();          // immediate — catches already-laid-out containers
+    const t1 = setTimeout(() => { map.resize(); updateCanvasSize(); addLog('resize @150ms'); }, 150);
+    const t2 = setTimeout(() => { map.resize(); updateCanvasSize(); addLog('resize @500ms'); }, 500);
+    const t3 = setTimeout(() => { map.resize(); updateCanvasSize(); addLog('resize @1500ms'); }, 1500);
+
     return () => {
-      clearTimeout(resizeTimerId);
+      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
       ro.disconnect();
       mapReadyRef.current = false;
       map.remove();
@@ -415,22 +573,87 @@ export function NationalMapView({
         {/* Kartbehållare — MapLibre monteras här */}
         <div ref={containerRef} className="absolute inset-0" />
 
+        {/* TEST 11 debug badge — permanent tills kartan fungerar på iPhone */}
+        <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full bg-[#FF8B01] px-4 py-1 text-[11px] font-bold text-[#090909] shadow-lg">
+          TEST 11 MAP DEBUG
+        </div>
+
         {/* Återcentrera-knapp */}
         <button
           onClick={() => mapRef.current?.flyTo({ center: SWEDEN_CENTER, zoom: SWEDEN_ZOOM })}
-          className="absolute right-3 top-3 z-10 h-9 w-9 rounded-full bg-black/60 text-lg text-white shadow-lg backdrop-blur hover:bg-black/80"
+          className="absolute right-3 top-10 z-10 h-9 w-9 rounded-full bg-black/60 text-lg text-white shadow-lg backdrop-blur hover:bg-black/80"
           aria-label="Centrera Sverige"
           title="Centrera Sverige"
         >
           ⊙
         </button>
 
-        {/* Diagnostik-overlay */}
-        {loadState === 'ok' && dataSource === 'bundled' && (
-          <div className="absolute bottom-8 left-2 right-2 z-10 mx-auto max-w-[90%] rounded-lg bg-black/70 px-3 py-1.5 text-center text-[10px] text-white/50 backdrop-blur">
-            Pilotdataset · {projects.length} projekt · full nationell data kommer i nästa version
+        {/* MapLibre runtime diagnostics — visas alltid på skärmen (för felsökning på iOS) */}
+        <div className="absolute bottom-0 left-0 right-0 z-20 max-h-[55%] overflow-y-auto bg-black/85 text-[10px] font-mono text-white/90 backdrop-blur-sm">
+          {/* Header row */}
+          <div className="flex items-center justify-between border-b border-white/20 px-2 py-1">
+            <span className="font-bold text-[#FFB347]">MapLibre diagnostik</span>
+            <button
+              onClick={() => setDiagExpanded(v => !v)}
+              className="rounded px-1.5 py-0.5 text-white/50 hover:bg-white/10"
+            >
+              {diagExpanded ? '▴ Dölj' : '▾ Visa'}
+            </button>
           </div>
-        )}
+
+          {/* Status grid */}
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 px-2 py-1 text-[9px]">
+            <span className={diag.webGLSupported ? 'text-green-400' : 'text-red-400'}>
+              WebGL: {diag.webGLSupported ? '✓' : '✗ NOT SUPPORTED'}
+            </span>
+            <span className={diag.mapCreated ? 'text-green-400' : 'text-yellow-400'}>
+              Map created: {diag.mapCreated ? '✓' : '…'}
+            </span>
+            <span className={diag.containerW > 0 ? 'text-green-400' : 'text-red-400'}>
+              Container: {diag.containerW.toFixed(0)}×{diag.containerH.toFixed(0)}
+            </span>
+            <span className={diag.canvasW > 0 ? 'text-green-400' : 'text-red-400'}>
+              Canvas: {diag.canvasW}×{diag.canvasH}
+            </span>
+            <span className={diag.styleLoaded ? 'text-green-400' : 'text-yellow-400'}>
+              style.load: {diag.styleLoaded ? '✓' : '…'}
+            </span>
+            <span className={diag.sourceAdded ? 'text-green-400' : 'text-yellow-400'}>
+              Source: {diag.sourceAdded ? '✓' : '…'}
+            </span>
+            <span className={diag.layerAdded ? 'text-green-400' : 'text-yellow-400'}>
+              Layers: {diag.layerAdded ? '✓' : '…'}
+            </span>
+            <span className={diag.webGLContextLost ? 'text-red-400' : 'text-white/40'}>
+              Context: {diag.webGLContextLost ? '✗ LOST' : 'ok'}
+            </span>
+            {diag.usingFallback && (
+              <span className="col-span-2 text-yellow-400">⚠️ OSM fallback aktiv</span>
+            )}
+          </div>
+
+          {/* Error */}
+          {diag.lastError && (
+            <div className="border-t border-red-500/30 bg-red-900/40 px-2 py-1">
+              <span className="font-bold text-red-400">FEL: </span>
+              <span className="text-red-300">{diag.lastError}</span>
+            </div>
+          )}
+
+          {/* Event log */}
+          {diagExpanded && diag.log.length > 0 && (
+            <div className="border-t border-white/10 px-2 py-1">
+              {diag.log.map((entry, i) => (
+                <div
+                  key={i}
+                  className={entry.includes('ERROR') ? 'text-red-400' : entry.includes('→') ? 'text-yellow-400' : 'text-white/60'}
+                >
+                  {entry}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Projektkort */}
