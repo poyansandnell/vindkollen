@@ -1,0 +1,171 @@
+AR is now working much better. The remaining major issue is the Sweden map and nationwide data model.
+
+1. Replace the current static/transform-based Sweden map with a real interactive map
+
+The current implementation behaves like a zoomed image:
+- pinch zoom does not re-render correctly
+- labels and markers become oversized/blurry
+- the map drifts toward a corner
+- marker positions do not behave like true geographic coordinates
+
+Use MapLibre GL or the existing interactive map engine.
+
+Required:
+- real pinch zoom
+- drag/pan
+- double-tap zoom
+- smooth zoom around the gesture focal point
+- markers anchored to longitude/latitude
+- fit bounds to Sweden initially
+- recenter/home button
+- no CSS transform scaling of the whole image
+- no absolute pixel positioning based on a static Sweden image
+
+2. Support thousands of turbines with clustering
+
+The app currently loads only 20 project records. That is not the full turbine dataset.
+
+Separate:
+- projects
+- individual turbines
+- turbine/project status
+
+Create a turbine registry with fields such as:
+- id
+- projectId
+- name
+- latitude
+- longitude
+- status
+- turbineHeight
+- rotorDiameter
+- municipality
+- county
+- source
+- lastUpdated
+
+Statuses:
+- planned
+- consultation
+- permitted
+- under_construction
+- operational
+- cancelled
+
+On the Sweden map:
+- use clustering for thousands of turbines
+- zoomed out: show cluster counts
+- medium zoom: show project clusters and names
+- high zoom: show individual turbines
+- tapping a turbine/project opens its detail card
+- only projects with detailed editable data should allow editing
+
+Do not try to render 10,000 DOM markers individually.
+
+3. Verify the full dataset
+
+The native build currently appears to load only the bundled 20-project fallback.
+
+Add temporary diagnostics:
+- project count
+- turbine count
+- planned turbine count
+- operational turbine count
+- data source used: bundled / API
+- exact filename or API URL loaded
+
+If the intended full turbine file exists, verify it is included in dist-native and resolves correctly under capacitor://localhost.
+
+If it does not exist yet, do not pretend 20 projects are the full national dataset. Label it clearly as a limited pilot dataset until the full file is imported.
+
+4. Project filters
+
+Filters should apply to actual turbine/project status:
+
+- Aktuella
+- Planerade
+- Pågående
+- Befintliga
+- Alla
+
+Suggested meanings:
+- Aktuella = consultation + permitted + under construction
+- Planerade = planned + consultation
+- Pågående = permitted + under construction
+- Befintliga = operational
+- Alla = all statuses
+
+Show the number of turbines and projects separately, for example:
+“7 projekt · 143 verk”
+
+5. Transition to project/editor mode
+
+The Sweden map remains the main overview.
+
+When the user:
+- taps a project, or
+- zooms in sufficiently around a selected project
+
+show a project detail card first.
+
+Only enable:
+“Redigera placering”
+when the selected project has:
+- boundary polygon
+- editable turbine dataset
+- scoring configuration
+
+Otherwise show:
+“Detaljerat redigeringsunderlag saknas för detta projekt.”
+
+6. Referendum/campaign form
+
+The referendum form must start with a municipality selector.
+
+Add:
+“Välj kommun”
+
+Only list municipalities with an enabled campaign.
+
+Initial option:
+- Katrineholm
+
+Project/municipality campaign config should contain:
+- municipality
+- enabled
+- title
+- description
+- contact destination
+- privacy text
+
+Do not show Katrineholm-specific campaign wording until Katrineholm has been selected.
+
+If no municipality is selected:
+- disable submit
+- show “Välj först kommun”
+
+7. Remove global local wording
+
+Keep local referendum and Katrineholm-specific text inside the Katrineholm campaign/project module only.
+
+The nationwide app should use generic text everywhere else.
+
+8. Mobile map quality
+
+Test specifically on iPhone:
+- 390x844
+- 430x932
+
+Ensure:
+- map stays centered while zooming
+- markers stay geographically anchored
+- no drifting to the upper corner
+- labels scale appropriately
+- controls stay inside safe areas
+- filters can horizontally scroll without clipping
+
+9. Build marker
+
+Increment to:
+
+Native TEST 9 – Real map + turbine clustering + municipality campaigns
