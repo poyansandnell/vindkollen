@@ -94,10 +94,24 @@ export function useGeolocation(enabled: boolean): GeoState {
       async function startNativeGPS() {
         // 1. checkPermissions + requestPermissions via Capacitor —
         //    hoppa över om redan beviljad av requestAllPermissionsSequentially().
-        const granted =
-          areNativePermissionsGranted() || (await requestNativeGeolocationPermission());
-        console.log("[Vindkollen] useGeolocation: location permission =", granted);
+        const alreadyGranted = areNativePermissionsGranted();
+        console.log("[AR] useGeolocation: alreadyGranted =", alreadyGranted);
+        let granted = alreadyGranted;
+        if (!alreadyGranted) {
+          console.log("[AR] useGeolocation: requesting location permission (not pre-granted)");
+          try {
+            granted = await requestNativeGeolocationPermission();
+          } catch (err) {
+            console.error("[AR] useGeolocation: requestNativeGeolocationPermission threw:", err);
+            granted = false;
+          }
+        }
+        console.log("[AR] useGeolocation: location permission =", granted);
         if (stopped) return;
+
+        if (granted) {
+          console.log("[AR] Starting geolocation (watchNativePosition)");
+        }
 
         if (!granted) {
           window.clearTimeout(watchdogId);

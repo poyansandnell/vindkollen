@@ -50,9 +50,19 @@ export function useCameraStream(enabled: boolean): CameraState {
       async function startNative() {
         // 1. Begär kamerabehörighet — hoppa över om redan beviljad av
         //    requestAllPermissionsSequentially() i handleStart.
-        const permGranted =
-          areNativePermissionsGranted() || (await requestNativeCameraPermission());
-        console.log("[Vindkollen] useCameraStream: camera permission =", permGranted);
+        const alreadyGranted = areNativePermissionsGranted();
+        console.log("[AR] useCameraStream: alreadyGranted =", alreadyGranted);
+        let permGranted = alreadyGranted;
+        if (!alreadyGranted) {
+          console.log("[AR] useCameraStream: requesting camera permission (not pre-granted)");
+          try {
+            permGranted = await requestNativeCameraPermission();
+          } catch (err) {
+            console.error("[AR] useCameraStream: requestNativeCameraPermission threw:", err);
+            permGranted = false;
+          }
+        }
+        console.log("[AR] useCameraStream: camera permission =", permGranted);
         if (cancelled) return;
 
         if (!permGranted) {
@@ -67,9 +77,14 @@ export function useCameraStream(enabled: boolean): CameraState {
         }
 
         // 2. Starta native camera-preview
-        console.log("[Vindkollen] useCameraStream: startNativeCameraPreview startar…");
-        const started = await startNativeCameraPreview();
-        console.log("[Vindkollen] useCameraStream: startNativeCameraPreview klar:", started);
+        console.log("[AR] Starting CameraPreview");
+        let started = false;
+        try {
+          started = await startNativeCameraPreview();
+        } catch (err) {
+          console.error("[AR] startNativeCameraPreview threw:", err);
+        }
+        console.log("[AR] CameraPreview started:", started);
         if (cancelled) {
           if (started) void stopNativeCameraPreview();
           return;

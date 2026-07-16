@@ -116,7 +116,10 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
         {!inApp && (
           <>
             <button
-              onClick={onStart}
+              onClick={() => {
+                console.log("[AR] Start button pressed - PermissionGate onClick fired");
+                onStart();
+              }}
               disabled={starting}
               className="w-full rounded-full bg-[#FF8B01] py-4 text-base font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] disabled:opacity-60"
             >

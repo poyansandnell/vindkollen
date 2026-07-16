@@ -194,9 +194,15 @@ export async function requestAllPermissionsSequentially(): Promise<{
 
   try {
     // Steg 1/2 — Kamera
-    console.log("[Vindkollen] [1/2] Kamerabehörighet begärs…");
-    const cameraGranted = await requestNativeCameraPermission();
-    console.log("[Vindkollen] [1/2] Kamerabehörighet klar:", cameraGranted);
+    console.log("[AR] Requesting camera permission");
+    let cameraGranted = false;
+    try {
+      cameraGranted = await requestNativeCameraPermission();
+    } catch (camErr) {
+      console.error("[AR] Camera permission threw:", camErr);
+      return { camera: false, location: false, error: `Kamerabehörighet kastade fel: ${camErr instanceof Error ? camErr.message : String(camErr)}` };
+    }
+    console.log("[AR] Camera permission result:", cameraGranted ? "granted" : "denied");
 
     if (!cameraGranted) {
       return {
@@ -207,12 +213,19 @@ export async function requestAllPermissionsSequentially(): Promise<{
     }
 
     // Ge iOS tid att stänga den första dialogen helt innan nästa visas
+    console.log("[AR] Waiting 350 ms between permission dialogs");
     await new Promise<void>((r) => setTimeout(r, 350));
 
     // Steg 2/2 — Plats
-    console.log("[Vindkollen] [2/2] Platsbehörighet begärs…");
-    const locationGranted = await requestNativeGeolocationPermission();
-    console.log("[Vindkollen] [2/2] Platsbehörighet klar:", locationGranted);
+    console.log("[AR] Requesting location permission");
+    let locationGranted = false;
+    try {
+      locationGranted = await requestNativeGeolocationPermission();
+    } catch (locErr) {
+      console.error("[AR] Location permission threw:", locErr);
+      return { camera: true, location: false, error: `Platsbehörighet kastade fel: ${locErr instanceof Error ? locErr.message : String(locErr)}` };
+    }
+    console.log("[AR] Location permission result:", locationGranted ? "granted" : "denied");
 
     if (!locationGranted) {
       return {
@@ -223,7 +236,7 @@ export async function requestAllPermissionsSequentially(): Promise<{
     }
 
     _nativePermissionsGranted = true;
-    console.log("[Vindkollen] Alla behörigheter beviljade ✓");
+    console.log("[AR] All permissions granted ✓");
     return { camera: true, location: true };
   } finally {
     _isRequestingPermissions = false;

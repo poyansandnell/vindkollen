@@ -1024,10 +1024,16 @@ export default function Home() {
   }, [wind.playing, windTargetVolume]);
 
   const handleStart = useCallback(() => {
-    // Double-tap guard: ignorera knapptryck om ett flöde redan pågår.
-    if (starting) return;
+    // *** THIS IS THE REWRITTEN HANDLER — v2 sequential permissions ***
+    console.log("[AR] Start button pressed");
+    console.log("[AR] isNative:", isNative(), "| starting:", starting);
 
-    console.info("[AR][pipeline] startAR() anropad (knapptryckning)");
+    // Double-tap guard: ignorera knapptryck om ett flöde redan pågår.
+    if (starting) {
+      console.log("[AR] Already starting, ignoring tap");
+      return;
+    }
+
     setStarting(true);
     setNativePermError(null);
     setShowLoadingSequence(true);
@@ -1038,10 +1044,9 @@ export default function Home() {
     void wind.toggle();
 
     const finish = () => {
-      // Nollställ/starta åtta-rörelsens sektorspårning precis när AR-flödet
-      // startar, så att `LoadingSequence`s kompass-steg (se nedan) kan visa
-      // ett levande kalibreringsförlopp istället för en blind timer.
+      console.log("[AR] Starting compass (startCalibrationTracking)");
       orientation.startCalibrationTracking();
+      console.log("[AR] Navigating to AR scene (setStarted true)");
       setStarted(true);
       setStarting(false);
     };
@@ -1054,29 +1059,34 @@ export default function Home() {
     // över att begära behörighet en gång till.
     // -----------------------------------------------------------------------
     if (isNative()) {
+      console.log("[AR] Native path: calling requestAllPermissionsSequentially");
       void requestAllPermissionsSequentially()
         .then(({ camera, location, error }) => {
+          console.log("[AR] requestAllPermissionsSequentially result: camera=", camera, "location=", location, "error=", error ?? "none");
           if (!camera || !location) {
-            console.warn("[Vindkollen] handleStart: behörighet nekad —", error);
+            console.warn("[AR] Permission denied, aborting start. error:", error);
             setNativePermError(error ?? "Behörighet nekad.");
             setStarting(false);
             setShowLoadingSequence(false);
             return;
           }
-          // Vänta lite extra efter att sista dialogen stängs, innan native-
-          // tjänsterna (CameraPreview, watchPosition) startar.
-          console.log("[Vindkollen] handleStart: alla behörigheter OK, startar om 400 ms…");
+          console.log("[AR] All permissions granted, waiting 400 ms before starting services");
           setTimeout(() => {
+            console.log("[AR] 400 ms elapsed, checking compass permission. needsPermission:", orientation.needsPermission);
             if (orientation.needsPermission) {
-              void orientation.requestPermission().finally(finish);
+              console.log("[AR] Requesting compass permission");
+              void orientation.requestPermission()
+                .then((result) => { console.log("[AR] Compass permission result:", result); })
+                .catch((err: unknown) => { console.error("[AR] Compass permission error:", err); })
+                .finally(finish);
             } else {
               finish();
             }
           }, 400);
         })
         .catch((err: unknown) => {
+          console.error("[AR] requestAllPermissionsSequentially threw:", err);
           const msg = err instanceof Error ? err.message : String(err);
-          console.error("[Vindkollen] handleStart: requestAllPermissionsSequentially fel:", msg);
           setNativePermError(`Fel vid behörighetsbegäran: ${msg}`);
           setStarting(false);
           setShowLoadingSequence(false);
@@ -1089,6 +1099,7 @@ export default function Home() {
     // OBS enableHighAccuracy: false — resultatet kastas bort; konkurrerar ej
     // om GPS-chipet med den riktiga watchPosition-bevakningen.
     // -----------------------------------------------------------------------
+    console.log("[AR] Web path: requesting camera + location in parallel");
     navigator.geolocation?.getCurrentPosition(
       () => {},
       () => {},
