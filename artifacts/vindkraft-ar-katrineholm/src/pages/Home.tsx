@@ -39,7 +39,8 @@ import { estimateNoiseImpact } from "@/lib/noiseImpact";
 import { useWindDirection } from "@/hooks/useWindDirection";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
 import { KATRINEHOLM_CENTER } from "@/lib/ericsbergArea";
-import { openSverigekartan } from "@/lib/capacitorBridge";
+import { openSverigekartan, captureNativeCameraPhoto } from "@/lib/capacitorBridge";
+import { NativeDiagnostics } from "@/components/NativeDiagnostics";
 
 const PHOTO_WATERMARK_TEXT = "Katrineholm FRAMÅT – Vindkraft AR";
 const PHOTO_DISCLAIMER_TEXT = "Fotomontage/visualisering. GPS, kompass, terräng, väder och sikt kan påverka precisionen.";
@@ -240,7 +241,10 @@ export default function Home() {
   // riktning istället för att användaren står och väntar på att de "dyker
   // upp". Detta ersätter den tidigare `orientation.hasFix`-spärren (och den
   // nödbroms-knapp den krävde) helt.
-  const ready = started && geo.lat !== null && geo.lon !== null && Boolean(camera.stream);
+  // cameraActive: true om kameran är igång — antingen via getUserMedia (webb)
+  // eller via native CameraPreview-plugin (iOS/Android).
+  const cameraActive = Boolean(camera.stream) || camera.nativePreview;
+  const ready = started && geo.lat !== null && geo.lon !== null && cameraActive;
 
   // Juli 2026-fix (fjärde kritiska buggrapporten, punkt "UI-fix"): denna
   // effekt (som mäter topp-barens FAKTISKA höjd, se `topBarRef`s kommentar
@@ -1097,8 +1101,12 @@ export default function Home() {
     setPhotoError(null);
     try {
       const video = videoElRef.current;
-      if (!video || !arSceneRef.current) {
-        setPhotoError("Kunde inte ta bild — kameran eller AR-vyn är inte redo.");
+      if (!arSceneRef.current) {
+        setPhotoError("Kunde inte ta bild — AR-vyn är inte redo.");
+        return;
+      }
+      if (!video && !camera.nativePreview) {
+        setPhotoError("Kunde inte ta bild — kameran är inte redo.");
         return;
       }
       // Fångar AR-scenens canvas via ARScene:s imperativa handtag (synkront
@@ -1116,8 +1124,8 @@ export default function Home() {
         arImage.src = arDataUrl;
       });
 
-      const width = video.videoWidth || arImage.width || 1080;
-      const height = video.videoHeight || arImage.height || 1920;
+      const width = video?.videoWidth || arImage.width || window.screen.width || 1080;
+      const height = video?.videoHeight || arImage.height || window.screen.height || 1920;
 
       const out = document.createElement("canvas");
       out.width = width;
@@ -1128,22 +1136,38 @@ export default function Home() {
         return;
       }
 
-      // Kamerabild (object-cover-liknande beskärning så proportionerna
-      // matchar det som faktiskt syns på skärmen).
-      const videoAspect = video.videoWidth / video.videoHeight || width / height;
-      const targetAspect = width / height;
-      let sx = 0;
-      let sy = 0;
-      let sw = video.videoWidth || width;
-      let sh = video.videoHeight || height;
-      if (videoAspect > targetAspect) {
-        sw = sh * targetAspect;
-        sx = ((video.videoWidth || width) - sw) / 2;
+      if (video) {
+        // Webb: kamerabild från video-element med object-cover-beskärning.
+        const videoAspect = video.videoWidth / video.videoHeight || width / height;
+        const targetAspect = width / height;
+        let sx = 0;
+        let sy = 0;
+        let sw = video.videoWidth || width;
+        let sh = video.videoHeight || height;
+        if (videoAspect > targetAspect) {
+          sw = sh * targetAspect;
+          sx = ((video.videoWidth || width) - sw) / 2;
+        } else {
+          sh = sw / targetAspect;
+          sy = ((video.videoHeight || height) - sh) / 2;
+        }
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
       } else {
-        sh = sw / targetAspect;
-        sy = ((video.videoHeight || height) - sh) / 2;
+        // Native: fånga bildruta från CameraPreview-plugin
+        const cameraDataUrl = await captureNativeCameraPhoto();
+        if (cameraDataUrl) {
+          const cameraImg = new Image();
+          await new Promise<void>((resolve) => {
+            cameraImg.onload = () => resolve();
+            cameraImg.onerror = () => resolve();
+            cameraImg.src = cameraDataUrl;
+          });
+          ctx.drawImage(cameraImg, 0, 0, width, height);
+        } else {
+          ctx.fillStyle = "#000";
+          ctx.fillRect(0, 0, width, height);
+        }
       }
-      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
 
       // AR-scenen (vindkraftverk, etiketter, sol, skuggor) — bilden har
       // alpha-transparent bakgrund, så kamerabilden lyser igenom naturligt.
@@ -1174,7 +1198,7 @@ export default function Home() {
     } catch {
       setPhotoError("Kunde inte skapa fotomontage. Försök igen.");
     }
-  }, []);
+  }, [camera.nativePreview]);
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#090909] text-white">
@@ -1198,7 +1222,7 @@ export default function Home() {
             />
           )}
 
-          <CameraBackground stream={camera.stream} videoRef={videoElRef} />
+          <CameraBackground stream={camera.stream} videoRef={videoElRef} nativePreview={camera.nativePreview} />
 
           {/* PRESTANDA (produktkrav juli 2026): `ARScene` monteras redan här,
               så fort `started` är sant — INTE bara när `arSessionVisible`
@@ -1299,8 +1323,8 @@ export default function Home() {
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/50 px-8 text-center">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#FF8B01] border-t-transparent" />
               <p className="text-sm text-white/90">
-                {!camera.stream && "Startar kameran…"}
-                {camera.stream && geo.lat === null && "Väntar på GPS-signal…"}
+                {!cameraActive && "Startar kameran…"}
+                {cameraActive && geo.lat === null && "Väntar på GPS-signal…"}
               </p>
 
               {/* Statuspanel: visar GPS/kompass/kamera/AR-status var för sig
@@ -1310,7 +1334,7 @@ export default function Home() {
               <ul className="w-full max-w-xs space-y-1 rounded-xl bg-black/30 p-3 text-left text-[11px] text-white/70">
                 <li className="flex items-center justify-between">
                   <span>📷 Kamera</span>
-                  <span>{camera.stream ? "✅ Redo" : camera.error ? "❌ Fel" : "⏳ Startar…"}</span>
+                  <span>{cameraActive ? "✅ Redo" : camera.error ? "❌ Fel" : "⏳ Startar…"}</span>
                 </li>
                 <li className="flex items-center justify-between">
                   <span>📍 GPS</span>
@@ -1363,10 +1387,10 @@ export default function Home() {
                   bara ser en snurrande spinner utan förklaring. Kompassen
                   blockerar sedan juli 2026 aldrig `ready` — se motiveringen
                   vid `ready` ovan. */}
-              {camera.stream && geo.lat === null && (
+              {cameraActive && geo.lat === null && (
                 <p className="text-xs text-white/50">Gå gärna ut på en öppen plats och rikta telefonen mot himlen.</p>
               )}
-              {camera.stream && geo.lat === null && !geo.error && (
+              {cameraActive && geo.lat === null && !geo.error && (
                 <p className="text-[11px] text-white/40">
                   {waitSeconds}s — platsbehörighet:{" "}
                   {geo.permissionState === "granted"
@@ -1826,6 +1850,9 @@ export default function Home() {
           onClose={() => setShowSensorDebug(false)}
         />
       )}
+
+      {/* Diagnostikpanel — visas automatiskt på native (iOS/Android) */}
+      <NativeDiagnostics />
     </div>
   );
 }

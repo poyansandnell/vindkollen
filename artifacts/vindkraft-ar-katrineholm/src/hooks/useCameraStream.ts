@@ -1,18 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { requestNativeCameraPermission } from "../lib/capacitorBridge";
+import {
+  isNative,
+  requestNativeCameraPermission,
+  startNativeCameraPreview,
+  stopNativeCameraPreview,
+} from "../lib/capacitorBridge";
 
 export interface CameraState {
   stream: MediaStream | null;
+  /**
+   * True när kameran körs som native camera-preview (iOS/Android).
+   * CameraPreview renderas som ett nativt lager bakom WKWebView —
+   * det finns ingen MediaStream/video-element i detta läge.
+   */
+  nativePreview: boolean;
   error: string | null;
   loading: boolean;
-  /** Gör ett nytt försök att starta kameran — triggar webbläsarens native-dialog om läget fortfarande är "prompt". */
+  /** Gör ett nytt försök att starta kameran. */
   retry: () => void;
 }
 
-/** Startar bakre kameran som bakgrund för AR-vyn. */
+/** Startar bakre kameran — via getUserMedia på webb, CameraPreview på native. */
 export function useCameraStream(enabled: boolean): CameraState {
   const [state, setState] = useState<Omit<CameraState, "retry">>({
     stream: null,
+    nativePreview: false,
     error: null,
     loading: enabled,
   });
@@ -30,8 +42,59 @@ export function useCameraStream(enabled: boolean): CameraState {
     let cancelled = false;
     setState((s) => ({ ...s, loading: true }));
 
-    // Vakthund — garanterar ett felmeddelande + retry-knapp om getUserMedia
-    // hänger (kamerabehörighetsdialog hänger, kamera upptagen, m.m.).
+    // ------------------------------------------------------------------
+    // Native: CameraPreview plugin (renderas bakom WKWebView)
+    // ------------------------------------------------------------------
+    if (isNative()) {
+      async function startNative() {
+        // 1. Begär kamerabehörighet via iOS-systemdialog
+        const permGranted = await requestNativeCameraPermission();
+        if (cancelled) return;
+
+        if (!permGranted) {
+          setState({
+            stream: null,
+            nativePreview: false,
+            error:
+              "Kamerabehörighet nekad. Öppna Inställningar → Vindkollen → Kamera och tillåt åtkomst.",
+            loading: false,
+          });
+          return;
+        }
+
+        // 2. Starta native camera-preview
+        const started = await startNativeCameraPreview();
+        if (cancelled) {
+          if (started) void stopNativeCameraPreview();
+          return;
+        }
+
+        if (!started) {
+          setState({
+            stream: null,
+            nativePreview: false,
+            error:
+              "Kunde inte starta kameraförhandsgranskning. Kontrollera att ingen annan app använder kameran.",
+            loading: false,
+          });
+          return;
+        }
+
+        setState({ stream: null, nativePreview: true, error: null, loading: false });
+      }
+
+      void startNative();
+
+      return () => {
+        cancelled = true;
+        void stopNativeCameraPreview();
+        setState((s) => ({ ...s, nativePreview: false }));
+      };
+    }
+
+    // ------------------------------------------------------------------
+    // Webb: getUserMedia (befintlig logik)
+    // ------------------------------------------------------------------
     let gotStream = false;
     const watchdogId = window.setTimeout(() => {
       if (gotStream || cancelled) return;
@@ -46,35 +109,26 @@ export function useCameraStream(enabled: boolean): CameraState {
       });
     }, 15000);
 
-    async function start() {
-      // --- Capacitor native: begär kamerabehörighet via iOS-systemdialog ---
-      // getUserMedia i WKWebView kräver att appen explicit frågar om
-      // kamerabehörighet via Capacitor-plugin INNAN API:et anropas,
-      // annars misslyckas det tyst med "not supported" eller "error".
-      const permissionGranted = await requestNativeCameraPermission();
-      if (cancelled) return;
-
-      if (!permissionGranted) {
+    async function startWeb() {
+      if (!navigator.mediaDevices?.getUserMedia) {
         gotStream = true;
         window.clearTimeout(watchdogId);
         setState({
           stream: null,
-          error: "Kamerabehörighet nekad. Öppna Inställningar → Vindkollen → Kamera och tillåt åtkomst.",
+          nativePreview: false,
+          error: "Kameran stöds inte i den här webbläsaren.",
           loading: false,
         });
         return;
       }
 
-      if (!navigator.mediaDevices?.getUserMedia) {
-        gotStream = true;
-        window.clearTimeout(watchdogId);
-        setState({ stream: null, error: "Kameran stöds inte i den här webbläsaren.", loading: false });
-        return;
-      }
-
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
           audio: false,
         });
         gotStream = true;
@@ -84,7 +138,7 @@ export function useCameraStream(enabled: boolean): CameraState {
           return;
         }
         streamRef.current = stream;
-        setState({ stream, error: null, loading: false });
+        setState({ stream, nativePreview: false, error: null, loading: false });
       } catch (err) {
         gotStream = true;
         window.clearTimeout(watchdogId);
@@ -92,7 +146,7 @@ export function useCameraStream(enabled: boolean): CameraState {
         const name = err instanceof Error ? err.name : "";
         const message =
           name === "NotAllowedError" || name === "PermissionDeniedError"
-            ? "Kamerabehörighet nekad. Öppna Inställningar → Vindkollen → Kamera och tillåt åtkomst."
+            ? "Kamerabehörighet nekad. Tillåt kamera i webbläsarens inställningar och försök igen."
             : name === "NotFoundError" || name === "DevicesNotFoundError"
               ? "Ingen kamera hittades på enheten."
               : name === "NotReadableError"
@@ -100,15 +154,11 @@ export function useCameraStream(enabled: boolean): CameraState {
                 : err instanceof Error
                   ? err.message
                   : "Kunde inte starta kameran.";
-        setState({
-          stream: null,
-          error: message,
-          loading: false,
-        });
+        setState({ stream: null, nativePreview: false, error: message, loading: false });
       }
     }
 
-    start();
+    void startWeb();
 
     return () => {
       cancelled = true;

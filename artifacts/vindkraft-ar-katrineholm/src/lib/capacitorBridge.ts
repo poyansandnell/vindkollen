@@ -20,16 +20,90 @@ export function isNative(): boolean {
 /**
  * Öppnar Sverigekartan.
  *
- * Navigerar till /vindkraft-karta/ via intern routing i både webb och native.
- * Om VITE_PUBLIC_APP_URL är explicit satt öppnas URL:en externt i Safari/Chrome
- * via _system — annars används alltid intern navigation (inget krav på env-variabel).
+ * - Webb: navigerar direkt till /vindkraft-karta/ (path routing).
+ * - Native + VITE_PUBLIC_APP_URL satt: öppnar externt i Safari/Chrome.
+ * - Native utan URL: navigerar till /#/placera (inbyggt kartverktyg, ingen 404).
  */
 export function openSverigekartan(): void {
   const externalBase = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ?? "";
-  if (isNative() && externalBase) {
-    window.open(`${externalBase}/vindkraft-karta/`, "_system");
+  if (isNative()) {
+    if (externalBase) {
+      window.open(`${externalBase}/vindkraft-karta/`, "_system");
+    } else {
+      // Hash-routing: navigera till det inbyggda placeringsverktyget
+      window.location.hash = "/placera";
+    }
   } else {
     window.location.href = "/vindkraft-karta/";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Kamera — native camera preview (CameraPreview plugin)
+// ---------------------------------------------------------------------------
+
+let _cameraPreviewActive = false;
+
+/**
+ * Startar native camera-preview (renderas som ett nativt lager BAKOM WKWebView).
+ * Body-bakgrunden görs genomskinlig så Three.js-canvasen syns ovanpå.
+ * No-op på webb.
+ */
+export async function startNativeCameraPreview(): Promise<boolean> {
+  if (!isNative()) return false;
+  try {
+    const { CameraPreview } = await import("@capacitor-community/camera-preview");
+    await CameraPreview.start({
+      position: "rear",
+      toBack: true,
+      width: window.screen.width,
+      height: window.screen.height,
+      x: 0,
+      y: 0,
+      enableZoom: false,
+    });
+    _cameraPreviewActive = true;
+    document.body.style.backgroundColor = "transparent";
+    document.documentElement.style.backgroundColor = "transparent";
+    console.log("[Vindkollen] CameraPreview started");
+    return true;
+  } catch (err) {
+    console.error("[Vindkollen] CameraPreview.start failed:", err);
+    _cameraPreviewActive = false;
+    addNativeError(`CameraPreview.start: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
+}
+
+/** Stoppar native camera-preview och återställer bakgrundsfärg. */
+export async function stopNativeCameraPreview(): Promise<void> {
+  if (!_cameraPreviewActive) return;
+  _cameraPreviewActive = false;
+  document.body.style.backgroundColor = "";
+  document.documentElement.style.backgroundColor = "";
+  if (!isNative()) return;
+  try {
+    const { CameraPreview } = await import("@capacitor-community/camera-preview");
+    await CameraPreview.stop();
+    console.log("[Vindkollen] CameraPreview stopped");
+  } catch (err) {
+    console.error("[Vindkollen] CameraPreview.stop failed:", err);
+  }
+}
+
+/**
+ * Fångar en bildruta från native camera-preview som en data-URL.
+ * Returnerar null om preview inte är aktiv eller om fångst misslyckas.
+ */
+export async function captureNativeCameraPhoto(): Promise<string | null> {
+  if (!isNative() || !_cameraPreviewActive) return null;
+  try {
+    const { CameraPreview } = await import("@capacitor-community/camera-preview");
+    const result = await CameraPreview.capture({ quality: 90 });
+    return `data:image/jpeg;base64,${result.value}`;
+  } catch (err) {
+    console.error("[Vindkollen] CameraPreview.capture failed:", err);
+    return null;
   }
 }
 
@@ -39,42 +113,154 @@ export function openSverigekartan(): void {
 
 /**
  * Begär kamerabehörighet via Capacitor-plugin på iOS/Android.
- *
- * På iOS visar detta systemdialogen "Vindkollen vill använda kameran"
- * INNAN getUserMedia anropas — utan detta steg nekar WKWebView tyst.
- *
- * På webb: returnerar alltid true (webbläsaren hanterar dialog via getUserMedia).
- *
- * @returns true om behörighet beviljades (eller om vi kör i webbläsare),
- *          false om användaren nekade.
+ * Loggar alla utfall — kastar INTE fel tyst.
+ * Returnerar false om nekad, true om beviljad eller om vi kör i webbläsare.
  */
 export async function requestNativeCameraPermission(): Promise<boolean> {
   if (!isNative()) return true;
   try {
     const { Camera } = await import("@capacitor/camera");
-    const status = await Camera.requestPermissions({ permissions: ["camera"] });
-    return status.camera === "granted";
-  } catch {
-    // Plugin-fel (t.ex. saknas i build) — låt getUserMedia försöka ändå
-    return true;
+    const current = await Camera.checkPermissions();
+    console.log("[Vindkollen] Camera.checkPermissions →", current.camera);
+    if (current.camera === "granted") return true;
+    const requested = await Camera.requestPermissions({ permissions: ["camera"] });
+    console.log("[Vindkollen] Camera.requestPermissions →", requested.camera);
+    const granted = requested.camera === "granted";
+    if (!granted) addNativeError(`Kamerabehörighet nekad (status: ${requested.camera})`);
+    return granted;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[Vindkollen] Camera.requestPermissions failed:", msg);
+    addNativeError(`Camera.requestPermissions: ${msg}`);
+    return false;
   }
 }
 
 /**
  * Begär platsbehörighet via Capacitor-plugin på iOS/Android.
- *
- * På iOS visar detta systemdialogen "Vindkollen vill använda din plats"
- * INNAN navigator.geolocation.watchPosition anropas.
- *
- * @returns true om behörighet beviljades, false om nekad.
+ * checkPermissions() → requestPermissions() för att trigga iOS-dialog.
  */
 export async function requestNativeGeolocationPermission(): Promise<boolean> {
   if (!isNative()) return true;
   try {
     const { Geolocation } = await import("@capacitor/geolocation");
-    const status = await Geolocation.requestPermissions();
-    return status.location === "granted" || status.coarseLocation === "granted";
-  } catch {
-    return true;
+    const current = await Geolocation.checkPermissions();
+    console.log("[Vindkollen] Geolocation.checkPermissions →", current.location);
+    if (current.location === "granted") return true;
+    const requested = await Geolocation.requestPermissions();
+    console.log("[Vindkollen] Geolocation.requestPermissions →", requested.location);
+    const granted = requested.location === "granted" || requested.coarseLocation === "granted";
+    if (!granted) addNativeError(`Platsbehörighet nekad (status: ${requested.location})`);
+    return granted;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[Vindkollen] Geolocation.requestPermissions failed:", msg);
+    addNativeError(`Geolocation.requestPermissions: ${msg}`);
+    return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Native GPS watchPosition (mer tillförlitlig än navigator.geolocation i WKWebView)
+// ---------------------------------------------------------------------------
+
+export type NativePosCallback = (lat: number, lon: number, accuracy: number) => void;
+export type NativeErrCallback = (message: string) => void;
+
+/**
+ * Bevakar GPS-positionen via @capacitor/geolocation istället för browser-API:et.
+ * På webb returnerar en no-op cleanup-funktion och gör ingenting.
+ * @returns async cleanup-funktion — anropa för att stoppa bevakningen.
+ */
+export async function watchNativePosition(
+  onPos: NativePosCallback,
+  onErr: NativeErrCallback,
+): Promise<() => void> {
+  if (!isNative()) return () => {};
+  try {
+    const { Geolocation } = await import("@capacitor/geolocation");
+    const watchId = await Geolocation.watchPosition(
+      { enableHighAccuracy: true, timeout: 15000 },
+      (position, err) => {
+        if (err) {
+          const msg = (err as Error).message ?? "GPS-fel.";
+          console.error("[Vindkollen] Geolocation.watchPosition error:", err);
+          addNativeError(`GPS watchPosition: ${msg}`);
+          onErr(msg);
+        } else if (position) {
+          onPos(
+            position.coords.latitude,
+            position.coords.longitude,
+            position.coords.accuracy,
+          );
+        }
+      },
+    );
+    console.log("[Vindkollen] Geolocation.watchPosition started, watchId:", watchId);
+    return async () => {
+      try {
+        await Geolocation.clearWatch({ id: watchId });
+        console.log("[Vindkollen] Geolocation.clearWatch:", watchId);
+      } catch {}
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[Vindkollen] Geolocation.watchPosition setup failed:", msg);
+    addNativeError(`Geolocation setup: ${msg}`);
+    onErr(msg);
+    return () => {};
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostik (synlig i NativeDiagnostics-panelen på enheten)
+// ---------------------------------------------------------------------------
+
+const _nativeErrors: string[] = [];
+
+function addNativeError(msg: string) {
+  _nativeErrors.unshift(`${new Date().toISOString().slice(11, 23)} ${msg}`);
+  if (_nativeErrors.length > 5) _nativeErrors.length = 5;
+}
+
+export interface NativeDiagnosticsData {
+  platform: string;
+  isNative: boolean;
+  cameraPermission: string;
+  locationPermission: string;
+  cameraPreviewActive: boolean;
+  errors: string[];
+}
+
+export async function getNativeDiagnostics(): Promise<NativeDiagnosticsData> {
+  const platform = Capacitor.getPlatform();
+  const native = Capacitor.isNativePlatform();
+  let cameraPermission = "n/a (webb)";
+  let locationPermission = "n/a (webb)";
+
+  if (native) {
+    try {
+      const { Camera } = await import("@capacitor/camera");
+      const cs = await Camera.checkPermissions();
+      cameraPermission = cs.camera;
+    } catch (e) {
+      cameraPermission = `fel: ${e instanceof Error ? e.message : String(e)}`;
+    }
+    try {
+      const { Geolocation } = await import("@capacitor/geolocation");
+      const gs = await Geolocation.checkPermissions();
+      locationPermission = gs.location;
+    } catch (e) {
+      locationPermission = `fel: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+
+  return {
+    platform,
+    isNative: native,
+    cameraPermission,
+    locationPermission,
+    cameraPreviewActive: _cameraPreviewActive,
+    errors: [..._nativeErrors],
+  };
 }

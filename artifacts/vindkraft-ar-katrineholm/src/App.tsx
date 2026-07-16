@@ -1,8 +1,10 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PwaUpdateBanner } from "@/components/PwaUpdateBanner";
+import { isNative } from "@/lib/capacitorBridge";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import PlaceTurbines from "@/pages/PlaceTurbines";
@@ -29,15 +31,32 @@ function Router() {
   );
 }
 
+const _isNative = isNative();
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
+        {_isNative ? (
+          /*
+           * Native (iOS/Android via Capacitor): hash-baserad routing.
+           * Capacitor serverar appen från capacitor://localhost/ och kan inte
+           * hantera path-baserad navigation som /placera → 404.
+           * Hash-routing (/#/, /#/placera) fungerar korrekt i WKWebView.
+           */
+          <WouterRouter hook={useHashLocation}>
+            <Router />
+          </WouterRouter>
+        ) : (
+          /*
+           * Webb: path-baserad routing med BASE_URL-prefix (Replit-proxy).
+           */
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+        )}
         <Toaster />
-        <PwaUpdateBanner />
+        {!_isNative && <PwaUpdateBanner />}
       </TooltipProvider>
     </QueryClientProvider>
   );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { requestNativeGeolocationPermission } from "../lib/capacitorBridge";
+import { isNative, requestNativeGeolocationPermission, watchNativePosition } from "../lib/capacitorBridge";
 
 export interface GeoState {
   lat: number | null;
@@ -10,13 +10,11 @@ export interface GeoState {
   /** True när felet beror på att webbläsaren/användaren nekat platsbehörighet. */
   permissionDenied: boolean;
   /**
-   * Nuvarande status för platsbehörigheten enligt Permissions API, uppdaterad
-   * proaktivt (inte bara efter ett misslyckat försök). "unsupported" om
-   * webbläsaren saknar Permissions API — då vet vi bara via ett faktiskt
-   * försök om behörigheten är nekad.
+   * Nuvarande status för platsbehörigheten enligt Permissions API.
+   * "unsupported" om webbläsaren saknar Permissions API.
    */
   permissionState: PermissionState | "unsupported";
-  /** Gör ett nytt försök att hämta position — triggar webbläsarens native-dialog om läget fortfarande är "prompt". */
+  /** Gör ett nytt försök att hämta position. */
   retry: () => void;
 }
 
@@ -32,6 +30,7 @@ export function useGeolocation(enabled: boolean): GeoState {
     permissionState: "unsupported",
   });
   const watchIdRef = useRef<number | null>(null);
+  const nativeCleanupRef = useRef<(() => void) | null>(null);
   const [retryToken, setRetryToken] = useState(0);
 
   const retry = useCallback(() => {
@@ -39,9 +38,9 @@ export function useGeolocation(enabled: boolean): GeoState {
     setRetryToken((t) => t + 1);
   }, []);
 
-  // Läser proaktivt av platsbehörighetens status via Permissions API,
-  // oavsett om vi redan gjort ett watchPosition-anrop.
+  // Proaktiv behörighetsstatus via Permissions API (webb)
   useEffect(() => {
+    if (isNative()) return; // Hanteras separat via Capacitor
     if (!navigator.permissions?.query) return;
 
     let cancelled = false;
@@ -68,15 +67,10 @@ export function useGeolocation(enabled: boolean): GeoState {
   useEffect(() => {
     if (!enabled) return;
 
-    if (!("geolocation" in navigator)) {
-      setState((s) => ({ ...s, loading: false, error: "Geolocation stöds inte i den här webbläsaren." }));
-      return;
-    }
-
     setState((s) => ({ ...s, loading: true }));
 
     // Vakthund — garanterar att användaren alltid får ett fel + retry-knapp
-    // efter max 20 sekunder om watchPosition aldrig svarar (känt iOS-problem).
+    // efter max 20 sekunder om watchPosition aldrig svarar.
     let gotFix = false;
     const watchdogId = window.setTimeout(() => {
       if (gotFix) return;
@@ -91,14 +85,95 @@ export function useGeolocation(enabled: boolean): GeoState {
       });
     }, 20000);
 
-    // --- Capacitor native: begär platsbehörighet via iOS-systemdialog ---
-    // navigator.geolocation.watchPosition i WKWebView kräver att appen
-    // explicit begär platsbehörighet via Capacitor-plugin INNAN anropet,
-    // annars misslyckas det utan att någon dialog visas.
+    // ------------------------------------------------------------------
+    // Native: @capacitor/geolocation plugin (tillförlitligare än browser-API i WKWebView)
+    // ------------------------------------------------------------------
+    if (isNative()) {
+      let stopped = false;
+
+      async function startNativeGPS() {
+        // 1. checkPermissions + requestPermissions via Capacitor
+        const granted = await requestNativeGeolocationPermission();
+        if (stopped) return;
+
+        if (!granted) {
+          window.clearTimeout(watchdogId);
+          setState((s) => ({
+            ...s,
+            loading: false,
+            error:
+              "Platsbehörighet nekad. Öppna Inställningar → Vindkollen → Plats och välj 'Vid användning av appen'.",
+            permissionDenied: true,
+            permissionState: "denied",
+          }));
+          return;
+        }
+
+        // 2. watchPosition via Capacitor Geolocation plugin
+        const cleanup = await watchNativePosition(
+          (lat, lon, accuracy) => {
+            gotFix = true;
+            window.clearTimeout(watchdogId);
+            setState((s) => ({
+              ...s,
+              lat,
+              lon,
+              accuracy,
+              error: null,
+              permissionDenied: false,
+              loading: false,
+            }));
+          },
+          (errMsg) => {
+            const permissionDenied = errMsg.toLowerCase().includes("denied") ||
+              errMsg.toLowerCase().includes("nekad");
+            setState((s) => ({
+              ...s,
+              loading: false,
+              error: permissionDenied
+                ? "Platsbehörighet nekad. Öppna Inställningar → Vindkollen → Plats."
+                : errMsg || "Kunde inte hämta position.",
+              permissionDenied,
+              permissionState: permissionDenied ? "denied" : s.permissionState,
+            }));
+          },
+        );
+
+        if (stopped) {
+          cleanup();
+        } else {
+          nativeCleanupRef.current = cleanup;
+        }
+      }
+
+      void startNativeGPS();
+
+      return () => {
+        stopped = true;
+        window.clearTimeout(watchdogId);
+        nativeCleanupRef.current?.();
+        nativeCleanupRef.current = null;
+      };
+    }
+
+    // ------------------------------------------------------------------
+    // Webb: navigator.geolocation.watchPosition
+    // ------------------------------------------------------------------
+    if (!("geolocation" in navigator)) {
+      window.clearTimeout(watchdogId);
+      setState((s) => ({
+        ...s,
+        loading: false,
+        error: "Geolocation stöds inte i den här webbläsaren.",
+      }));
+      return;
+    }
+
     let watchStarted = false;
 
     void requestNativeGeolocationPermission().then((granted) => {
-      if (watchStarted) return; // Effect redan avmonterad
+      // requestNativeGeolocationPermission är no-op på webb (returnerar true)
+      if (watchStarted) return;
       watchStarted = true;
 
       if (!granted) {
@@ -106,7 +181,8 @@ export function useGeolocation(enabled: boolean): GeoState {
         setState((s) => ({
           ...s,
           loading: false,
-          error: "Platsbehörighet nekad. Öppna Inställningar → Vindkollen → Plats och välj 'Vid användning av appen'.",
+          error:
+            "Platsbehörighet nekad. Öppna Inställningar → Vindkollen → Plats och välj 'Vid användning av appen'.",
           permissionDenied: true,
           permissionState: "denied",
         }));
@@ -149,7 +225,7 @@ export function useGeolocation(enabled: boolean): GeoState {
     });
 
     return () => {
-      watchStarted = true; // Stoppar promise-callbacken om den ännu inte kört
+      watchStarted = true;
       window.clearTimeout(watchdogId);
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
