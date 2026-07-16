@@ -1,0 +1,120 @@
+Ja — be den köra en sista supercheck, men nu som verifiering, inte som en ny fri felsökning eller större omskrivning.
+
+Klistra in detta:
+
+⸻
+
+Kör nu en sista fullständig supercheck av iOS-versionen efter de senaste ändringarna.
+
+Gör inga nya större omskrivningar. Fokus ska vara att verifiera att allt verkligen fungerar tillsammans och att inga regressioner har introducerats.
+
+Kontrollera särskilt
+
+1. Sverigekartan
+    * Öppnas internt i appen.
+    * Öppnar inte Safari.
+    * Hämtar live-data.
+    * Visar fler än pilotprojekten.
+    * Zoom, panorering och projektkort fungerar.
+2. Native-build
+    * dist-native är nybyggd.
+    * Rätt build-ID visas.
+    * Ingen gammal cache används.
+    * npx cap sync ios kopierar rätt filer.
+3. API
+    * Den fullständiga API-URL:en är korrekt.
+    * HTTP 200.
+    * 3585 projekt hämtas.
+    * Fallback används endast om live-anropet misslyckas.
+    * Inga CORS-fel.
+    * Inga tysta fetch-fel.
+4. Intern navigation
+    * Startsida till Sverigekartan.
+    * Sverigekartan tillbaka till AR-vyn.
+    * Katrineholmsvyn.
+    * Projektkort och redigeringsläge.
+    * Inga externa länkar öppnas av misstag.
+5. Safe area och små skärmar
+    * iPhone SE.
+    * iPhone mini.
+    * iPhone med notch.
+    * iPhone med Dynamic Island.
+    * Stående och liggande läge.
+    * Ingen knapp, banner eller diagnostikpanel hamnar under notch eller Home Indicator.
+6. AR-vyn
+    * GPS.
+    * Kompass.
+    * Kalibreringsbanner.
+    * dBA.
+    * Infraljud.
+    * Ljud ute/inne.
+    * Toppbar.
+    * Bottenmeny.
+    * Inställningar.
+    * Närmaste verk.
+    * Inga lager täcker fel komponent.
+7. GeoJSON-export
+    * På native visas modal.
+    * Kopieringsknappen fungerar.
+    * Manuell kopiering fungerar som fallback.
+    * På webben fungerar nedladdningen fortfarande.
+8. Övriga funktioner
+    * PDF-länkar.
+    * Fotomontage.
+    * Petition/folkomröstningsmodal.
+    * Projektinformation.
+    * Menyer och overlays.
+    * Ingen funktion öppnar Safari om den ska vara intern.
+    * Externa länkar öppnas fortfarande korrekt när de faktiskt ska vara externa.
+
+Tekniska kontroller
+
+Kör:
+
+pnpm typecheck
+pnpm native:build
+npx cap sync ios
+
+Kör även relevanta tester eller lint-kommandon om sådana scripts finns.
+
+Sök dessutom efter:
+
+window.open(
+_system
+_blank
+VITE_PUBLIC_APP_URL
+VITE_API_BASE_URL
+capacitor://localhost
+top: "5rem"
+bottom-4
+py-10
+
+Kontrollera att inga gamla problematiska implementationer finns kvar på andra ställen.
+
+Rapport
+
+Redovisa resultatet som:
+
+* ✅ Godkänt
+* ⚠️ Kvarvarande begränsning
+* ❌ Fel som måste åtgärdas
+
+För varje kvarvarande problem ska du ange:
+
+1. Fil och rad.
+2. Exakt effekt på iPhone.
+3. Om problemet är nytt eller fanns sedan tidigare.
+4. Rekommenderad åtgärd.
+5. Risknivå.
+
+Gör inga ytterligare ändringar utan att först redovisa dem, såvida det inte är en uppenbar och riskfri enradersfix.
+
+Avsluta med ett tydligt besked:
+
+Redo för test på fysisk iPhone: JA/NEJ
+
+och lista exakt vad jag ska testa på telefonen i rätt ordning.
+
+⸻
+
+Det är bra att Replit redan visar typecheck ✅, build ✅ och cap sync ✅. Men den riktiga sanningen kommer först när du kör appen från Xcode på din fysiska iPhone.
