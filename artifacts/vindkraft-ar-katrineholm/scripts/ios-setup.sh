@@ -2,13 +2,19 @@
 # =============================================================================
 # ios-setup.sh — Vindkollen iOS Info.plist privacy strings
 #
-# Kör detta skript EFTER "cap add ios" på din Mac.
-# Det lägger till de obligatoriska privacy usage descriptions som Apple kräver
-# för kamera, plats och rörelsedata.
+# Skriver in obligatoriska NSUsageDescription-nycklar i
+# ios/App/App/Info.plist med PlistBuddy (macOS-verktyg).
 #
-# Användning:
+# Körs automatiskt av:
+#   pnpm native:ios   (efter cap sync ios, före cap open ios)
+#   pnpm native:plist (manuellt, t.ex. efter cap add ios)
+#
+# Körs manuellt om du återskapar ios/-mappen:
 #   cd artifacts/vindkraft-ar-katrineholm
 #   bash scripts/ios-setup.sh
+#
+# Skriptet är idempotent — Add-or-Set: lägger till nyckeln om den saknas,
+# uppdaterar värdet om den redan finns. Säkert att köra flera gånger.
 # =============================================================================
 
 set -e
@@ -21,27 +27,30 @@ if [ ! -f "$PLIST" ]; then
   exit 1
 fi
 
-echo "📝  Lägger till privacy strings i $PLIST …"
+echo "📝  Skriver privacy strings till $PLIST …"
 
+# NSCameraUsageDescription
 /usr/libexec/PlistBuddy -c \
-  "Add :NSCameraUsageDescription string 'Vindkollen behöver kameran för att visa vindkraftverken i AR direkt mot horisonten.'" \
+  "Add :NSCameraUsageDescription string 'Vindkollen behöver använda kameran för att visa vindkraftverken i AR.'" \
   "$PLIST" 2>/dev/null || \
 /usr/libexec/PlistBuddy -c \
-  "Set :NSCameraUsageDescription 'Vindkollen behöver kameran för att visa vindkraftverken i AR direkt mot horisonten.'" \
+  "Set :NSCameraUsageDescription 'Vindkollen behöver använda kameran för att visa vindkraftverken i AR.'" \
   "$PLIST"
 
+# NSLocationWhenInUseUsageDescription
 /usr/libexec/PlistBuddy -c \
-  "Add :NSLocationWhenInUseUsageDescription string 'Vindkollen använder din plats för att beräkna riktning och avstånd till vindkraftverken.'" \
+  "Add :NSLocationWhenInUseUsageDescription string 'Vindkollen behöver din position för att beräkna avstånd och riktning till vindkraftverken.'" \
   "$PLIST" 2>/dev/null || \
 /usr/libexec/PlistBuddy -c \
-  "Set :NSLocationWhenInUseUsageDescription 'Vindkollen använder din plats för att beräkna riktning och avstånd till vindkraftverken.'" \
+  "Set :NSLocationWhenInUseUsageDescription 'Vindkollen behöver din position för att beräkna avstånd och riktning till vindkraftverken.'" \
   "$PLIST"
 
+# NSMotionUsageDescription
 /usr/libexec/PlistBuddy -c \
-  "Add :NSMotionUsageDescription string 'Vindkollen använder kompass och rörelsesensorer för att rikta AR-vyn mot rätt horisont.'" \
+  "Add :NSMotionUsageDescription string 'Vindkollen behöver använda rörelsesensorer och kompass för att visa rätt riktning i AR.'" \
   "$PLIST" 2>/dev/null || \
 /usr/libexec/PlistBuddy -c \
-  "Set :NSMotionUsageDescription 'Vindkollen använder kompass och rörelsesensorer för att rikta AR-vyn mot rätt horisont.'" \
+  "Set :NSMotionUsageDescription 'Vindkollen behöver använda rörelsesensorer och kompass för att visa rätt riktning i AR.'" \
   "$PLIST"
 
 echo "✅  Privacy strings klara:"
@@ -49,5 +58,4 @@ echo "   NSCameraUsageDescription"
 echo "   NSLocationWhenInUseUsageDescription"
 echo "   NSMotionUsageDescription"
 echo ""
-echo "➡️  Nästa steg: öppna Xcode och verifiera under"
-echo "   Vindkollen target → Info → Custom iOS Target Properties"
+echo "   Verifiera i Xcode: App target → Info → Custom iOS Target Properties"

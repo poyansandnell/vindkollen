@@ -9,8 +9,9 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "native:build": "vite build --config vite.native.config.ts",
+    "native:plist": "bash scripts/ios-setup.sh",
     "native:sync": "pnpm native:build && cap sync",
-    "native:ios": "pnpm native:build && cap sync ios && cap open ios",
+    "native:ios": "pnpm native:build && cap sync ios && pnpm native:plist && cap open ios",
     "native:android": "pnpm native:build && cap sync android && cap open android"
   },
   "devDependencies": {
