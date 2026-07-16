@@ -39,6 +39,7 @@ import { estimateNoiseImpact } from "@/lib/noiseImpact";
 import { useWindDirection } from "@/hooks/useWindDirection";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
 import { KATRINEHOLM_CENTER } from "@/lib/ericsbergArea";
+import { KATRINEHOLM_PROJECT } from "@/lib/bundledProjects";
 import {
   captureNativeCameraPhoto,
   isNative,
@@ -47,7 +48,7 @@ import {
 } from "@/lib/capacitorBridge";
 import { NativeDiagnostics } from "@/components/NativeDiagnostics";
 
-const PHOTO_WATERMARK_TEXT = "Katrineholm FRAMÅT – Vindkraft AR";
+const PHOTO_WATERMARK_TEXT = "Vindkollen AR – Katrineholm";
 const PHOTO_DISCLAIMER_TEXT = "Fotomontage/visualisering. GPS, kompass, terräng, väder och sikt kan påverka precisionen.";
 
 const AVG_RPM = TURBINES.reduce((sum, t) => sum + getBladeRpm(t.name), 0) / TURBINES.length;
@@ -158,6 +159,9 @@ export default function Home() {
   const debugStripRef = useRef<HTMLDivElement | null>(null);
   const [debugStripHeight, setDebugStripHeight] = useState(0);
   const [showSensorDebug, setShowSensorDebug] = useState(false);
+  // TEST 7: debug-remsan (LiveDebugStrip) är dold som standard — visas bara
+  // i utvecklarläge via menyn. Minskar visuellt brus för vanliga användare.
+  const [showDebugStrip, setShowDebugStrip] = useState(false);
   // Juli 2026-fix (produktfeedback, ny omgång: "gör informationen smartare
   // så den inte tar upp lika mycket plats och inte skymmer varandra"):
   // föregående fix bytte badge-raden till `flex-wrap` för att lösa den
@@ -1363,7 +1367,7 @@ export default function Home() {
               den tar mindre plats och stör mindre. Den fullständiga,
               interaktiva `SensorDebugPanel` är fortfarande kvar bakom
               "Felsökning" för djupare felsökning. */}
-          {arSessionVisible && (
+          {arSessionVisible && showDebugStrip && (
             <LiveDebugStrip
               measureRef={debugStripRef}
               fps={arDebugStats.fps}
@@ -1741,12 +1745,14 @@ export default function Home() {
             {ready && showNoiseImpact && (
               <NoiseImpactPanel result={noiseImpact} onClose={() => setShowNoiseImpact(false)} />
             )}
+            {KATRINEHOLM_PROJECT.campaign?.enabled && (
             <button
               onClick={() => setShowPetition(true)}
               className="w-full rounded-full bg-[#FF8B01] py-3.5 text-sm font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/30 hover:bg-[#FFB347]"
             >
               Jag vill skriva på för att få till folkomröstning
             </button>
+            )}
             {ready && (
               <button
                 onClick={handleCapturePhoto}
@@ -1847,6 +1853,16 @@ export default function Home() {
                     ↩️ Återgå till planerad placering (29 verk)
                   </button>
                 )}
+                <button
+                  onClick={() => {
+                    setShowDebugStrip((v) => !v);
+                    setShowMenu(false);
+                  }}
+                  aria-pressed={showDebugStrip}
+                  className="w-full rounded-full border border-white/10 bg-white/[0.03] py-2 text-[11px] font-medium text-white/40 hover:bg-white/10 hover:text-white/60 aria-pressed:text-white/70"
+                >
+                  {showDebugStrip ? "🔧 Dölj diagnostik" : "🔧 Visa diagnostik"}
+                </button>
               </div>
             </div>
           )}

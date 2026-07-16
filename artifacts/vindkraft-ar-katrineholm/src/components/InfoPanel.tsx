@@ -3,31 +3,48 @@ export function InfoPanel({ onClose }: { onClose: () => void }) {
     <div className="absolute inset-0 z-[60] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">
       <div className="w-full max-w-md rounded-t-3xl bg-[#111111] p-6 shadow-2xl sm:rounded-3xl">
         <div className="mb-4 flex items-start justify-between">
-          <h2 className="text-xl font-semibold text-white">Bakgrund om planerna</h2>
-          <button onClick={onClose} className="shrink-0 rounded-full bg-white/10 p-1.5 text-white hover:bg-white/20">
+          <h2 className="text-xl font-semibold text-white">Om Vindkollen</h2>
+          <button
+            onClick={onClose}
+            className="shrink-0 rounded-full bg-white/10 p-1.5 text-white hover:bg-white/20"
+          >
             ✕
           </button>
         </div>
 
         <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1 text-sm leading-relaxed text-white/75">
           <p>
-            Detta är de vindkraftverk som Ericsbergs Säteri genom Renewable Sweden AB har begärt
-            samrådsyttrande om hos Försvarsmakten.
+            Vindkollen hjälper invånare att se och förstå hur planerade vindkraftsetableringar kan påverka
+            landskapet, närboende och lokalsamhället.
           </p>
           <p>
-            Underlaget avser Ericsbergs Vind 1–5 i Katrineholms kommun, totalt 29 vindkraftverk fördelade på
-            fem delområden.
+            Genom Sverigekartan, lokala projektvyer och AR-visualisering kan användaren undersöka verkens
+            placering, avstånd, riktning, ljudnivå och visuella påverkan direkt från den plats där man
+            befinner sig.
           </p>
           <p>
-            Om dessa verk byggs finns en risk att det öppnar för betydligt större vindkraftsparker i
-            Katrineholms kommun.
+            Målet är att göra information om planerade etableringar mer tillgänglig, tydlig och begriplig —
+            så att fler kan bilda sig en egen uppfattning och delta i den lokala demokratiska processen.
           </p>
           <p>
-            Som jämförelse presenterade Holmen tidigare planer på upp till 77 vindkraftverk i området kring
-            Simonstorp i Norrköpings och Finspångs kommuner. Projektet omarbetades senare till 32 verk.
-            Norrköpings kommun valde därefter att använda sitt kommunala veto mot den del av etableringen som
-            berörde kommunen.
+            Vindkollen är utvecklad av{" "}
+            <span className="font-medium text-[#FFB347]">@PoyanSandnell</span>. Den första versionen togs
+            fram åt Katrineholm Framåt för att visa hur den planerade vindkraftsetableringen nära
+            Katrineholms tätort kan påverka staden och dess invånare.
           </p>
+
+          <div className="mt-1 border-t border-white/10 pt-3">
+            <h3 className="mb-2 text-sm font-semibold text-white">Länsterberget — Katrineholms kommun</h3>
+            <p>
+              Denna projektvy har tagits fram åt Katrineholm Framåt för att tydliggöra hur den planerade
+              etableringen norr om Katrineholm kan upplevas från olika delar av kommunen.
+            </p>
+            <p className="mt-2">
+              Verktyget visar bland annat verkens riktning, avstånd, uppskattad ljudnivå och visuella
+              påverkan. Syftet är att ge invånarna ett mer konkret underlag inför den fortsatta
+              diskussionen om etableringen.
+            </p>
+          </div>
         </div>
 
         <button

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { apiUrl } from "@/lib/apiUrl";
-import { consumeFreshPlaceraFlag, openSverigekartan } from "@/lib/capacitorBridge";
+import { consumeFreshPlaceraFlag, isNative, openSverigekartan } from "@/lib/capacitorBridge";
 import { PlacementMap } from "@/components/PlacementMap";
 import { PlacementScorePanel } from "@/components/PlacementScorePanel";
 import {
@@ -20,29 +20,14 @@ import {
   type LatLon,
 } from "@/lib/ericsbergArea";
 import { lon2tileX, lat2tileY, ESRI_WORLD_IMAGERY_URL } from "@/lib/webMercatorTiles";
+import { BUNDLED_PROJECTS, type ApiProjectArea } from "@/lib/bundledProjects";
 
 const SAVED_KEY = "vindkraft-ar-katrineholm:savedPlacements";
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
 const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
 
 // ─── API-typer och hjälpfunktioner för nationellt projektläge ─────────────
-
-/** Minimal projekttyp för Sverigekartan (undviker beroende av @workspace/api-zod). */
-interface ApiProjectArea {
-  id: number;
-  name: string;
-  status: string;
-  /** @nullable */
-  kommun?: string | null;
-  /** @nullable */
-  turbineCountPlannedMin?: number | null;
-  /** @nullable */
-  turbineCountPlannedMax?: number | null;
-  centerLat?: number;
-  centerLng?: number;
-  /** @nullable */
-  polygon?: { type: string; coordinates: unknown } | null;
-}
+// ApiProjectArea importeras från @/lib/bundledProjects — delas med bundlade projekt.
 
 /** Konverterar API GeoJSON Polygon/MultiPolygon till LatLon[] för gränseditorn. */
 function apiPolygonToLatLon(polygon: ApiProjectArea["polygon"]): LatLon[] | null {
@@ -114,9 +99,32 @@ function NationalView({
 
   useEffect(() => {
     let cancelled = false;
-    setLoadState("loading");
-    setLoadError(null);
 
+    // ── Steg 1: visa bundlade projekt omedelbart ─────────────────────────────
+    // Fungerar offline och på Capacitor native utan nätverkshämtning.
+    // På native (iOS/Android) returnerar apiUrl() en relativ URL under
+    // capacitor://localhost som inte kan nå en extern server →
+    // DOMException "The string did not match the expected pattern."
+    // Bundlade data förhindrar detta fel och ger offline-stöd.
+    const bundled = BUNDLED_PROJECTS.filter(
+      (p) => typeof p.centerLat === "number" && typeof p.centerLng === "number",
+    );
+    setProjects(bundled);
+    setLoadState("ok");
+    setLoadError(null);
+    console.log(
+      `[Vindkollen] Sverigekartan: laddade ${bundled.length} bundlade projekt`,
+      bundled.map((p) => `[${p.id}] ${p.name} (${p.kommun ?? "okänd kommun"})`),
+    );
+
+    // ── Steg 2: på native utan absolut API-bas — hoppa över fetch ────────────
+    // Relativa URL:er (/api/...) fungerar inte under capacitor://localhost.
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
+    if (isNative() && !apiBase) {
+      return () => { cancelled = true; };
+    }
+
+    // ── Steg 3: på webben — hämta API-data i bakgrunden och ersätt bundlade ──
     // Sverige-bbox: lon 10-25°E, lat 55-70°N
     const url = apiUrl("/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25");
     fetch(url)
@@ -129,18 +137,22 @@ function NationalView({
         const withCoords = (Array.isArray(data) ? data : []).filter(
           (p) => typeof p.centerLat === "number" && typeof p.centerLng === "number",
         );
-        setProjects(withCoords);
-        setLoadState("ok");
-        console.log(
-          `[Vindkollen] Sverigekartan: laddade ${withCoords.length} projekt`,
-          withCoords.map((p) => `[${p.id}] ${p.name}`),
-        );
+        if (withCoords.length > 0) {
+          setProjects(withCoords);
+          console.log(
+            `[Vindkollen] Sverigekartan: API-uppdatering — ${withCoords.length} projekt`,
+            withCoords.map((p) => `[${p.id}] ${p.name}`),
+          );
+        }
       })
       .catch((err: Error) => {
         if (cancelled) return;
-        setLoadError(err.message);
-        setLoadState("error");
-        console.error("[Vindkollen] Sverigekartan: projekthämtning misslyckades:", err.message, url);
+        // Bundlade data visas redan — logga bara utan att ändra UI-tillstånd
+        console.warn(
+          "[Vindkollen] Sverigekartan: API-hämtning misslyckades (bundlade data visas):",
+          err.message,
+          url,
+        );
       });
 
     return () => {

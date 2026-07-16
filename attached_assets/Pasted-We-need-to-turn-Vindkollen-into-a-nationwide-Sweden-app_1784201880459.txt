@@ -1,0 +1,159 @@
+We need to turn Vindkollen into a nationwide Sweden app with configurable local project modules.
+
+1. Fix the Sweden project loading error
+
+The native Sweden map currently shows:
+
+“Could not load projects”
+“The string did not match the expected pattern.”
+
+This strongly suggests an invalid URL or fetch path under capacitor://localhost.
+
+Please investigate and fix:
+
+- Log the exact URL passed to fetch before every project-data request.
+- Do not construct API URLs with undefined, empty or malformed base URLs.
+- Detect Capacitor native runtime explicitly.
+- For native builds, either:
+  a) bundle the full project registry as local JSON/static TypeScript data, or
+  b) use a valid absolute HTTPS production API URL.
+- Never call fetch() with a relative API URL that resolves incorrectly under capacitor://localhost.
+- Add a fallback bundled project list if the remote API is unavailable.
+- Display “Loaded X projects” in temporary diagnostics.
+- Log every loaded project ID, name, municipality and coordinate.
+- Preserve the full web project dataset in dist-native.
+
+The Sweden overview must remain usable even without a network connection if bundled project data is available.
+
+2. Nationwide project architecture
+
+Create a generic project registry.
+
+Each project should contain:
+
+- id
+- name
+- municipality
+- region/county
+- latitude
+- longitude
+- turbineCount
+- turbines
+- boundary polygon
+- project description
+- source documents
+- optional local campaign configuration
+- optional contact details
+- AR configuration
+
+The app must not contain hardcoded Ericsberg-specific routing or labels.
+
+When a user selects a project, pass selectedProjectId to the generic editor and AR view.
+
+3. Start flow
+
+The user should be able to:
+
+- View all Sweden
+- Select municipality/project
+- Search by place or project name
+- Select a marker on the Sweden map
+- Zoom into a project
+- Open that project’s generic detail/editor/AR view
+
+Add a selector such as:
+
+“Välj ort eller projekt”
+
+Initially include Katrineholm, but make it data-driven so additional municipalities can be added without changing the UI logic.
+
+4. Local campaign modules
+
+Do not show the Katrineholm referendum form globally.
+
+Add optional project-level campaign configuration.
+
+Example:
+
+campaign: {
+  enabled: true,
+  type: "referendum-interest",
+  title: "...",
+  description: "...",
+  municipality: "Katrineholm"
+}
+
+Only show the referendum/interest form when the selected project has campaign.enabled = true.
+
+For all other projects, hide the campaign CTA completely.
+
+5. Global About text
+
+Replace local/Ericsberg wording in the general app information with:
+
+“Vindkollen hjälper invånare att se och förstå hur planerade vindkraftsetableringar kan påverka landskapet, närboende och lokalsamhället.
+
+Genom Sverigekartan, lokala projektvyer och AR-visualisering kan användaren undersöka verkens placering, avstånd, riktning, ljudnivå och visuella påverkan direkt från den plats där man befinner sig.
+
+Målet är att göra information om planerade etableringar mer tillgänglig, tydlig och begriplig – så att fler kan bilda sig en egen uppfattning och delta i den lokala demokratiska processen.
+
+Vindkollen är utvecklad av @PoyanSandnell. Den första versionen togs fram åt Katrineholm Framåt för att visa hur den planerade vindkraftsetableringen nära Katrineholms tätort kan påverka staden och dess invånare.”
+
+6. Katrineholm project text
+
+For the Katrineholm project only, show:
+
+“Denna projektvy har tagits fram åt Katrineholm Framåt för att tydliggöra hur den planerade etableringen norr om Katrineholm kan upplevas från olika delar av kommunen.
+
+Verktyget visar bland annat verkens riktning, avstånd, uppskattad ljudnivå och visuella påverkan. Syftet är att ge invånarna ett mer konkret underlag inför den fortsatta diskussionen om etableringen.”
+
+Remove old text that incorrectly treats Ericsberg as the whole app.
+
+7. AR interface layout
+
+The AR controls currently overlap and occupy too much vertical space.
+
+Reorganize the mobile UI:
+
+Row 1:
+- GPS status
+- Compass status
+- Sound level
+- Infrasound
+
+Row 2:
+- “Du tittar mot närmaste verk”
+- nearest turbine distance and bearing
+
+Row 3:
+- Sound controls
+- More status
+- Settings
+
+Requirements:
+
+- Keep each row inside 100vw.
+- Allow compact wrapping when necessary.
+- The green nearest-turbine message must appear below the status row.
+- Do not cover the title or camera view.
+- Respect safe-area-inset-top.
+- Hide the large developer diagnostics panel by default.
+- Add a small developer toggle to reveal diagnostics when needed.
+- Remove the raw green FPS/debug text from normal user mode.
+
+8. Generic labels
+
+Replace every remaining hardcoded label:
+
+- Ericsbergsplaneraren → Projektplaneraren
+- Öppna Ericsbergsplaneraren → Öppna projektet
+- Ericsbergs marker → selected project’s boundary name
+- Katrineholm · 29 verk → selected municipality/project and turbine count
+
+9. Build marker
+
+Increment the temporary native label to:
+
+Native TEST 7 – Nationwide projects + AR layout
+
+Run typecheck and native build, but also verify that the bundled native build can load the full project registry without relying on a malformed relative API URL.
