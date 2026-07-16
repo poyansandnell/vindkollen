@@ -3,6 +3,9 @@ import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { openSverigekartan } from "@/lib/capacitorBridge";
 
+/** Ändra denna sträng inför varje ny native-testbygge. Ta bort raden inför release. */
+const BUILD_LABEL = "🧪 Native TEST 2";
+
 interface PermissionGateProps {
   onStart: () => void;
   starting: boolean;
@@ -132,9 +135,11 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
             <p className="text-center text-[11px] text-white/30">
               Fungerar bäst utomhus, i dagsljus eller kväll, med fri sikt mot horisonten.
             </p>
-            <p className="text-center text-[11px] font-bold text-[#FF8B01]">
-              Vindkollen TEST 123
-            </p>
+            {BUILD_LABEL && (
+              <p className="text-center text-[11px] font-bold text-[#FF8B01]">
+                {BUILD_LABEL}
+              </p>
+            )}
           </>
         )}
       </div>

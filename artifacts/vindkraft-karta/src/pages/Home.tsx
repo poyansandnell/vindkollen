@@ -235,7 +235,7 @@ export default function Home() {
   }
 
   return (
-    <div className="relative h-screen w-full overflow-hidden bg-background">
+    <div className="relative h-[100dvh] w-full overflow-hidden bg-background" style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
       <MapCanvas
         key={flyToken}
         mapboxToken={mapboxToken}
@@ -252,14 +252,16 @@ export default function Home() {
         onSightResultsChange={setSightResultsInfo}
       />
 
-      <div className="absolute top-3 left-3 right-3 sm:right-auto flex flex-col gap-2 z-10">
-        <div className="flex items-center gap-2">
-          <SearchBox
-            mapboxToken={mapboxToken}
-            onSelectLocation={(point) => handleLocated(point)}
-            onLocateMe={locate}
-            locating={locating}
-          />
+      <div className="absolute top-3 left-3 right-3 sm:right-auto flex flex-col gap-2 z-10 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <div className="flex-1 min-w-0">
+            <SearchBox
+              mapboxToken={mapboxToken}
+              onSelectLocation={(point) => handleLocated(point)}
+              onLocateMe={locate}
+              locating={locating}
+            />
+          </div>
           <Button
             variant="secondary"
             size="sm"
@@ -267,8 +269,8 @@ export default function Home() {
             onClick={() => setShowBestPlaces(true)}
             data-testid="button-open-best-places"
           >
-            <ListOrdered className="h-4 w-4 mr-1" />
-            Bästa orter
+            <ListOrdered className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Bästa orter</span>
           </Button>
           <Button
             variant={sightMode ? "default" : "secondary"}
@@ -277,8 +279,8 @@ export default function Home() {
             onClick={handleToggleSightMode}
             data-testid="button-toggle-sight-mode"
           >
-            <Crosshair className="h-4 w-4 mr-1" />
-            {sightMode ? "Klicka på kartan…" : "Sikt från plats"}
+            <Crosshair className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">{sightMode ? "Klicka på kartan…" : "Sikt från plats"}</span>
           </Button>
         </div>
         <FilterBar filters={filters} onChange={setFilters} hasFocusPoint={!!focusPoint} />

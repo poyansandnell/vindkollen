@@ -39,7 +39,12 @@ import { estimateNoiseImpact } from "@/lib/noiseImpact";
 import { useWindDirection } from "@/hooks/useWindDirection";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
 import { KATRINEHOLM_CENTER } from "@/lib/ericsbergArea";
-import { openSverigekartan, captureNativeCameraPhoto } from "@/lib/capacitorBridge";
+import {
+  captureNativeCameraPhoto,
+  isNative,
+  openSverigekartan,
+  requestAllPermissionsSequentially,
+} from "@/lib/capacitorBridge";
 import { NativeDiagnostics } from "@/components/NativeDiagnostics";
 
 const PHOTO_WATERMARK_TEXT = "Katrineholm FRAMÅT – Vindkraft AR";
@@ -107,6 +112,8 @@ export default function Home() {
 
   const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
+  // Fel från sekventiell native behörighetsförfrågan — visas i PermissionGate.
+  const [nativePermError, setNativePermError] = useState<string | null>(null);
   // Visar den produktkrävda laddningssekvensen direkt efter
   // "Starta visualisering": (1) kompasskalibrering i två steg (liggande,
   // sedan stående — sensorstyrd, se `useDeviceOrientation.ts`s
@@ -554,8 +561,10 @@ export default function Home() {
 
   const errors = useMemo(
     () =>
-      [preStartPermissionError, geo.error, orientation.error, camera.error].filter((e): e is string => Boolean(e)),
-    [preStartPermissionError, geo.error, orientation.error, camera.error],
+      [nativePermError, preStartPermissionError, geo.error, orientation.error, camera.error].filter(
+        (e): e is string => Boolean(e),
+      ),
+    [nativePermError, preStartPermissionError, geo.error, orientation.error, camera.error],
   );
 
   // Juli 2026-fix (produktkrav 2, "endast EN statusruta åt gången"): rapporteras
@@ -1015,50 +1024,18 @@ export default function Home() {
   }, [wind.playing, windTargetVolume]);
 
   const handleStart = useCallback(() => {
-    // Sjunde kritiska buggrapporten (punkt 2): explicit "startAR()"-logg,
-    // så man i konsolen kan se ATT och NÄR AR-flödet faktiskt begärdes,
-    // fristående från `[AR][pipeline] startAR(): render-loop initierad...`
-    // som loggas senare av `ARScene.tsx` när själva render-loopen startar.
+    // Double-tap guard: ignorera knapptryck om ett flöde redan pågår.
+    if (starting) return;
+
     console.info("[AR][pipeline] startAR() anropad (knapptryckning)");
     setStarting(true);
+    setNativePermError(null);
     setShowLoadingSequence(true);
+
     // Ljud på som standard: startas direkt från samma knapptryckning (giltigt
     // användargest för iOS Safaris ljuduppspelningsregler), innan ev. await
     // nedan, så AudioContext skapas/låses upp synkront i gestens "kontext".
     void wind.toggle();
-
-    // VIKTIGT: GPS- och kamerabehörighet måste begäras SYNKRONT i samma
-    // knapptryckning som utlöser dem — precis som ljudet ovan. iOS Safari
-    // (och flera Android-webbläsare) räknar bara knappklicket som en giltig
-    // "user gesture" en mycket kort stund. Om vi (som tidigare) väntar
-    // (await) på kompassbehörigheten FÖRST, och först därefter — via
-    // setStarted(true) och en efterföljande render/effekt — begär GPS och
-    // kamera, hinner gest-fönstret stängas. Resultatet blir att webbläsaren
-    // tyst nekar GPS/kamera utan att någonsin visa behörighetsdialogen,
-    // vilket var precis vad testaren (Stephane) upplevde. Genom att trigga
-    // alla tre förfrågningar parallellt, direkt här, ligger de alla kvar
-    // inom samma giltiga gest-fönster.
-    //
-    // OBS enableHighAccuracy: false här (medvetet, till skillnad från den
-    // riktiga watchPosition-bevakningen i useGeolocation): den här anropet
-    // kastas bort — vi bryr oss bara om att trigga behörighetsdialogen. Om
-    // vi begär hög noggrannhet (GPS-chip) HÄR *samtidigt* som den riktiga
-    // watchPosition-bevakningen startar en bråkdel av en sekund senare, kan
-    // de två samtidiga GPS-chip-förfrågningarna konkurrera om samma
-    // hårdvara på många Android-enheter och avsevärt fördröja/blockera den
-    // riktiga positionsfixen — exakt det som såg ut som "GPS hänger sig".
-    // Med enableHighAccuracy: false används bara nätverks-/wifi-baserad
-    // positionering för detta bortkastade anrop, vilket inte konkurrerar om
-    // GPS-chipet.
-    navigator.geolocation?.getCurrentPosition(
-      () => {},
-      () => {},
-      { enableHighAccuracy: false, timeout: 15000, maximumAge: Infinity },
-    );
-    navigator.mediaDevices
-      ?.getUserMedia?.({ video: { facingMode: { ideal: "environment" } }, audio: false })
-      .then((stream) => stream.getTracks().forEach((t) => t.stop()))
-      .catch(() => {});
 
     const finish = () => {
       // Nollställ/starta åtta-rörelsens sektorspårning precis när AR-flödet
@@ -1069,13 +1046,66 @@ export default function Home() {
       setStarting(false);
     };
 
+    // -----------------------------------------------------------------------
+    // Native iOS/Android: kamera- och platsbehörighet begärs SEKVENTIELLT via
+    // Capacitor-plugin, INNAN setStarted(true) anropas. Parallella iOS-dialoger
+    // fryser appen. requestAllPermissionsSequentially() sätter
+    // _nativePermissionsGranted så att useCameraStream/useGeolocation hoppar
+    // över att begära behörighet en gång till.
+    // -----------------------------------------------------------------------
+    if (isNative()) {
+      void requestAllPermissionsSequentially()
+        .then(({ camera, location, error }) => {
+          if (!camera || !location) {
+            console.warn("[Vindkollen] handleStart: behörighet nekad —", error);
+            setNativePermError(error ?? "Behörighet nekad.");
+            setStarting(false);
+            setShowLoadingSequence(false);
+            return;
+          }
+          // Vänta lite extra efter att sista dialogen stängs, innan native-
+          // tjänsterna (CameraPreview, watchPosition) startar.
+          console.log("[Vindkollen] handleStart: alla behörigheter OK, startar om 400 ms…");
+          setTimeout(() => {
+            if (orientation.needsPermission) {
+              void orientation.requestPermission().finally(finish);
+            } else {
+              finish();
+            }
+          }, 400);
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error("[Vindkollen] handleStart: requestAllPermissionsSequentially fel:", msg);
+          setNativePermError(`Fel vid behörighetsbegäran: ${msg}`);
+          setStarting(false);
+          setShowLoadingSequence(false);
+        });
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // Webb: kamera- och GPS-dialogen triggas parallellt i samma gest-fönster.
+    // OBS enableHighAccuracy: false — resultatet kastas bort; konkurrerar ej
+    // om GPS-chipet med den riktiga watchPosition-bevakningen.
+    // -----------------------------------------------------------------------
+    navigator.geolocation?.getCurrentPosition(
+      () => {},
+      () => {},
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: Infinity },
+    );
+    navigator.mediaDevices
+      ?.getUserMedia?.({ video: { facingMode: { ideal: "environment" } }, audio: false })
+      .then((stream) => stream.getTracks().forEach((t) => t.stop()))
+      .catch(() => {});
+
     if (orientation.needsPermission) {
       void orientation.requestPermission().finally(finish);
     } else {
       finish();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orientation]);
+  }, [orientation, starting]);
 
   // VIKTIGT: måste ha stabil identitet. `LoadingSequence`s checklista
   // beror på denna callback i sitt completion-effekt — om vi (som tidigare)

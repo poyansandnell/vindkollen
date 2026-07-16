@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isNative, requestNativeGeolocationPermission, watchNativePosition } from "../lib/capacitorBridge";
+import { areNativePermissionsGranted, isNative, requestNativeGeolocationPermission, watchNativePosition } from "../lib/capacitorBridge";
 
 export interface GeoState {
   lat: number | null;
@@ -92,8 +92,11 @@ export function useGeolocation(enabled: boolean): GeoState {
       let stopped = false;
 
       async function startNativeGPS() {
-        // 1. checkPermissions + requestPermissions via Capacitor
-        const granted = await requestNativeGeolocationPermission();
+        // 1. checkPermissions + requestPermissions via Capacitor —
+        //    hoppa över om redan beviljad av requestAllPermissionsSequentially().
+        const granted =
+          areNativePermissionsGranted() || (await requestNativeGeolocationPermission());
+        console.log("[Vindkollen] useGeolocation: location permission =", granted);
         if (stopped) return;
 
         if (!granted) {

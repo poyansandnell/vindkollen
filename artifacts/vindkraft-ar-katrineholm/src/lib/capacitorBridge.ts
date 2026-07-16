@@ -44,6 +44,18 @@ export function openSverigekartan(): void {
 
 let _cameraPreviewActive = false;
 
+// ---------------------------------------------------------------------------
+// Sequential permission state — prevents parallel iOS dialog freeze
+// ---------------------------------------------------------------------------
+
+let _isRequestingPermissions = false;
+let _nativePermissionsGranted = false;
+
+/** True after requestAllPermissionsSequentially() succeeded. Hooks use this to skip re-requesting. */
+export function areNativePermissionsGranted(): boolean {
+  return _nativePermissionsGranted;
+}
+
 /**
  * Startar native camera-preview (renderas som ett nativt lager BAKOM WKWebView).
  * Body-bakgrunden görs genomskinlig så Three.js-canvasen syns ovanpå.
@@ -157,6 +169,64 @@ export async function requestNativeGeolocationPermission(): Promise<boolean> {
     console.error("[Vindkollen] Geolocation.requestPermissions failed:", msg);
     addNativeError(`Geolocation.requestPermissions: ${msg}`);
     return false;
+  }
+}
+
+/**
+ * Begär kamera- och platsbehörighet SEKVENTIELLT med en guard mot parallella
+ * anrop. Returnerar resultatet och sätter _nativePermissionsGranted så att
+ * useCameraStream/useGeolocation kan hoppa över att begära behörighet igen.
+ *
+ * Anropa detta från handleStart i Home.tsx på native INNAN setStarted(true).
+ * Starta ALDRIG CameraPreview eller watchPosition medan denna funktion körs.
+ */
+export async function requestAllPermissionsSequentially(): Promise<{
+  camera: boolean;
+  location: boolean;
+  error?: string;
+}> {
+  if (_isRequestingPermissions) {
+    console.warn("[Vindkollen] requestAllPermissionsSequentially: pågår redan, ignorerar");
+    return { camera: false, location: false, error: "Behörighetsförfrågan pågår redan" };
+  }
+  _isRequestingPermissions = true;
+  _nativePermissionsGranted = false;
+
+  try {
+    // Steg 1/2 — Kamera
+    console.log("[Vindkollen] [1/2] Kamerabehörighet begärs…");
+    const cameraGranted = await requestNativeCameraPermission();
+    console.log("[Vindkollen] [1/2] Kamerabehörighet klar:", cameraGranted);
+
+    if (!cameraGranted) {
+      return {
+        camera: false,
+        location: false,
+        error: "Kamerabehörighet nekad. Aktivera i Inställningar → Vindkollen → Kamera.",
+      };
+    }
+
+    // Ge iOS tid att stänga den första dialogen helt innan nästa visas
+    await new Promise<void>((r) => setTimeout(r, 350));
+
+    // Steg 2/2 — Plats
+    console.log("[Vindkollen] [2/2] Platsbehörighet begärs…");
+    const locationGranted = await requestNativeGeolocationPermission();
+    console.log("[Vindkollen] [2/2] Platsbehörighet klar:", locationGranted);
+
+    if (!locationGranted) {
+      return {
+        camera: true,
+        location: false,
+        error: "Platsbehörighet nekad. Aktivera i Inställningar → Vindkollen → Plats.",
+      };
+    }
+
+    _nativePermissionsGranted = true;
+    console.log("[Vindkollen] Alla behörigheter beviljade ✓");
+    return { camera: true, location: true };
+  } finally {
+    _isRequestingPermissions = false;
   }
 }
 

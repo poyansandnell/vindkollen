@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  areNativePermissionsGranted,
   isNative,
   requestNativeCameraPermission,
   startNativeCameraPreview,
@@ -47,8 +48,11 @@ export function useCameraStream(enabled: boolean): CameraState {
     // ------------------------------------------------------------------
     if (isNative()) {
       async function startNative() {
-        // 1. Begär kamerabehörighet via iOS-systemdialog
-        const permGranted = await requestNativeCameraPermission();
+        // 1. Begär kamerabehörighet — hoppa över om redan beviljad av
+        //    requestAllPermissionsSequentially() i handleStart.
+        const permGranted =
+          areNativePermissionsGranted() || (await requestNativeCameraPermission());
+        console.log("[Vindkollen] useCameraStream: camera permission =", permGranted);
         if (cancelled) return;
 
         if (!permGranted) {
@@ -63,7 +67,9 @@ export function useCameraStream(enabled: boolean): CameraState {
         }
 
         // 2. Starta native camera-preview
+        console.log("[Vindkollen] useCameraStream: startNativeCameraPreview startar…");
         const started = await startNativeCameraPreview();
+        console.log("[Vindkollen] useCameraStream: startNativeCameraPreview klar:", started);
         if (cancelled) {
           if (started) void stopNativeCameraPreview();
           return;
