@@ -4,7 +4,8 @@ import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { openSverigekartan } from "@/lib/capacitorBridge";
 
 /** Ändra denna sträng inför varje ny native-testbygge. Ta bort raden inför release. */
-const BUILD_LABEL = "🧪 Native TEST 11 – Map runtime diagnostics";
+const BUILD_LABEL = "🧪 Native TEST 12";
+const BUILD_ID = (import.meta.env.VITE_BUILD_ID as string | undefined) ?? "";
 
 interface PermissionGateProps {
   onStart: () => void;
@@ -141,6 +142,11 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
             {BUILD_LABEL && (
               <p className="text-center text-[11px] font-bold text-[#FF8B01]">
                 {BUILD_LABEL}
+              </p>
+            )}
+            {BUILD_ID && (
+              <p className="text-center text-[10px] text-white/40 font-mono">
+                {BUILD_ID}
               </p>
             )}
           </>

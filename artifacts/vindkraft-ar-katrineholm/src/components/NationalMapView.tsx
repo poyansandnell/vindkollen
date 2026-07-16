@@ -689,7 +689,7 @@ export function NationalMapView({
 
         {/* Debug badge — build-ID visas för att bekräfta rätt version på iPhone */}
         <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full bg-[#FF8B01] px-4 py-1 text-[11px] font-bold text-[#090909] shadow-lg">
-          TEST 11 · {apiDiag.buildId || 'dev'}
+          TEST 12 · {apiDiag.buildId || 'dev'}
         </div>
 
         {/* Återcentrera-knapp */}

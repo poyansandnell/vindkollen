@@ -1619,7 +1619,7 @@ export default function Home() {
                 `justify-content: flex-end` tillsammans med `overflow-x-auto`
                 är en känd Chrome-bugg som gör innehåll som "skjuts ut" åt
                 vänster om den synliga rutan helt onåbart via scroll. */}
-            {/* TEST 11 rad 1: Projektnamn + turbinantal */}
+            {/* TEST 12 rad 1: Projektnamn + turbinantal */}
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKOLLEN AR</p>
@@ -1634,7 +1634,7 @@ export default function Home() {
                 </span>
               )}
             </div>
-            {/* TEST 11 rad 2: GPS · Kompass · dBA · Infraljud (+ mer status om aktiv)
+            {/* TEST 12 rad 2: GPS · Kompass · dBA · Infraljud (+ mer status om aktiv)
                 Använder flex utan radbrytning. Alla 4 badges ska alltid synas. */}
             <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
@@ -1652,7 +1652,7 @@ export default function Home() {
                 </>
               )}
             </div>
-            {/* TEST 11 rad 3: Närmaste verk-information */}
+            {/* TEST 12 rad 3: Närmaste verk-information */}
             {nearestTurbineInfo && (
               <div className="text-[11px] leading-none text-white/60">
                 🌬️ Närmaste verk ·{" "}
@@ -1665,7 +1665,7 @@ export default function Home() {
                 ]}
               </div>
             )}
-            {/* TEST 11 rad 4: Ljud · Ljud ute/inne · Mer status · ⚙️ */}
+            {/* TEST 12 rad 4: Ljud · Ljud ute/inne · Mer status · ⚙️ */}
             <div className="flex items-center gap-1.5">
               {ready && (
                 <button
