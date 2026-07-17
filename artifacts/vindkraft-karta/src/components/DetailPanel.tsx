@@ -246,22 +246,32 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                 return (
                   <div className="mt-4 space-y-2">
                     <Button
+                      asChild
                       className="w-full font-semibold"
                       style={{ backgroundColor: '#fff7ed', color: '#1f2937', border: '2px solid #FF8B01' }}
-                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ffedd5')}
-                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#fff7ed')}
-                      onClick={() => openInEditor(
-                        projectName,
-                        projectTurbines,
-                        projectAreaQuery.data?.centerLat,
-                        projectAreaQuery.data?.centerLng,
-                        projectAreaQuery.data?.id,
-                      )}
                       data-testid="button-edit-project"
                     >
-                      {projectTurbines.length > 0
-                        ? `✏️ Redigera ${projectTurbines.length} verk`
-                        : `✏️ Placera ${turbineCount ? `${turbineCount} ` : ""}verk`}
+                      <a
+                        href={isCapacitorNative() ? "/#/placera" : "/placera"}
+                        style={{ touchAction: 'manipulation' }}
+                        onClick={() => {
+                          localStorage.setItem(
+                            EDIT_HANDOFF_KEY,
+                            JSON.stringify({
+                              projectName,
+                              turbines: projectTurbines,
+                              centerLat: projectAreaQuery.data?.centerLat ?? null,
+                              centerLng: projectAreaQuery.data?.centerLng ?? null,
+                              projectId: projectAreaQuery.data?.id != null ? String(projectAreaQuery.data.id) : undefined,
+                              savedAt: Date.now(),
+                            }),
+                          );
+                        }}
+                      >
+                        {projectTurbines.length > 0
+                          ? `✏️ Redigera ${projectTurbines.length} verk`
+                          : `✏️ Placera ${turbineCount ? `${turbineCount} ` : ""}verk`}
+                      </a>
                     </Button>
                     {projectTurbines.length === 0 && (
                       <p className="text-xs text-muted-foreground/60 text-center -mt-1">

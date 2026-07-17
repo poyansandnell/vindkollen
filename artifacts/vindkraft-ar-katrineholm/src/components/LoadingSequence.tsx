@@ -190,7 +190,7 @@ export function LoadingSequence({
     // tiden — ett lägre z-index skulle låta HUD:en blöda igenom ovanpå
     // kalibreringsskärmen precis som den ursprungliga bug-rapporten (som
     // ledde till `!showLoadingSequence`-spärren) beskrev.
-    <div className="absolute inset-0 z-[70] flex flex-col items-center justify-center bg-[#090909] px-6 text-center text-white">
+    <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-[#090909] px-6 text-center text-white">
       {uiPhase === "calibration" && (
         <div className="mx-auto w-full max-w-md">
           <p className="text-xs font-medium uppercase tracking-wide text-[#FFB347]">Katrineholm FRAMÅT</p>
