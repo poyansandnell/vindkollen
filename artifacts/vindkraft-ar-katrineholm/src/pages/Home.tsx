@@ -44,9 +44,9 @@ import {
   captureNativeCameraPhoto,
   isNative,
   lockPortraitOrientation,
-  openPlaceraEditor,
   openSverigekartan,
   requestAllPermissionsSequentially,
+  stopNativeCameraPreview,
   unlockOrientation,
 } from "@/lib/capacitorBridge";
 import { NativeDiagnostics } from "@/components/NativeDiagnostics";
@@ -361,7 +361,9 @@ export default function Home() {
   // nödbroms-knapp den krävde) helt.
   // cameraActive: true om kameran är igång — antingen via getUserMedia (webb)
   // eller via native CameraPreview-plugin (iOS/Android).
-  const cameraActive = Boolean(camera.stream) || camera.nativePreview;
+  // I simulerat läge (positionOverride) behövs ingen kamera för att "ready" ska
+  // bli sant: positionen är känd och bakgrunden är mörk istället för kamerabild.
+  const cameraActive = positionOverride !== null || Boolean(camera.stream) || camera.nativePreview;
   // Med simulerad betraktarposition behövs inte riktigt GPS för "ready".
   const hasPosition = positionOverride !== null || (geo.lat !== null && geo.lon !== null);
   const ready = started && hasPosition && cameraActive;
@@ -1454,7 +1456,13 @@ export default function Home() {
             />
           )}
 
-          <CameraBackground stream={camera.stream} videoRef={videoElRef} nativePreview={camera.nativePreview} />
+          {/* Kamerabakgrund — döljs i simulerat läge.
+              I simulerat läge visas mörk bakgrund istället för kamera:
+              positionen är ej kopplad till verkligheten runtomkring, och kameran
+              bidrar varken till precision eller upplevelse. */}
+          {positionOverride === null && (
+            <CameraBackground stream={camera.stream} videoRef={videoElRef} nativePreview={camera.nativePreview} />
+          )}
 
           {/* Orange simuleringsram — visas när betraktarpositionen är simulerad (inte riktigt GPS).
               pointer-events-none så ramen inte blockerar tryck/svep på AR-ytan. */}
@@ -1996,7 +2004,16 @@ export default function Home() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => {
-                      openPlaceraEditor();
+                      // Sätt direktflagga (hoppar nationell projektkarta)
+                      sessionStorage.setItem("vindkollen:placeraEditorDirect", "1");
+                      if (isNative()) {
+                        // Native använder hash-routing; stoppa kameran explicit
+                        void stopNativeCameraPreview();
+                        window.location.hash = "/placera";
+                      } else {
+                        // Webb använder path-routing — wouter navigate
+                        navigate("/placera");
+                      }
                       setShowMenu(false);
                     }}
                     className="flex-1 rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
