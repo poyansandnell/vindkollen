@@ -6,6 +6,7 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "sync:wind": "tsx ./src/wind-sync/run.ts",
+    "push:github": "tsx ./src/push-github.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
