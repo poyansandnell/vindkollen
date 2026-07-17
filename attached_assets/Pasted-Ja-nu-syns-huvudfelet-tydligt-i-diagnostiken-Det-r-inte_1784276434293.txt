@@ -1,0 +1,260 @@
+Ja — nu syns huvudfelet tydligt i diagnostiken.
+
+Det är inte API:t som är problemet:
+
+* HTTP: 200
+* Källa: live · 3586 proj
+* Map created: ✓
+* Source: ✓
+* Layers: ✓
+
+Det stora felet är denna rad:
+
+Container: 440×0
+
+Kartans behållare får alltså 0 pixlar i höjd. MapLibre skapas och laddar data, men har ingen synlig yta att rita kartan i. Därför blir skärmen svart.
+
+Dessutom finns ett separat datafel: API:t returnerar 3586 projekt, men gränssnittet visar 0 projekt. Någon filtrering eller omvandling efter API-anropet kastar alltså bort alla projekt.
+
+Skicka detta exakt till Replit:
+
+⸻
+
+Slutlig huvudfix – Sverigekartan, projektdata och iPhone safe area
+
+Vi har nu diagnostik från den riktiga iOS-appen, TEST 12.
+
+Bekräftade fakta från diagnostiken
+
+* API svarar HTTP 200
+* API returnerar 3586 projekt
+* MapLibre skapas korrekt
+* style laddas
+* source skapas
+* layers skapas
+* WebGL fungerar
+* Men kartans container rapporterar 440×0
+* Gränssnittet visar samtidigt 0 projekt
+
+Det betyder att två separata grundfel måste lösas.
+
+⸻
+
+1. Kritisk fix: kartcontainern har höjd 0
+
+Kartans wrapper/container måste alltid få en verklig höjd på iOS.
+
+Ta bort beroenden av exempelvis:
+
+height: 100%;
+
+om någon förälder saknar explicit höjd.
+
+Bygg layouten så att hela sidan är en riktig flexkolumn:
+
+.national-map-page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+.national-map-header {
+  flex: 0 0 auto;
+}
+.national-map-container {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 300px;
+  width: 100%;
+  overflow: hidden;
+}
+.national-map-container .maplibregl-map,
+.national-map-container > div {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+Kartcontainern får aldrig kunna bli height: 0.
+
+Kontrollera även samtliga föräldrar till MapLibre-elementet och ta bort kombinationer som orsakar nollhöjd, exempelvis:
+
+* height: 100% utan definierad föräldrahöjd
+* felaktig position: absolute
+* flex: 1 i en förälder som själv saknar höjd
+* en diagnostikpanel eller bottendel som trycker ihop kartan
+* overflow eller grid-rader som gör kartans rad 0px
+
+Efter att containern fått korrekt storlek ska detta köras:
+
+requestAnimationFrame(() => {
+  map.resize();
+});
+
+Kör även map.resize() efter:
+
+* sidnavigering
+* att kartan blivit synlig
+* orienteringsändring
+* ändrad viewport
+* öppning/stängning av diagnostikpanelen
+
+Lägg in ResizeObserver på kartcontainern:
+
+const observer = new ResizeObserver(() => {
+  map.resize();
+});
+observer.observe(container);
+
+MapLibre får inte initieras innan containern har både bredd och höjd större än noll.
+
+⸻
+
+2. Kritisk fix: 3586 projekt blir felaktigt 0 projekt
+
+API:t returnerar data korrekt, men projektlistan blir tom efter bearbetning.
+
+Spåra hela kedjan:
+
+API response
+→ extraction av array
+→ normalisering
+→ koordinatvalidering
+→ statusfilter
+→ GeoJSON
+→ project count i UI
+
+Logga antalet efter varje steg.
+
+Exempel:
+
+console.log("API raw projects:", rawProjects.length);
+console.log("Normalized projects:", normalizedProjects.length);
+console.log("Valid coordinates:", projectsWithCoordinates.length);
+console.log("After status filter:", filteredProjects.length);
+console.log("GeoJSON features:", geoJson.features.length);
+
+Kontrollera särskilt:
+
+* om API-svaret ligger i data, projects, results, items eller annan egenskap
+* om latitud/longitud är strängar och måste konverteras med Number()
+* om koordinaterna heter exempelvis lat, latitude, lng, lon, longitude
+* om GeoJSON råkar använda [lat, lng] i stället för korrekt [lng, lat]
+* om projektstatus från API:t har andra värden eller annan versalisering än filtren
+* om filtret Aktuella råkar filtrera bort allt
+* om projekt utan status ska visas under Alla
+* om projekt med verk men utan projektcentrum kan få centrum beräknat från verkens koordinater
+
+När sidan öppnas ska den inte börja med ett statusfilter som kan ge noll träffar. Visa alla giltiga projekt först, eller låt Aktuella falla tillbaka till samtliga projekt om statusmappningen ännu inte är säker.
+
+Rubriken ska baseras på den faktiska normaliserade listan och inte på en separat tom state.
+
+Krav:
+
+API: 3586 projekt
+→ UI ska visa ett rimligt antal projekt
+→ GeoJSON ska innehålla motsvarande giltiga punkter
+→ Sverige ska zoomas så att alla projekt syns
+
+Efter att source-data satts:
+
+map.getSource("projects")?.setData(geoJson);
+
+Kör fitBounds utifrån samtliga giltiga koordinater.
+
+⸻
+
+3. Safe area och helskärm på iPhone
+
+Appen täcker inte hela skärmen upptill. Det syns en ljus eller genomskinlig yta bakom statusfältet och Dynamic Island.
+
+Sätt korrekt viewport:
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+/>
+
+Rotnivåerna ska täcka hela skärmen:
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  background: #000;
+}
+body {
+  min-height: 100dvh;
+}
+
+Sidans bakgrund ska fortsätta bakom statusfältet:
+
+.national-map-page {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: #000;
+}
+
+Men undvik dubbel padding. Endast en gemensam toppnivå ska hantera safe-area-inset-top.
+
+Kontrollera även Capacitor-statusfältet så att webbvyn verkligen får gå bakom statusfältet, alternativt att statusfältets bakgrund explicit sätts svart. Ingen vit eller genomskinlig remsa får synas överst.
+
+⸻
+
+4. Diagnostikpanelen får inte påverka kartans höjd
+
+Den stora diagnostikpanelen längst ner får inte ligga i samma normala flexflöde och trycka kartan till höjd 0.
+
+Gör den till en overlay:
+
+.map-diagnostics {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: env(safe-area-inset-bottom);
+  z-index: 1000;
+  max-height: 45dvh;
+  overflow-y: auto;
+}
+
+När diagnostiken är stängd ska den inte uppta någon layout-höjd.
+
+⸻
+
+5. Verifiering som måste göras före besked
+
+Testa i riktig iPhone-simulator eller fysisk iPhone och verifiera:
+
+1. Kartcontainern rapporterar exempelvis 440×700, aldrig 440×0.
+2. Sverigekartan är synlig.
+3. Projektmarkörer visas.
+4. Projektantalet är inte 0 när API:t returnerar 3586 projekt.
+5. Statusflikarna filtrerar men förstör inte grundlistan.
+6. Alla visar alla projekt med giltiga koordinater.
+7. fitBounds visar hela Sverige och samtliga projekt.
+8. Appens svarta bakgrund går hela vägen bakom Dynamic Island och statusfältet.
+9. Diagnostikpanelen påverkar inte kartans dimensioner.
+10. Ingen befintlig Katrineholm-, AR-, kompass-, ljud- eller namninsamlingsfunktion får ändras eller försämras.
+
+Skapa sedan TEST 13 med ett nytt build-ID och visa i diagnostiken:
+
+Container: faktisk bredd × faktisk höjd
+Raw API projects: 3586
+Normalized:
+Valid coordinates:
+Filtered:
+GeoJSON features:
+
+Gör inga kosmetiska ändringar innan dessa två huvudfel är lösta och verifierade.
+
+⸻
+
+Den viktigaste ledtråden är alltså Container: 440×0. När Replit har fixat det ska själva kartan bli synlig. Därefter visar de nya räknarna exakt i vilket bearbetningssteg de 3 586 projekten försvinner.

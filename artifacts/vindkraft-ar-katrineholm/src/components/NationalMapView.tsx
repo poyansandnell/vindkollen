@@ -31,6 +31,26 @@ function statusLabel(status: string): string {
   return m[status] ?? status;
 }
 
+/**
+ * Normaliserar Vindbrukskollens svenska statusvärden till interna engelska värden
+ * som matchar getFilterStatuses() och projectStatusColor().
+ * API returnerar t.ex. "aktuellt", "samrad", "uppfort" — inte "planned", "operational".
+ */
+function normalizeStatus(raw: string): string {
+  const MAP: Record<string, string> = {
+    aktuellt: 'planned',
+    inledande_undersokning: 'proposed',
+    samrad: 'consultation',
+    ansokan_inlamnad: 'consultation',
+    andringsansokan: 'permitted',
+    beviljat: 'permitted',
+    uppfort: 'operational',
+    inte_aktuellt: 'cancelled',
+    avslaget: 'cancelled',
+  };
+  return MAP[raw.toLowerCase().replace(/\s/g, '_')] ?? raw;
+}
+
 // ─── Filter ───────────────────────────────────────────────────────────────────
 
 export type FilterMode = 'aktuella' | 'planerade' | 'pågående' | 'befintliga' | 'alla';
@@ -136,6 +156,10 @@ interface ApiDiagState {
   apiProjectCount: number;
   lastApiError: string | null;
   apiSource: 'bundled' | 'fetching' | 'live' | 'error';
+  /** Pipeline-räknare för att spåra var projekt försvinner */
+  rawCount: number;
+  normalizedCount: number;
+  validCoordsCount: number;
 }
 
 const API_DIAG_INIT: ApiDiagState = {
@@ -147,6 +171,9 @@ const API_DIAG_INIT: ApiDiagState = {
   apiProjectCount: 0,
   lastApiError: null,
   apiSource: 'bundled',
+  rawCount: 0,
+  normalizedCount: 0,
+  validCoordsCount: 0,
 };
 
 // ─── GeoJSON ──────────────────────────────────────────────────────────────────
@@ -211,9 +238,9 @@ export function NationalMapView({
   const [loadState, setLoadState] = useState<'loading' | 'bundled-loading-live' | 'live' | 'live-error'>('loading');
   const [dataSource, setDataSource] = useState<'bundled' | 'api'>('bundled');
   const [selectedProject, setSelectedProject] = useState<ApiProjectArea | null>(null);
-  const [filterMode, setFilterMode] = useState<FilterMode>('aktuella');
+  const [filterMode, setFilterMode] = useState<FilterMode>('alla');
   const [diag, setDiag] = useState<DiagState>({ ...DIAG_INIT });
-  const [diagExpanded, setDiagExpanded] = useState(true);
+  const [diagExpanded, setDiagExpanded] = useState(false);
   const [apiDiag, setApiDiag] = useState<ApiDiagState>({ ...API_DIAG_INIT });
 
   // ── Load projects ───────────────────────────────────────────────────────────
@@ -244,6 +271,9 @@ export function NationalMapView({
       apiProjectCount: bundled.length,
       lastApiError: null,
       apiSource: 'fetching',
+      rawCount: 0,
+      normalizedCount: 0,
+      validCoordsCount: 0,
     });
 
     if (native && !apiBase) {
@@ -267,17 +297,34 @@ export function NationalMapView({
       })
       .then(data => {
         if (cancelled) return;
-        const ok = (Array.isArray(data) ? data : []).filter(
+
+        // ── Pipeline med explicita räknare för diagnostik ──────────────────
+        const raw = Array.isArray(data) ? data : [];
+        const rawCount = raw.length;
+
+        // Normalisera Vindbrukskollens svenska statusvärden → engelska interna
+        const normalized = raw.map(p => ({ ...p, status: normalizeStatus(p.status) }));
+        const normalizedCount = normalized.length;
+
+        // Filtrera bort poster utan giltiga koordinater
+        const ok = normalized.filter(
           p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number'
         );
-        console.info('[NationalMap] Live-data hämtad', { url, count: ok.length, native });
+        const validCoordsCount = ok.length;
+
+        console.info('[NationalMap] Live-data hämtad', {
+          url, rawCount, normalizedCount, validCoordsCount, native,
+        });
         setApiDiag(prev => ({
           ...prev,
           apiHttpStatus: prev.apiHttpStatus ?? 200,
-          apiProjectCount: ok.length,
-          apiSource: ok.length > 0 ? 'live' : 'error',
-          lastApiError: ok.length === 0
-            ? 'API svarade OK men returnerade 0 giltiga projekt'
+          apiProjectCount: validCoordsCount,
+          apiSource: validCoordsCount > 0 ? 'live' : 'error',
+          rawCount,
+          normalizedCount,
+          validCoordsCount,
+          lastApiError: validCoordsCount === 0
+            ? `API svarade OK (${rawCount} poster) men 0 hade giltiga koordinater`
             : null,
         }));
         if (ok.length > 0) {
@@ -599,13 +646,19 @@ export function NationalMapView({
       }));
     };
 
-    const ro = new ResizeObserver(() => { map.resize(); updateCanvasSize(); });
+    const updateContainerDims = () => {
+      const r = container.getBoundingClientRect();
+      setDiag(prev => ({ ...prev, containerW: r.width, containerH: r.height }));
+    };
+
+    const ro = new ResizeObserver(() => { map.resize(); updateCanvasSize(); updateContainerDims(); });
     ro.observe(container);
 
     map.resize();          // immediate — catches already-laid-out containers
-    const t1 = setTimeout(() => { map.resize(); updateCanvasSize(); addLog('resize @150ms'); }, 150);
-    const t2 = setTimeout(() => { map.resize(); updateCanvasSize(); addLog('resize @500ms'); }, 500);
-    const t3 = setTimeout(() => { map.resize(); updateCanvasSize(); addLog('resize @1500ms'); }, 1500);
+    updateContainerDims(); // update diagnostic immediately
+    const t1 = setTimeout(() => { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @150ms'); }, 150);
+    const t2 = setTimeout(() => { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @500ms'); }, 500);
+    const t3 = setTimeout(() => { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @1500ms'); }, 1500);
 
     return () => {
       clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
@@ -639,7 +692,7 @@ export function NationalMapView({
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#090909] text-white">
       {/* Sidhuvud */}
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 pt-[max(env(safe-area-inset-top),12px)]">
         <div>
@@ -689,7 +742,7 @@ export function NationalMapView({
 
         {/* Debug badge — build-ID visas för att bekräfta rätt version på iPhone */}
         <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full bg-[#FF8B01] px-4 py-1 text-[11px] font-bold text-[#090909] shadow-lg">
-          TEST 12 · {apiDiag.buildId || 'dev'}
+          TEST 13 · {apiDiag.buildId || 'dev'}
         </div>
 
         {/* Återcentrera-knapp */}
@@ -748,6 +801,11 @@ export function NationalMapView({
               }>
                 Källa: {apiDiag.apiSource} · {apiDiag.apiProjectCount} proj
               </span>
+              {apiDiag.rawCount > 0 && (
+                <span className="col-span-2 text-white/50">
+                  Raw: {apiDiag.rawCount} → Norm: {apiDiag.normalizedCount} → Coords: {apiDiag.validCoordsCount}
+                </span>
+              )}
             </div>
             {apiDiag.lastApiError && (
               <div className="mt-0.5 break-all text-[9px] text-red-400">
