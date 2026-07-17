@@ -1,0 +1,107 @@
+ägg till en visuell laddningssekvens för Sverigekartan
+
+När Sverigekartan öppnas och de cirka 13 000 vindkraftverken hämtas ska användaren se en kort, snygg laddningsanimation istället för en statisk spinner eller tom karta.
+
+Önskad upplevelse
+
+Visa en kompakt overlay centralt över kartan med:
+
+* Vindkollens logotyp eller namn
+* texten: “Laddar Sveriges vindkraftverk”
+* ett räknarvärde som går från 0 upp till det faktiska antalet laddade verk
+* en progressbar under räknaren
+* avslutning med exempelvis:
+
+13 247 vindkraftverk laddade
+
+Därefter tonas overlayen snabbt bort och kartan visas fullt interaktiv.
+
+Viktigt: använd verkliga data
+
+Räkneverket får inte vara hårdkodat till exakt 13 000.
+
+Använd:
+
+* faktiskt antal poster som laddas
+* verkligt API-resultat
+* eller metadata/total count från backend om det finns
+
+Om det faktiska antalet är exempelvis 13 284 ska räknaren sluta där.
+
+Animation
+
+Eftersom laddningen bara tar omkring en sekund ska animationen vara snabb och mjuk:
+
+* börja på 0
+* öka snabbt men mjukt mot cirka 80–90 procent medan datan hämtas
+* när API-anropet är klart, animera till det faktiska slutvärdet
+* progressbaren ska följa samma progression
+* håll slutvärdet synligt cirka 300–500 ms
+* tona sedan bort overlayen
+
+Använd gärna easing så att siffrorna går snabbt i början och lugnar ner sig mot slutet.
+
+Undvik falsk laddning
+
+Overlayen får inte medvetet fördröja kartan om datan redan är färdig.
+
+Krav:
+
+* om datan laddas på under cirka 300 ms ska animationen ändå vara kort men inte blockera användaren onödigt länge
+* maximal extra visning efter färdig laddning: cirka 500 ms
+* vid långsam anslutning ska animationen fortsätta utan att fastna på 100 procent innan datan är klar
+* gå aldrig till slutvärdet förrän riktig data har laddats
+
+Felhantering
+
+Om hämtningen misslyckas:
+
+* visa inte “13 000 verk laddade”
+* visa ett tydligt felmeddelande
+* erbjud knappen “Försök igen”
+* behåll befintlig intern loggning
+
+Design
+
+Använd Vindkollens befintliga design:
+
+* orange accentfärg
+* mörk halvtransparent bakgrund
+* rundade hörn
+* tydlig vit text
+* diskret blur om det passar
+* ingen stor helskärmsruta som känns tung
+
+Exempel:
+
+Laddar Sveriges vindkraftverk
+8 742 / 13 284
+█████████████░░░░
+
+När klart:
+
+✓ 13 284 vindkraftverk laddade
+
+Tekniska krav
+
+* bygg den som en återanvändbar komponent, exempelvis NationalMapLoadingOverlay
+* koppla den till Sverigekartans riktiga loading state
+* använd requestAnimationFrame för räknaranimationen
+* städa animation frame vid unmount
+* skapa inte extra API-anrop
+* orsaka inte att kartan eller Mapbox initieras två gånger
+* overlayen ska inte blockera kartan efter att den tonats bort
+* visa den vid första verkliga laddningen, men inte vid varje liten pan/zoom eller bounds-uppdatering
+* vid senare bakgrundsuppdateringar kan en mindre diskret laddningsindikator användas i stället
+
+Verifiera
+
+1. Räknaren slutar på verkligt antal verk.
+2. Progressbaren når inte 100 procent före färdig data.
+3. Ingen onödig fördröjning läggs till.
+4. Overlayen visas vid första laddningen, inte vid varje kartförflyttning.
+5. Felstatus fungerar.
+6. pnpm typecheck passerar.
+7. Sverigekartan förblir lika snabb och responsiv som innan.
+
+Ändra inte kartans befintliga datalogik eller optimeringen som hoppar över turbinhämtning i nationell vy. Animationen ska endast visualisera den faktiska laddningen.

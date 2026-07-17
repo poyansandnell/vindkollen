@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, ListOrdered, Crosshair } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import MapCanvas, { type MapSelection, type SightResultsInfo } from "@/components/MapCanvas";
@@ -8,6 +8,7 @@ import DetailPanel from "@/components/DetailPanel";
 import BestPlacesView from "@/components/BestPlacesView";
 import SightLinePanel, { type SightSummary } from "@/components/SightLinePanel";
 import InstallPrompt from "@/components/InstallPrompt";
+import { NationalMapLoadingOverlay } from "@/components/NationalMapLoadingOverlay";
 import { WifiOff } from "lucide-react";
 import { useGeolocation, type GeoPoint } from "@/hooks/useGeolocation";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -180,6 +181,28 @@ export default function Home() {
   const hasCachedData = turbines.length > 0 || projectAreas.length > 0;
   const showOfflineBanner = !isOnline && (hasCachedData || turbinesQuery.isError || projectAreasQuery.isError);
 
+  // Laddningsoverlay — visas bara vid den allra första datahämtningen per session.
+  const overlayTriggeredRef = useRef(false);
+  const [showOverlay, setShowOverlay] = useState(false);
+
+  useEffect(() => {
+    if (overlayTriggeredRef.current) return;
+    if (isFetching || projectAreasQuery.isError || turbinesQuery.isError) {
+      overlayTriggeredRef.current = true;
+      setShowOverlay(true);
+    }
+  }, [isFetching, projectAreasQuery.isError, turbinesQuery.isError]);
+
+  const isOverlayLoading = isFetching;
+  const isOverlayError =
+    !isFetching && (projectAreasQuery.isError || turbinesQuery.isError) && projectAreas.length === 0 && turbines.length === 0;
+  const overlayCount = projectAreas.length + turbines.length;
+
+  const handleOverlayRetry = useCallback(() => {
+    void projectAreasQuery.refetch();
+    void turbinesQuery.refetch();
+  }, [projectAreasQuery, turbinesQuery]);
+
   const sightSummary = useMemo<SightSummary | null>(() => {
     if (!sightObserver) return null;
     let visible = 0;
@@ -255,6 +278,16 @@ export default function Home() {
         onPlaceSightObserver={handlePlaceSightObserver}
         onSightResultsChange={setSightResultsInfo}
       />
+
+      {showOverlay && (
+        <NationalMapLoadingOverlay
+          isLoading={isOverlayLoading}
+          isError={isOverlayError}
+          count={overlayCount}
+          onRetry={handleOverlayRetry}
+          onHidden={() => setShowOverlay(false)}
+        />
+      )}
 
       <div
         className="absolute left-3 right-3 sm:right-auto flex flex-col gap-2 z-10 min-w-0"
