@@ -174,6 +174,23 @@ export default function PlaceTurbines() {
   const [boundaryVersion, setBoundaryVersion] = useState(0);
   const [nationalTurbinesLoading, setNationalTurbinesLoading] = useState(false);
 
+  // Global runtime-diagnostik — fångar JavaScript-krascher och oupphantade
+  // promise-avvisanden som annars bara syns som vit skärm.
+  useEffect(() => {
+    const onError = (ev: ErrorEvent) => {
+      console.error("[PlaceTurbines] GLOBAL ERROR", ev.error ?? ev.message, ev.filename, ev.lineno);
+    };
+    const onUnhandled = (ev: PromiseRejectionEvent) => {
+      console.error("[PlaceTurbines] UNHANDLED REJECTION", ev.reason);
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onUnhandled);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onUnhandled);
+    };
+  }, []);
+
   // Initialisera/uppdatera editableBoundary från projektets polygon när
   // editHandoff sätts — antingen vid mount (från localStorage) eller direkt
   // från NationalMapViews "Öppna projektet". Kör inte om editHandoff saknar polygon.
@@ -563,7 +580,16 @@ export default function PlaceTurbines() {
             {isAuthenticated ? "☁️ Mina projekt" : "📁 Lokala projekt"}
           </button>
           <button
-            onClick={openSverigekartan}
+            onClick={() => {
+              if (editHandoff) {
+                // Vi är redan på #/placera — setShowWelcome(true) visar NationalMapView
+                // direkt utan att navigera bort, vilket är den enda tillförlitliga
+                // vägen tillbaka på native när hash redan är /placera.
+                setShowWelcome(true);
+              } else {
+                openSverigekartan();
+              }
+            }}
             className="rounded-full bg-white/10 px-4 py-1.5 text-sm text-white hover:bg-white/20"
           >
             🗺️ Kartan

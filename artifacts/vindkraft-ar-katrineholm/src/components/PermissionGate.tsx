@@ -5,7 +5,7 @@ import { openSverigekartan } from "@/lib/capacitorBridge";
 
 /** Ändra VERSION och BUILD_LABEL inför varje ny native-testbygge. Ta bort inför release. */
 const VERSION = "15";
-const BUILD_LABEL = "🧪 Native TEST 15";
+const BUILD_LABEL = "🧪 Native TEST 16";
 const BUILD_ID = (import.meta.env.VITE_BUILD_ID as string | undefined) ?? "";
 const SHORT_HASH = BUILD_ID.split("@")[0] ?? "";
 

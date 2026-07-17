@@ -1,0 +1,185 @@
+Skriv detta till Replit:
+
+⸻
+
+TEST 16 – tre kvarvarande fel i Sverigekartan och redigeringsverktyget
+
+TEST 15 har löst att verken nu laddas in i redigeringsverktyget. Tre tydliga problem återstår:
+
+1. Befintligt verk går inte att välja och flytta
+
+Just nu händer detta:
+
+* ett befintligt verk syns på kartan
+* användaren trycker nära verket
+* appen skapar ändå ett nytt verk direkt
+* det går alltså inte att markera och dra det befintliga verket
+
+Det önskade beteendet är:
+
+* tryck nära ett befintligt verk → välj det
+* det valda verket får tydlig markerad stil
+* dra verket för att flytta det
+* tryck på tom yta → skapa nytt verk
+
+Implementera en träffradie i skärmpixlar, inte bara exakt koordinatträff.
+
+Exempel:
+
+const HIT_RADIUS_PX = 24;
+
+Vid tap:
+
+1. konvertera alla befintliga verk till skärmkoordinater med map.project
+2. beräkna avståndet till tryckpunkten
+3. välj närmaste verk inom HIT_RADIUS_PX
+4. skapa bara nytt verk om inget befintligt träffas
+
+Pseudokod:
+
+const nearest = turbines
+  .map((turbine, index) => {
+    const p = map.project([turbine.lng, turbine.lat]);
+    const distance = Math.hypot(
+      p.x - event.point.x,
+      p.y - event.point.y
+    );
+    return { turbine, index, distance };
+  })
+  .filter(item => item.distance <= HIT_RADIUS_PX)
+  .sort((a, b) => a.distance - b.distance)[0];
+if (nearest) {
+  setSelectedTurbineIndex(nearest.index);
+  return;
+}
+addNewTurbine(event.lngLat);
+
+Viktigt:
+
+* click får inte skapa nytt verk efter att ett befintligt verk valts
+* stoppa eventuell event propagation
+* kontrollera att både marker-klick och map-klick inte körs vid samma tryck
+* på touch ska pointerdown/touchstart fungera på iPhone
+* drag ska uppdatera samma objekt i turbines, inte skapa en kopia
+
+Lägg gärna till:
+
+dragPan.disable()
+
+under själva dragningen och aktivera igen efter pointerup, så att kartan inte panorerar samtidigt.
+
+⸻
+
+2. Vit skärm när man zoomar ut eller lämnar redigeringsverktyget
+
+Efter zoomning eller navigering från redigeringsläget blir hela webbvyn vit. Det ser ut som att kartan eller sidan avmonteras fel eller att ett runtime-fel inträffar.
+
+Felsök och fixa hela övergången:
+
+Sverigekarta
+→ öppna projekt
+→ redigeringsverktyg
+→ zooma/panorera
+→ gå tillbaka
+→ Sverigekartan ska renderas igen
+
+Kontrollera särskilt:
+
+* att MapLibre-instansen tas bort korrekt i cleanup
+* att gamla listeners tas bort
+* att ResizeObserver disconnectas
+* att requestAnimationFrame och timeouts avbryts
+* att ingen gammal map.remove() körs på en redan borttagen karta
+* att samma container inte återanvänds med en gammal MapLibre-instans
+* att routen inte hamnar i ett tomt state
+* att selectedProject, editHandoff eller mode inte blir ett otillåtet mellanläge
+* att React inte kraschar på undefined efter att editorn stängts
+
+Lägg in global runtime-diagnostik tillfälligt:
+
+window.addEventListener("error", event => {
+  console.error("GLOBAL ERROR", event.error || event.message);
+});
+window.addEventListener("unhandledrejection", event => {
+  console.error("UNHANDLED REJECTION", event.reason);
+});
+
+Och MapLibre-fel:
+
+map.on("error", event => {
+  console.error("EDITOR MAP ERROR", event.error);
+});
+
+När Sverigekartan mountas igen ska den skapa en helt ny MapLibre-instans och därefter köra:
+
+requestAnimationFrame(() => map.resize());
+
+Vit skärm får inte döljas med en enkel bakgrundsfärg. Själva kraschen eller felaktiga state-övergången ska hittas och lösas.
+
+⸻
+
+3. Klustercirklarna är fortfarande för stora i Sverigeöversikten
+
+De är fortfarande visuellt för stora när hela Sverige visas. Jag vill se fler mindre cirklar så kartan känns mer detaljerad.
+
+Minska både clusterRadius och cirklarnas visuella storlek.
+
+Förslag:
+
+clusterRadius: 12,
+clusterMaxZoom: 8
+
+Klustercirklarnas radius:
+
+"circle-radius": [
+  "step",
+  ["get", "point_count"],
+  9,
+  25, 11,
+  100, 13,
+  500, 15,
+  1000, 17
+]
+
+Det ska alltså inte bli jättestora cirklar även om klustret innehåller många hundra eller tusentals projekt.
+
+Klustertalets text ska också minskas:
+
+"text-size": 11
+
+För enskilda projekt:
+
+"circle-radius": [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  4, 2.5,
+  7, 4,
+  10, 6
+]
+
+Planerade projekt ska vara blå, som tidigare:
+
+"#3B82F6"
+
+Övrig färgkodning ska behållas.
+
+⸻
+
+Verifiering för TEST 16
+
+Testa på riktig iPhone:
+
+1. Tryck nära ett befintligt verk.
+2. Verket markeras i stället för att ett nytt skapas.
+3. Dra det markerade verket.
+4. Släpp och kontrollera att samma verk har flyttats.
+5. Tryck på tom yta och kontrollera att ett nytt verk skapas.
+6. Zooma in och ut flera gånger i redigeringsläget.
+7. Gå tillbaka till Sverigekartan.
+8. Ingen vit skärm får uppstå.
+9. Sverigeöversikten ska visa fler och betydligt mindre kluster.
+10. Planerade projekt ska visas blå.
+11. Befintliga data, filter, AR och Katrineholmsvyn får inte försämras.
+
+Bumpa till TEST 16, kör typecheck, native build och cap sync ios.

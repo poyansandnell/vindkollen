@@ -475,6 +475,32 @@ export function PlacementMap({
 
     if (pan.moved || pan.suppressClick) return;
 
+    // Hit-detection: tryckte användaren nära ett befintligt verk?
+    // Om ja → öppna dess kontextmeny direkt; skapa INTE ett nytt verk.
+    // Radien är 24 skärmpixlar — lättare att träffa på iPhone än SVG-ellipsens
+    // exakta yta (som kan vara < 10 px vid hög zoomnivå).
+    if (!boundaryEditMode) {
+      const hitEl = containerRef.current;
+      if (hitEl && turbines.length > 0) {
+        const HIT_RADIUS_PX = 24;
+        const rect = hitEl.getBoundingClientRect();
+        let nearestDist = Infinity;
+        let nearestId: string | null = null;
+        let nearestPct: { x: number; y: number } | null = null;
+        for (const t of turbines) {
+          const p = project(t.lat, t.lon);
+          const px = (p.x / 100) * rect.width;
+          const py = (p.y / 100) * rect.height;
+          const dist = Math.hypot(e.clientX - rect.left - px, e.clientY - rect.top - py);
+          if (dist < nearestDist) { nearestDist = dist; nearestId = t.id; nearestPct = p; }
+        }
+        if (nearestId && nearestPct && nearestDist <= HIT_RADIUS_PX) {
+          setMenu({ id: nearestId, xPct: nearestPct.x, yPct: nearestPct.y });
+          return;
+        }
+      }
+    }
+
     // Dubbeltryck (à la Google Maps) zoomar in istället för att placera ett
     // nytt verk. Ett enkelklick väntar därför kort innan det faktiskt
     // placerar ett verk, så att ett snabbt andra tryck kan avbryta det och

@@ -454,6 +454,10 @@ export function NationalMapView({
     mapRef.current = map;
     addLog('Map() created · style=ESRI satellite', { mapCreated: true });
 
+    map.on('error', (ev) => {
+      console.error('[NationalMap] EDITOR MAP ERROR', (ev as { error?: Error }).error ?? ev);
+    });
+
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
 
     // ── Helper: add project GeoJSON source + layers + click handlers ──────────
@@ -476,7 +480,7 @@ export function NationalMapView({
         data: geoJson,
         cluster: true,
         clusterMaxZoom: 8,
-        clusterRadius: 55,
+        clusterRadius: 12,
       });
       addLog(`Source "${SOURCE_ID}" added (${geoJson.features.length} features)`, { sourceAdded: true });
 
@@ -487,7 +491,7 @@ export function NationalMapView({
         filter: ['has', 'point_count'],
         paint: {
           'circle-color': ['step', ['get', 'point_count'], '#FF8B01', 10, '#FFB347', 30, '#FF6B00'],
-          'circle-radius': ['step', ['get', 'point_count'], 14, 10, 17, 50, 21, 200, 25, 1000, 29],
+          'circle-radius': ['step', ['get', 'point_count'], 9, 25, 11, 100, 13, 500, 15, 1000, 17],
           'circle-opacity': 0.9,
           'circle-stroke-width': 2,
           'circle-stroke-color': '#090909',
@@ -501,7 +505,7 @@ export function NationalMapView({
         layout: {
           'text-field': ['get', 'point_count_abbreviated'],
           'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
-          'text-size': 12,
+          'text-size': 11,
         },
         paint: { 'text-color': '#090909' },
       });
@@ -521,7 +525,7 @@ export function NationalMapView({
             'consultation', '#3B82F6',
             '#94a3b8',
           ],
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 4, 8, 6, 12, 8],
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.5, 7, 4, 10, 6],
           'circle-stroke-width': 1.5,
           'circle-stroke-color': '#090909',
           'circle-opacity': 0.95,
