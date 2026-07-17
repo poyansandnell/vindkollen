@@ -1,0 +1,72 @@
+poyansandnell@MacBook-Pro-som-tillhor-Poyan vindkraft-ar-katrineholm % cd ~/vindkollen/artifacts/vindkraft-ar-katrineholm
+
+git fetch
+git reset --hard origin/main
+
+pnpm install
+pnpm native:build
+npx cap sync ios
+
+rm -rf ~/Library/Developer/Xcode/DerivedData
+
+open ios/App/App.xcodeproj
+remote: Enumerating objects: 140, done.
+remote: Counting objects: 100% (140/140), done.
+remote: Compressing objects: 100% (79/79), done.
+remote: Total 140 (delta 39), reused 140 (delta 39), pack-reused 0 (from 0)
+Receiving objects: 100% (140/140), 8.03 MiB | 3.18 MiB/s, done.
+Resolving deltas: 100% (39/39), completed with 7 local objects.
+From https://github.com/poyansandnell/vindkollen
+   f637dfd..e616ff8  main       -> origin/main
+HEAD is now at e616ff8 Saved progress at the end of the loop
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.supportedArchitectures". See https://pnpm.io/settings for the new home of each setting.
+Scope: all 13 workspace projects
+Already up to date
+Done in 339ms using pnpm v11.13.0
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.supportedArchitectures". See https://pnpm.io/settings for the new home of each setting.
+$ vite build --mode native --config vite.native.config.ts
+[native:build] mode = native
+[native:build] VITE_API_BASE_URL = https://b9014749-0395-4a74-81ac-8deb3fc86054-00-1te953tm13n9f.riker.replit.dev
+[native:build] VITE_PUBLIC_APP_URL = (tom)
+[native:build] VITE_BUILD_ID = e616ff8@2026-07-17 16:02
+vite v7.3.5 building client environment for native...
+(node:253) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+transforming (7) ../../node_modules/.pnpm/react@19.1.0/node_modules/react/jsx-runtime.js(node:253) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 1959 modules transformed.
+dist-native/index.html                     1.99 kB │ gzip:   0.69 kB
+dist-native/assets/index-DhDo8e7L.css    227.17 kB │ gzip:  33.92 kB
+dist-native/assets/index-CTMU768k.js       0.36 kB │ gzip:   0.24 kB
+dist-native/assets/index-B9b7aekj.js       0.99 kB │ gzip:   0.51 kB
+dist-native/assets/web-D9iAdbFV.js         2.30 kB │ gzip:   0.92 kB
+dist-native/assets/web-CEht6v9-.js         2.43 kB │ gzip:   1.06 kB
+dist-native/assets/index-BP9Ul70o.js      10.18 kB │ gzip:   3.32 kB
+dist-native/assets/index-oA0FBeFE.js   2,300.24 kB │ gzip: 643.86 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 4.31s
+✔ Copying web assets from dist-native to ios/App/App/public in 8.59ms
+✔ Creating capacitor.config.json in ios/App/App in 361.67μs
+✔ copy ios in 39.90ms
+✔ Updating iOS plugins in 6.23ms
+[info] All Capacitor plugins have a Package.swift file and will be included in Package.swift
+[info] Writing Package.swift
+[info] Found 3 Capacitor plugins for ios:
+       @capacitor-community/camera-preview@8.0.1
+       @capacitor/camera@8.2.1
+       @capacitor/geolocation@8.2.0
+✔ update ios in 28.28ms
+[fix-ios] Capacitor.xcframework present (committed) — skipping extraction.
+[fix-ios] Cordova.xcframework present (committed) — skipping extraction.
+[fix-ios] symlinks/CapacitorCamera → ../../../../node_modules/@capacitor/camera
+[fix-ios] symlinks/CapacitorGeolocation → ../../../../node_modules/@capacitor/geolocation
+[fix-ios] symlinks/CapacitorCommunityCameraPreview → ../../../../node_modules/@capacitor-community/camera-preview
+[fix-ios] CapApp-SPM/Package.swift written (inline-target design, local vendor).
+[fix-ios] Done.
+[info] Sync finished in 0.151s
+poyansandnell@MacBook-Pro-som-tillhor-Poyan vindkraft-ar-katrineholm % 
