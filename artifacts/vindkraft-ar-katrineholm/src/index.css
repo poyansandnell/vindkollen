@@ -302,8 +302,18 @@
     @apply border-border;
   }
 
+  /* Säkerställ mörk bakgrund på html/body så iOS WKWebView aldrig exponerar
+     vit compositor-bakgrund vid touch-zoom eller scroll-bounce, oavsett
+     vilket läge appen befinner sig i (AR, karta, intro). */
+  html {
+    background: #090909;
+    overscroll-behavior: none;
+  }
+
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    background: #090909;
+    overscroll-behavior: none;
   }
 }
 

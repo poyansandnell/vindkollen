@@ -22,7 +22,8 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
 
   return (
     <div
-      className={`absolute inset-0 z-30 flex flex-col justify-between overflow-y-auto bg-[#090909] px-6 text-white ${inApp ? "pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]" : "pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))]"}`}
+      className={`absolute inset-0 z-30 flex flex-col overflow-y-auto bg-[#090909] px-6 text-white ${inApp ? "pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]" : "pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))]"}`}
+      style={{ overscrollBehavior: "none" }}
     >
       <div className="mx-auto w-full max-w-md text-center">
         {/*
@@ -82,7 +83,7 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
         )}
       </div>
 
-      <div className={`mx-auto w-full max-w-md space-y-4 ${inApp ? "mt-4" : "mt-8"}`}>
+      <div className={`mx-auto mt-auto w-full max-w-md space-y-4 ${inApp ? "pt-4" : "pt-8"}`}>
         {!inApp && (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
             <p className="mb-2 font-medium text-white">Appen behöver tillgång till:</p>

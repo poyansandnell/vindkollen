@@ -591,6 +591,7 @@ export function PlacementMap({
     <div
       ref={containerRef}
       className="relative h-full w-full touch-none overflow-hidden rounded-2xl bg-[#0a0a0a]"
+      style={{ willChange: "transform", transform: "translateZ(0)", overscrollBehavior: "none" }}
       onPointerDown={handleBackgroundPointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={endDrag}

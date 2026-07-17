@@ -1657,30 +1657,9 @@ export default function Home() {
               svag-signal-/ljud-meddelanden i topp-baren) som tidigare kunde
               visas samtidigt och staplas på varandra. `statusBanner` väljer
               redan ut EXAKT en enligt prioritetsordningen, se dess jsdoc. */}
-          {/* Juli 2026-fix (produktfeedback, ny omgång: "gör det smartare,
-              tar för mycket plats och skymmer varandra"): `top-32`/`8rem`
-              var fortfarande ett GISSAT fast värde som antog att topp-baren
-              alltid tog exakt den höjden — men badge-raden radbryter numera
-              (`flex-wrap`) beroende på hur många statusbadgar/knappar som
-              råkar visas, så topp-barens verkliga höjd varierar. Ett gissat
-              tal hann aldrig ikapp det och bannern hamnade mitt i knapparna
-              (se skärmdump i produktfeedbacken). Använder nu `topBarHeight`
-              — samma verkligt uppmätta höjd (via `ResizeObserver` på
-              `topBarRef`) som redan används för att placera felsöknings-
-              raden ovanför — så bannern ALLTID hamnar precis under topp-
-              baren, oavsett hur många rader den råkar rendera just nu. */}
-          {arSessionVisible && statusBanner && (
-            <div
-              className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-6"
-              style={{ top: `${topBarHeight + debugStripHeight + 10}px` }}
-            >
-              <span
-                className={`max-w-xs rounded-full px-4 py-1.5 text-center text-xs font-medium shadow-lg ${statusBannerToneClasses[statusBanner.tone]}`}
-              >
-                {statusBanner.message}
-              </span>
-            </div>
-          )}
+          {/* statusBanner renderas i bottenpanelen som en kompakt pill ovanför
+              Meny-knappen (se "Bottom controls" nedan) — inte längre som ett
+              flytande overlay i mitten av skärmen. */}
 
           {/* Top bar — z-45: MÅSTE ligga ovanför statusbanners (z-30) och
               under pilen/målbekräftelsen (z-50). OBS: den tidigare
@@ -1864,6 +1843,11 @@ export default function Home() {
               >
                 📸 Fotomontage
               </button>
+            )}
+            {statusBanner && (
+              <div className={`rounded-full px-3 py-1.5 text-center text-xs font-medium shadow-md ${statusBannerToneClasses[statusBanner.tone]}`}>
+                {statusBanner.message}
+              </div>
             )}
             <button
               onClick={() => setShowMenu(true)}
