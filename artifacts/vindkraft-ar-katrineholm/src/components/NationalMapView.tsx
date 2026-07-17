@@ -243,6 +243,9 @@ export function NationalMapView({
   const [diagExpanded, setDiagExpanded] = useState(false);
   const [apiDiag, setApiDiag] = useState<ApiDiagState>({ ...API_DIAG_INIT });
 
+  // ── Räknaranimation — räknar snabbt upp verk under laddning ─────────────────
+  const [animatedCount, setAnimatedCount] = useState(0);
+
   // ── Load projects ───────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -373,6 +376,26 @@ export function NationalMapView({
     () => filteredProjects.reduce((s, p) => s + (p.turbineCountPlannedMin ?? 0), 0),
     [filteredProjects]
   );
+
+  // ── Räknaranimation — räknar snabbt upp verk när data laddats ───────────────
+  useEffect(() => {
+    if (turbineTotal === 0) { setAnimatedCount(0); return; }
+    setAnimatedCount(0);
+    const duration = 1200; // ms
+    const steps = Math.min(turbineTotal, 80);
+    const interval = duration / steps;
+    let current = 0;
+    const id = setInterval(() => {
+      current += Math.ceil(turbineTotal / steps);
+      if (current >= turbineTotal) {
+        setAnimatedCount(turbineTotal);
+        clearInterval(id);
+      } else {
+        setAnimatedCount(current);
+      }
+    }, interval);
+    return () => clearInterval(id);
+  }, [turbineTotal]);
 
   // ── Init MapLibre GL ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -755,6 +778,20 @@ export function NationalMapView({
                 ? `${filteredProjects.length} projekt · hämtar live…`
                 : `${filteredProjects.length} projekt${turbineTotal > 0 ? ` · ${turbineTotal} verk` : ''}`}
           </h1>
+          {/* Räknaranimation — visas under laddning och strax efter */}
+          {animatedCount > 0 && animatedCount < turbineTotal && (
+            <div className="mt-0.5 flex items-center gap-1.5">
+              <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-[#FF8B01] transition-all duration-75"
+                  style={{ width: `${(animatedCount / turbineTotal) * 100}%` }}
+                />
+              </div>
+              <span className="shrink-0 tabular-nums text-[10px] text-[#FFB347]">
+                {animatedCount.toLocaleString('sv-SE')} verk
+              </span>
+            </div>
+          )}
         </div>
         <button
           onClick={onBack}
@@ -785,11 +822,6 @@ export function NationalMapView({
       <div className="nm-viewport">
         {/* Kartbehållare — MapLibre monteras här */}
         <div ref={containerRef} className="nm-canvas" />
-
-        {/* Debug badge — build-ID visas för att bekräfta rätt version på iPhone */}
-        <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full bg-[#FF8B01] px-4 py-1 text-[11px] font-bold text-[#090909] shadow-lg">
-          TEST 15 · {apiDiag.buildId || 'dev'}
-        </div>
 
         {/* Återcentrera-knapp */}
         <button

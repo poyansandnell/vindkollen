@@ -34,7 +34,7 @@ export function InfoPanel({ onClose }: { onClose: () => void }) {
           </p>
 
           <div className="mt-1 border-t border-white/10 pt-3">
-            <h3 className="mb-2 text-sm font-semibold text-white">Länsterberget — Katrineholms kommun</h3>
+            <h3 className="mb-2 text-sm font-semibold text-white">Ericsbergs planer — Katrineholms kommun</h3>
             <p>
               Denna projektvy har tagits fram åt Katrineholm Framåt för att tydliggöra hur den planerade
               etableringen norr om Katrineholm kan upplevas från olika delar av kommunen.
@@ -44,6 +44,14 @@ export function InfoPanel({ onClose }: { onClose: () => void }) {
               påverkan. Syftet är att ge invånarna ett mer konkret underlag inför den fortsatta
               diskussionen om etableringen.
             </p>
+            <a
+              href="/samradsyttrande-forsvarsmakten.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 flex items-center gap-2 rounded-xl border border-[#FF8B01]/30 bg-[#FF8B01]/10 px-3 py-2 text-sm font-medium text-[#FFB347] hover:bg-[#FF8B01]/20"
+            >
+              📄 Försvarsmaktens samrådsyttrande (PDF)
+            </a>
           </div>
         </div>
 

@@ -565,17 +565,22 @@ export default function PlaceTurbines() {
           // boundary sätts från polygon om tillgänglig (summary-läge ger null →
           // editableBoundary-effekten ovan används inte; editor startar utan gräns).
           const boundary = apiPolygonToLatLon(project.polygon ?? null);
+          // Katrineholms bundlade projekt (id: 10001 = "Ericsbergs planer") har
+          // inga API-turbiner — förifyll med DEFAULT_TURBINES (de 29 planerade
+          // verken) så att editorn inte öppnas med en tom karta.
+          const isBundledKatrineholm = project.id === 10001;
+          const preloadedTurbines = isBundledKatrineholm ? DEFAULT_TURBINES : [];
           setEditHandoff({
             projectId: String(project.id),
             projectName: project.name,
             municipality: project.kommun ?? undefined,
-            turbines: [],
+            turbines: preloadedTurbines,
             centerLat: project.centerLat ?? null,
             centerLng: project.centerLng ?? null,
             boundary,
           });
-          setTurbines([]);
-          setCommittedTurbines([]);
+          setTurbines(preloadedTurbines);
+          setCommittedTurbines(preloadedTurbines);
           setShowWelcome(false);
         }}
         onBack={() => navigate("/")}

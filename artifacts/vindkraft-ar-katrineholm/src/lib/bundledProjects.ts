@@ -57,7 +57,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   // ── Södermanland ──────────────────────────────────────────────────────
   {
     id: 10001,
-    name: "Länsterberget",
+    name: "Ericsbergs planer",
     status: "consultation",
     kommun: "Katrineholm",
     region: "Södermanland",
@@ -320,7 +320,7 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
 ];
 
 /**
- * Katrineholms-projektet (Länsterberget) med fullständig kampanjkonfiguration.
+ * Katrineholms-projektet (Ericsbergs planer) med fullständig kampanjkonfiguration.
  * Används i Home.tsx för att avgöra om petitions-CTA:n ska visas.
  */
 export const KATRINEHOLM_PROJECT = BUNDLED_PROJECTS.find((p) => p.id === 10001)!;

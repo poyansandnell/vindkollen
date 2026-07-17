@@ -254,7 +254,7 @@ export default function Home() {
   // platsflytt ovan) syns per default. Se även `topBarRef`s stil nedan
   // (statusbanner/felbanner beräknar nu sin position FRÅN topp-barens
   // faktiska mätta höjd istället för en gissning).
-  const [showStatusDetails, setShowStatusDetails] = useState(false);
+  const [showStatusDetails, setShowStatusDetails] = useState(true);
   const [calibrated, setCalibrated] = useState(false);
   const [showSoundLevel, setShowSoundLevel] = useState(true);
   const [showNoiseImpact, setShowNoiseImpact] = useState(false);
@@ -1762,19 +1762,18 @@ export default function Home() {
                 )}
               </div>
             </div>
-            {/* Rad 2: GPS · Kompass (+ mer status om aktiv)
-                dBA och Infraljud är nu i rad 1 (höger sida) ovanför denna rad. */}
-            <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
-              <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
-              {showStatusDetails && (
-                <>
-                  <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
-                  <LineOfSightStatus status={lineOfSightStatus} />
-                </>
-              )}
-            </div>
-            {/* TEST 13 rad 3: Närmaste verk-information */}
+            {/* Rad 2: GPS · Kompass · AR-stabilitet · Fri sikt — alla alltid synliga,
+                flex-wrap garanterar att de passar oavsett skärmbredd.
+                showStatusDetails styr nu om hela raden visas (dölj/visa). */}
+            {showStatusDetails && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
+                <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
+                <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
+                <LineOfSightStatus status={lineOfSightStatus} />
+              </div>
+            )}
+            {/* Rad 3: Närmaste verk-information */}
             {nearestTurbineInfo && (
               <div className="text-[11px] leading-none text-white/60">
                 🌬️ Närmaste verk ·{" "}
@@ -1787,7 +1786,7 @@ export default function Home() {
                 ]}
               </div>
             )}
-            {/* TEST 13 rad 4: Ljud · Ljud ute/inne · Mer status · ⚙️ */}
+            {/* Rad 4: Ljud · Ute/Inne · Dölj status · ⚙️ */}
             <div className="flex items-center gap-1.5">
               {ready && (
                 <button
@@ -1808,10 +1807,10 @@ export default function Home() {
               <button
                 onClick={() => setShowStatusDetails((v) => !v)}
                 aria-pressed={showStatusDetails}
-                aria-label={showStatusDetails ? "Dölj fler statusdetaljer" : "Visa fler statusdetaljer"}
+                aria-label={showStatusDetails ? "Dölj statusraden" : "Visa statusraden"}
                 className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-white/20"
               >
-                {showStatusDetails ? "▴ Status" : "▾ Status"}
+                {showStatusDetails ? "👁 Dölj" : "👁 Status"}
               </button>
               <button
                 onClick={() => setShowControls(true)}
