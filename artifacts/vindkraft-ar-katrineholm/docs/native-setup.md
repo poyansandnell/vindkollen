@@ -36,50 +36,60 @@ Sätt den som miljövariabel vid native-bygget (se "Bygg lokalt" nedan).
 
 ---
 
-## Klona och första setup
+## Klona och öppna i Xcode (komplett från ren checkout)
+
+`ios/` är **committad i repot** och innehåller alla nödvändiga projektfiler inkl. `Package.resolved` med pinnade SPM-versioner. Det betyder att du kan öppna projektet i Xcode direkt efter dessa steg utan att behöva göra Reset Package Caches, Resolve Package Versions eller lägga till filer manuellt:
 
 ```bash
-# Klona repot till din Mac
+# 1. Klona
 git clone <din-repo-url>
 cd <repo>
 
-# Installera alla beroenden
+# 2. Installera npm-beroenden
 pnpm install
 
-# Gå till workspace-mappen
-cd artifacts/vindkraft-ar-katrineholm
+# 3. Bygg webb-bundeln för Capacitor
+pnpm --filter @workspace/vindkraft-ar-katrineholm run native:build
+
+# 4. Synkronisera Capacitor (kopierar webb-filer + regenererar Package.swift)
+npx cap sync ios --project-path artifacts/vindkraft-ar-katrineholm
+
+# 5. Öppna i Xcode — fungerar direkt, inga manuella steg
+open artifacts/vindkraft-ar-katrineholm/ios/App/App.xcodeproj
 ```
+
+**Varför fungerar det?** `Package.resolved` är committad på:
+`ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`
+
+Den pekar ut exakta git-revisioner för alla fjärr-SPM-paket:
+- `capacitor-swift-pm` 8.4.2
+- `ion-ios-camera` 1.0.4  (→ `IONCameraLib`, används av `@capacitor/camera`)
+- `ion-ios-geolocation` 2.1.1  (→ `IONGeolocationLib`, används av `@capacitor/geolocation`)
+
+Xcode läser `Package.resolved` och hämtar dessa pinnade versioner i bakgrunden — utan dialog, utan manuella steg.
 
 ---
 
-## Lägg till native-plattformar (körs en gång)
-
-```bash
-# Lägg till iOS och Android (skapar ios/ och android/ mapparna)
-pnpm exec cap add ios
-pnpm exec cap add android
-```
-
-> **OBS:** `ios/` och `android/` är inte committade i repot — de skapas lokalt av dig.
-
----
-
-## Bygg och synkronisera
+## Bygg för distribution (inkl. API-URL)
 
 Byt `<DIN-API-URL>` mot produktionsadressen:
 
 ```bash
-# iOS
-VITE_API_BASE_URL=https://<repl-name>--<owner>.repl.co pnpm native:ios
+# iOS — bygger, synkroniserar, kör xcodebuild -resolvePackageDependencies, öppnar Xcode
+VITE_API_BASE_URL=https://<repl-name>--<owner>.repl.co pnpm --filter @workspace/vindkraft-ar-katrineholm run native:ios
 
 # Android
-VITE_API_BASE_URL=https://<repl-name>--<owner>.repl.co pnpm native:android
+VITE_API_BASE_URL=https://<repl-name>--<owner>.repl.co pnpm --filter @workspace/vindkraft-ar-katrineholm run native:android
 ```
 
-Dessa kommandon gör i ordning:
+`native:ios` gör i ordning:
 1. `vite build --config vite.native.config.ts` → bygger till `dist-native/`
-2. `cap sync ios` / `cap sync android` → kopierar webbfiler + plugins till native-projektet
-3. `cap open ios` / `cap open android` → öppnar Xcode / Android Studio
+2. `cap sync ios` → kopierar webbfiler + regenererar `CapApp-SPM/Package.swift`
+3. `scripts/ios-setup.sh` → skriver in Info.plist privacy strings
+4. `xcodebuild -resolvePackageDependencies` → löser SPM-paket och uppdaterar `Package.resolved`
+5. `cap open ios` → öppnar Xcode
+
+> **När du lägger till ett nytt Capacitor-plugin:** kör `pnpm native:ios` → `xcodebuild -resolvePackageDependencies` uppdaterar `Package.resolved` → committera den uppdaterade filen.
 
 ---
 
