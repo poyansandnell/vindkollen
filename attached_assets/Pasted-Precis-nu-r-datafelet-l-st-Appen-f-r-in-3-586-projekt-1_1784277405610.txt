@@ -1,0 +1,258 @@
+Precis — nu är datafelet löst. Appen får in:
+
+* 3 586 projekt
+* 13 738 verk
+* alla koordinater verkar normaliseras
+
+Men kartytan är fortfarande svart. Diagnostiken visar fortfarande:
+
+Container: 440×0
+
+Så markörerna kan inte synas heller, eftersom MapLibre-kartan fortfarande saknar en faktisk synlig höjd. Canvas: 1320×900 visar bara att MapLibre har skapat en intern canvas, inte att själva kartcontainern visas korrekt i layouten.
+
+Skicka detta till Replit:
+
+⸻
+
+TEST 14 – lös kartans faktiska visningsyta och markörerna
+
+Datapipelinen fungerar nu:
+
+* Raw: 3586
+* Normalized: 3586
+* Coordinates: 3586
+* UI: 3586 projekt / 13738 verk
+* HTTP 200
+* Source och layers skapade
+
+Det enda kvarvarande huvudfelet är:
+
+Container: 440×0
+
+Kartans faktiska DOM-container har fortfarande höjd 0. Därför syns varken baskartan eller markeringarna.
+
+1. Identifiera rätt MapLibre-container
+
+Logga exakt element för:
+
+map.getContainer()
+
+och:
+
+map.getCanvasContainer()
+
+Logga för båda:
+
+element.getBoundingClientRect()
+element.offsetWidth
+element.offsetHeight
+getComputedStyle(element).height
+getComputedStyle(element).position
+getComputedStyle(element.parentElement!).height
+
+Diagnostiken ska inte läsa en wrapper som har höjd 0 om MapLibre egentligen sitter i ett annat element.
+
+⸻
+
+2. Ge själva map-diven en absolut, garanterad yta
+
+Använd en dedikerad wrapper:
+
+<div className="national-map-viewport">
+  <div ref={mapContainerRef} className="national-map-canvas" />
+</div>
+
+CSS:
+
+.national-map-page {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #000;
+}
+.national-map-header,
+.national-map-filters {
+  flex: 0 0 auto;
+}
+.national-map-viewport {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 320px;
+  width: 100%;
+  overflow: hidden;
+}
+.national-map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+}
+.national-map-canvas .maplibregl-map,
+.national-map-canvas .maplibregl-canvas-container,
+.national-map-canvas canvas {
+  width: 100%;
+  height: 100%;
+}
+
+Viktigt:
+
+* ingen förälder får använda height: 100% utan explicit höjd
+* kartan får inte ligga i en grid-rad som blir 0
+* kartan får inte använda flex: 1 under en förälder utan definierad viewport-höjd
+* diagnostikpanelen får inte ligga i normalt dokumentflöde
+
+⸻
+
+3. Diagnostikpanelen ska vara overlay
+
+Den får inte trycka ihop kartan.
+
+.map-diagnostics {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  max-height: 42dvh;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.96);
+}
+
+När den är hopfälld ska endast rubrikraden vara synlig och den får inte påverka kartans beräknade höjd.
+
+⸻
+
+4. Initiera inte MapLibre förrän containern har höjd
+
+const rect = mapContainerRef.current?.getBoundingClientRect();
+if (!rect || rect.width <= 0 || rect.height <= 0) {
+  requestAnimationFrame(initMap);
+  return;
+}
+
+Efter initiering:
+
+requestAnimationFrame(() => {
+  map.resize();
+});
+
+Lägg även in:
+
+const resizeObserver = new ResizeObserver(() => {
+  const rect = mapContainerRef.current?.getBoundingClientRect();
+  if (rect && rect.width > 0 && rect.height > 0) {
+    map.resize();
+  }
+});
+
+⸻
+
+5. Verifiera markörerna separat
+
+När kartan fått höjd ska GeoJSON-source innehålla projekten:
+
+console.log("GeoJSON features:", geoJson.features.length);
+
+Verifiera också:
+
+const source = map.getSource("projects") as GeoJSONSource;
+source.setData(geoJson);
+
+Lägg in diagnostik:
+
+GeoJSON features: 3586
+Rendered project features: X
+Rendered turbine features: X
+
+Kontrollera att koordinaterna är:
+
+[longitude, latitude]
+
+inte:
+
+[latitude, longitude]
+
+Efter setData, kör fitBounds över alla giltiga projekt:
+
+map.fitBounds(bounds, {
+  padding: 40,
+  maxZoom: 7,
+  duration: 0,
+});
+
+⸻
+
+6. Baskartan måste ha en giltig style och nätverkstrafik
+
+Eftersom skärmen är helt svart ska ni även verifiera att style verkligen innehåller en bakgrunds-/raster-/vector-layer, inte bara projektlagren.
+
+Logga:
+
+map.getStyle().layers?.map(layer => layer.id)
+
+Verifiera nätverksanrop för:
+
+* style JSON
+* tiles
+* glyphs
+* sprites
+
+Lägg in:
+
+map.on("error", event => {
+  console.error("MapLibre error:", event.error);
+});
+
+Om kartans DOM-höjd blir korrekt men bakgrunden fortfarande är svart, då är style/tiles nästa rotfel.
+
+⸻
+
+7. Safe area
+
+Den svarta appbakgrunden går nu nästan hela vägen upp, men säkerställ:
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+Och:
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+/>
+
+Undvik dubbel safe-area-inset-top.
+
+⸻
+
+Godkännandekrav för TEST 14
+
+TEST 14 får inte betraktas som klar förrän verklig iPhone visar:
+
+Container: 440×minst 300
+GeoJSON features: fler än 0
+
+Och visuellt:
+
+1. Sveriges baskarta syns.
+2. Projektmarkeringar syns.
+3. Vid inzoomning syns vindkraftverken.
+4. Filtren fungerar.
+5. Diagnostikpanelen påverkar inte kartans höjd.
+6. AR- och Katrineholmsvyn är oförändrade.
+
+⸻
+
+Det viktiga är att de inte fortsätter felsöka datan nu. Datan fungerar. De ska fokusera helt på varför den riktiga MapLibre-containern fortfarande rapporterar 440×0.

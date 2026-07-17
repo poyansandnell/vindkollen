@@ -467,3 +467,63 @@
 }
 
 /* Viewport-meta för Capacitor: viewport-fit=cover aktiveras i index.html */
+
+/* ── NationalMapView layout ─────────────────────────────────────────────────
+   Explicit CSS-klasser i stället för Tailwind flex-1 för att garantera att
+   MapLibre-containern alltid har en positiv höjd på iOS Capacitor WKWebView.
+   flex-1 + min-h-0 löser sig inte alltid vid mount på Capacitor. */
+
+.nm-page {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #090909;
+  color: #fff;
+}
+
+/* Karta-viewport: flex-1 MED explicit min-height som golv.
+   Utan min-height kan flex: 1 1 0 lösas till 0 på Capacitor om föräldern
+   inte har en känd höjd vid mount. */
+.nm-viewport {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 320px;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* MapLibre-canvas-div: absolut, täcker hela nm-viewport. */
+.nm-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+}
+
+/* Tvinga MapLibres interna element att fylla nm-canvas helt.
+   MapLibre sätter annars width/height via inline-style baserat på
+   container-måtten — om mätvärdet är 0 vid init syns ingenting. */
+.nm-canvas .maplibregl-map,
+.nm-canvas .maplibregl-canvas-container,
+.nm-canvas .maplibregl-canvas-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Diagnostikpanel: overlay nedtill, utanför dokumentflödet. */
+.nm-diag {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  max-height: 42dvh;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.96);
+}

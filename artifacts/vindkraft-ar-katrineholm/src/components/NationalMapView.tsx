@@ -402,16 +402,39 @@ export function NationalMapView({
       return;
     }
 
-    const container = containerRef.current;
-    const rect = container.getBoundingClientRect();
-    addLog(`Container: ${rect.width.toFixed(0)}×${rect.height.toFixed(0)}`, {
-      webGLSupported: true,
-      containerW: rect.width,
-      containerH: rect.height,
-    });
+    // Defer map initialization until the container has a positive height.
+    // On iOS Capacitor, WKWebView flex layout may not resolve at mount time,
+    // causing getBoundingClientRect() to return height=0 and MapLibre to create
+    // an invisible 0-height canvas that cannot be properly resized afterwards.
+    let cancelled = false;
+    let rafId: number | null = null;
+    const disposers: Array<() => void> = [];
+
+    const doInit = () => {
+      if (cancelled) return;
+      const container = containerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) {
+        // Not laid out yet — update diagnostics and retry next animation frame
+        setDiag(prev => ({
+          ...prev,
+          webGLSupported: true,
+          containerW: rect.width,
+          containerH: rect.height,
+        }));
+        rafId = requestAnimationFrame(doInit);
+        return;
+      }
+      addLog(`Container: ${rect.width.toFixed(0)}×${rect.height.toFixed(0)}`, {
+        webGLSupported: true,
+        containerW: rect.width,
+        containerH: rect.height,
+      });
 
     // 2. Create map with primary (ESRI satellite) style
-    let map: maplibregl.Map;
+    let map!: maplibregl.Map;
     try {
       map = new maplibregl.Map({
         container,
@@ -446,14 +469,16 @@ export function NationalMapView({
       const initData = filteredProjectsRef.current.length > 0
         ? filteredProjectsRef.current
         : BUNDLED_PROJECTS.filter(p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number');
+      const geoJson = buildGeoJSON(initData);
+      console.info('[NationalMap] GeoJSON features:', geoJson.features.length, '(', initData.length, 'proj)');
       map.addSource(SOURCE_ID, {
         type: 'geojson',
-        data: buildGeoJSON(initData),
+        data: geoJson,
         cluster: true,
         clusterMaxZoom: 8,
         clusterRadius: 55,
       });
-      addLog(`Source "${SOURCE_ID}" added (${initData.length} proj)`, { sourceAdded: true });
+      addLog(`Source "${SOURCE_ID}" added (${geoJson.features.length} features)`, { sourceAdded: true });
 
       map.addLayer({
         id: 'clusters',
@@ -651,21 +676,35 @@ export function NationalMapView({
       setDiag(prev => ({ ...prev, containerW: r.width, containerH: r.height }));
     };
 
-    const ro = new ResizeObserver(() => { map.resize(); updateCanvasSize(); updateContainerDims(); });
+    const ro = new ResizeObserver(() => {
+      if (cancelled) return;
+      map.resize();
+      requestAnimationFrame(() => { if (!cancelled) map.resize(); });
+      updateCanvasSize();
+      updateContainerDims();
+    });
     ro.observe(container);
 
-    map.resize();          // immediate — catches already-laid-out containers
-    updateContainerDims(); // update diagnostic immediately
-    const t1 = setTimeout(() => { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @150ms'); }, 150);
-    const t2 = setTimeout(() => { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @500ms'); }, 500);
-    const t3 = setTimeout(() => { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @1500ms'); }, 1500);
+    map.resize();
+    requestAnimationFrame(() => { if (!cancelled) map.resize(); });
+    updateContainerDims();
+    const t1 = setTimeout(() => { if (!cancelled) { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @150ms'); } }, 150);
+    const t2 = setTimeout(() => { if (!cancelled) { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @500ms'); } }, 500);
+    const t3 = setTimeout(() => { if (!cancelled) { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @1500ms'); } }, 1500);
+
+    disposers.push(
+      () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); },
+      () => { ro.disconnect(); },
+      () => { mapReadyRef.current = false; try { map.remove(); } catch {} mapRef.current = null; },
+    );
+    }; // end doInit
+
+    rafId = requestAnimationFrame(doInit);
 
     return () => {
-      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
-      ro.disconnect();
-      mapReadyRef.current = false;
-      map.remove();
-      mapRef.current = null;
+      cancelled = true;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      disposers.forEach(fn => fn());
     };
   }, []); // mount-only
 
@@ -692,7 +731,7 @@ export function NationalMapView({
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#090909] text-white">
+    <div className="nm-page">
       {/* Sidhuvud */}
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 pt-[max(env(safe-area-inset-top),12px)]">
         <div>
@@ -735,14 +774,14 @@ export function NationalMapView({
         ))}
       </div>
 
-      {/* MapLibre GL-karta — fyllde sin flex-1-behållare */}
-      <div className="relative min-h-0 flex-1">
+      {/* MapLibre GL-karta */}
+      <div className="nm-viewport">
         {/* Kartbehållare — MapLibre monteras här */}
-        <div ref={containerRef} className="absolute inset-0" />
+        <div ref={containerRef} className="nm-canvas" />
 
         {/* Debug badge — build-ID visas för att bekräfta rätt version på iPhone */}
         <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full bg-[#FF8B01] px-4 py-1 text-[11px] font-bold text-[#090909] shadow-lg">
-          TEST 13 · {apiDiag.buildId || 'dev'}
+          TEST 14 · {apiDiag.buildId || 'dev'}
         </div>
 
         {/* Återcentrera-knapp */}
@@ -755,10 +794,9 @@ export function NationalMapView({
           ⊙
         </button>
 
-        {/* MapLibre runtime diagnostics — visas alltid på skärmen (för felsökning på iOS) */}
-        {/* Outer wrapper: pointer-events-none so the map stays pannable underneath */}
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-20">
-        <div className="pointer-events-auto max-h-[55%] overflow-y-auto bg-black/85 text-[10px] font-mono text-white/90 backdrop-blur-sm">
+        {/* MapLibre runtime diagnostics — nm-diag är absolute overlay, påverkar inte kartans höjd */}
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-50">
+        <div className="nm-diag pointer-events-auto text-[10px] font-mono text-white/90">
           {/* Header row */}
           <div className="flex items-center justify-between border-b border-white/20 px-2 py-1">
             <span className="font-bold text-[#FFB347]">MapLibre diagnostik</span>
