@@ -1,0 +1,122 @@
+Skicka detta exakt till Replit:
+
+⸻
+
+Nu återstår tre tydliga saker i AR-vyn.
+
+1. Kameran täcker fortfarande inte hela skärmen längst ner
+
+Toppen är nu korrekt och kameran ligger bakom Dynamic Island/statusfältet, men längst ner syns fortfarande ett separat område där kamerabilden inte fyller hela skärmen.
+
+Det syns särskilt under knapparna längst ner, där det blir som ett extra fält eller en separat kameraremsa.
+
+Fixa AR-vyn så att kameran verkligen täcker hela den fysiska iPhone-skärmen från överkant till nederkant.
+
+Kontrollera särskilt:
+
+* yttersta AR-containern
+* CameraPreview-lagret
+* WebViewens höjd
+* position: fixed
+* inset: 0
+* height: 100dvh
+* min-height
+* viewport-fit=cover
+* env(safe-area-inset-bottom)
+* eventuella parent-containrar med padding, margin, overflow eller begränsad höjd
+* att ingen separat bakgrund eller duplicerad kamerayta renderas längst ner
+
+Krav:
+
+* kameran ska ligga edge-to-edge bakom hela skärmen
+* ingen ljus, mörk eller separat remsa får synas längst ner
+* UI-knapparna ska fortfarande respektera home indicator/safe area
+* kameran ska ligga bakom UI:t, inte avslutas ovanför safe area
+* ändra inte AR-verkens placering eller storlek
+
+Testa på fysisk iPhone med home indicator.
+
+2. Flytta upp informationsrutorna uppe till höger
+
+Informationsrutorna för:
+
+* dBA
+* antal synliga verk
+* infraljud
+
+ligger nu lite för långt ner och tar mycket plats i samma höjd som GPS- och kompassraden.
+
+Flytta upp blocket uppe till höger något, närmare statusfältet/Dynamic Island, men fortfarande inom safe area.
+
+Målet är:
+
+* skapa mer luft i mitten av topplayouten
+* minska risken att blocket krockar med övrig information
+* behålla tydlig läsbarhet
+* inte lägga något under Dynamic Island eller systemikonerna
+
+Gör detta responsivt så att det fungerar på både mindre och större iPhone-modeller.
+
+Kontrollera särskilt:
+
+* att GPS och Kompass fortfarande ligger bra
+* att dBA / verk / infraljud ligger något högre än idag
+* att “Närmaste verk”-raden och knapparna Ljud/Ute/Status inte trycks ihop
+* att layouten inte överlappar vid större textstorlek eller mindre skärm
+
+Flytta bara blocket. Ändra inte innehåll, färger eller funktion.
+
+3. Kontrollera att rätt vindkraftverk laddas beroende på användarens plats
+
+Appen visar nu ungefär 29 verk i Katrineholm. Jag behöver veta om detta är korrekt platsstyrt eller om Katrineholm-projektet alltid laddas oavsett var användaren befinner sig.
+
+Kontrollera nuvarande datalogik.
+
+Krav:
+
+* När användaren befinner sig i Katrineholm ska Katrineholms relevanta verk laddas.
+* När användaren befinner sig i en annan del av Sverige ska appen ladda de relevanta projekten/verken för den platsen.
+* Katrineholms 29 verk får inte vara hårdkodade som standard för hela Sverige.
+* Appen ska använda aktuell GPS-position för att välja närliggande projekt eller verk.
+* Om flera projekt finns i närheten ska appen välja rätt projekt eller visa dem enligt befintlig nationell logik.
+* Om inga projekt finns nära användaren ska ett tydligt normalt meddelande visas, inte Katrineholm som fallback.
+* Testdata/fallback för Katrineholm får endast användas i development, aldrig i production.
+
+Gå igenom:
+
+* hur projekt väljs vid AR-start
+* om Katrineholm, 29 turbines, projekt-ID eller koordinater är hårdkodade
+* eventuell fallback-data
+* kopplingen mellan Sverigekartan, valt projekt och AR-vyn
+* vad som händer vid kallstart på annan ort
+* vad som händer om användaren öppnar ett projekt manuellt från kartan
+* om GPS-baserat läge och manuellt valt projekt skiljs åt korrekt
+
+Önskad logik:
+
+1. Om användaren öppnar AR från ett specifikt projekt ska det projektets verk laddas.
+2. Om användaren öppnar AR utan valt projekt ska närmaste relevanta projekt utifrån GPS laddas.
+3. Om inget projekt finns inom rimligt avstånd ska appen visa att inga registrerade projekt finns i närheten.
+4. Appen ska aldrig automatiskt visa Katrineholms verk för en användare i exempelvis Göteborg, Malmö eller Norrland.
+
+Rapportera efter kontrollen:
+
+* varifrån de 29 verken kommer
+* om de är hårdkodade, projektstyrda eller GPS-styrda
+* hur projektvalet fungerar idag
+* vilka ändringar som gjordes för att göra det korrekt i hela Sverige
+
+Verifiering
+
+Kör och redovisa:
+
+1. pnpm typecheck
+2. pnpm native:build
+3. npx cap sync ios
+4. kontroll på fysisk iPhone att kameran täcker hela skärmen
+5. kontroll på liten och stor iPhone-layout
+6. test med simulerad eller ändrad GPS-position utanför Katrineholm
+7. test att manuellt valt projekt fortfarande öppnar rätt verk
+8. test att inga Katrineholmsverk används som produktionsfallback
+
+Ändra inte fungerande GPS-, kompass-, ljud-, fotomontage-, kart- eller AR-beräkningar utöver det som krävs för dessa tre korrigeringar.

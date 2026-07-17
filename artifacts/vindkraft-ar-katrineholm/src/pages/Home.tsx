@@ -1623,32 +1623,35 @@ export default function Home() {
                 `justify-content: flex-end` tillsammans med `overflow-x-auto`
                 är en känd Chrome-bugg som gör innehåll som "skjuts ut" åt
                 vänster om den synliga rutan helt onåbart via scroll. */}
-            {/* TEST 13 rad 1: Projektnamn + turbinantal */}
-            <div className="flex items-center justify-between">
-              <div>
+            {/* Rad 1: Projektnamn (vänster) + dBA/Infraljud-badges (höger, direkt under Dynamic Island/statusfält) */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 shrink">
                 <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKOLLEN AR</p>
                 <p className="text-sm text-white/90">
                   {usingCustomPlacement ? "Vindkollen" : "Katrineholm"} · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}
                 </p>
               </div>
-              {nightMode && (
-                <span className="flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] text-red-200">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-                  Nattläge
-                </span>
-              )}
+              {/* Höger sida: dBA + Infraljud (alltid synliga) + Nattläge-indikator */}
+              <div className="flex shrink-0 items-center gap-1.5">
+                <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
+                <NoiseImpactBadge
+                  result={noiseImpact}
+                  expanded={showNoiseImpact}
+                  onToggle={() => setShowNoiseImpact((v) => !v)}
+                />
+                {nightMode && (
+                  <span className="flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] text-red-200">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                    Nattläge
+                  </span>
+                )}
+              </div>
             </div>
-            {/* TEST 13 rad 2: GPS · Kompass · dBA · Infraljud (+ mer status om aktiv)
-                Använder flex utan radbrytning. Alla 4 badges ska alltid synas. */}
+            {/* Rad 2: GPS · Kompass (+ mer status om aktiv)
+                dBA och Infraljud är nu i rad 1 (höger sida) ovanför denna rad. */}
             <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
               <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
-              <SoundLevelBadge estimate={soundLevelEstimate} indoors={soundEnvironment === "inne"} />
-              <NoiseImpactBadge
-                result={noiseImpact}
-                expanded={showNoiseImpact}
-                onToggle={() => setShowNoiseImpact((v) => !v)}
-              />
               {showStatusDetails && (
                 <>
                   <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
@@ -1728,7 +1731,14 @@ export default function Home() {
               `arSessionVisible` för att inte blöda igenom bakom
               `LoadingSequence`. */}
           {arSessionVisible && (
-          <div className="absolute inset-x-0 bottom-0 z-[45] flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-10">
+          <div
+            className="absolute inset-x-0 bottom-0 z-[45]"
+            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+          >
+          {/* Gradienten avslutas precis ovanför safe area/home indicator:
+              safe area-utrymmet nedan är transparent → kameran syns
+              sömlöst ända till skärmkanten, ingen mörk "remsa" visas. */}
+          <div className="flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-10">
             {ready && showSoundLevel && (
               <SoundLevelPanel
                 estimate={soundLevelEstimate}
@@ -1761,6 +1771,7 @@ export default function Home() {
             >
               ☰ Meny
             </button>
+          </div>
           </div>
           )}
 
