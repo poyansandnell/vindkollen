@@ -280,9 +280,13 @@ export default function Home() {
       setTopBarHeight(0);
       return;
     }
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) setTopBarHeight(entry.contentRect.height);
+    // Fix: använd alltid getBoundingClientRect().height (inkluderar padding)
+    // i BOTH initial- och ResizeObserver-mätningen. entry.contentRect.height
+    // exkluderar padding, vilket på en topp-bar med pt-[safe-area-inset-top]
+    // ≈59px + pb-8≈32px ger ~91px för litet offset → statusbannern hamnade
+    // mitt i UI:t istället för under topp-baren.
+    const observer = new ResizeObserver(() => {
+      setTopBarHeight(el.getBoundingClientRect().height);
     });
     observer.observe(el);
     setTopBarHeight(el.getBoundingClientRect().height);
@@ -319,15 +323,15 @@ export default function Home() {
   // `started`, därför placerad HÄR efter `arSessionVisible`s deklaration),
   // men mäter i stället `LiveDebugStrip`s EGNA renderade höjd, för att
   // skjuta ner topp-baren/statusbannern med rätt mellanrum.
+  // Fix: getBoundingClientRect().height konsekvent (se topBarRef ovan).
   useEffect(() => {
     const el = debugStripRef.current;
     if (!el) {
       setDebugStripHeight(0);
       return;
     }
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) setDebugStripHeight(entry.contentRect.height);
+    const observer = new ResizeObserver(() => {
+      setDebugStripHeight(el.getBoundingClientRect().height);
     });
     observer.observe(el);
     setDebugStripHeight(el.getBoundingClientRect().height);
@@ -1282,7 +1286,7 @@ export default function Home() {
   }, [camera.nativePreview]);
 
   return (
-    <div className={`relative h-[100dvh] w-full overflow-hidden text-white ${camera.nativePreview ? "bg-transparent" : "bg-[#090909]"}`}>
+    <div className={`fixed inset-0 overflow-hidden text-white ${camera.nativePreview ? "bg-transparent" : "bg-[#090909]"}`}>
       {!started && (
         <PermissionGate
           onStart={handleStart}

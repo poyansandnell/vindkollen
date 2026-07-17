@@ -1,0 +1,112 @@
+Nu är appen byggbar igen, men fyra saker behöver justeras inför nästa testbygge.
+
+1. Vindkraftverken visas inte alltid första gången AR-vyn öppnas
+
+Vid första öppningen syntes kamerabilden och gränssnittet, men inga vindkraftverk. När jag gick ur AR-vyn och öppnade den igen visades verken korrekt.
+
+Det tyder på ett initierings-/race condition-problem mellan:
+
+* kamerastart
+* GPS-position
+* kompass/orientering
+* AR-scenens render-loop
+* inläsning/projicering av vindkraftverken
+
+Fixa grundorsaken, inte med en godtycklig timeout.
+
+Krav
+
+* Verken ska visas vid första öppningen när GPS och kompass har tillräckliga data.
+* AR-scenen ska automatiskt göra en ny fullständig projektion när:
+    * kameran är startad
+    * första giltiga GPS-positionen kommer
+    * första giltiga kompassriktningen kommer
+    * appen återgår från bakgrund
+    * AR-vyn återaktiveras
+* Om scenen startar innan sensordata finns får den inte fastna i ett tomt läge.
+* Kontrollera att gamla refs, flags eller initialized-värden återställs vid unmount och ny mount.
+* Säkerställ att render-loop/watchdog faktiskt startas om när man går in i AR-vyn igen.
+* Lägg gärna in en tillfällig intern kontroll: om antal projicerade verk är 0 trots laddat projekt och giltig position, trigga en ny beräkning/rendering. Detta ska inte skapa dubbla loops.
+
+Verifiera med kallstart av appen och direkt öppning av AR-vyn, inte bara genom att gå in en andra gång.
+
+2. Appen/kamerabilden måste täcka hela iPhone-skärmen
+
+På skärmbilderna syns att kamerabilden inte täcker hela skärmen. Det blir områden högst upp och längst ner där bakgrunden/safe-area inte fylls korrekt.
+
+AR-vyn ska vara äkta fullscreen edge-to-edge:
+
+* kameran ska täcka hela viewporten bakom Dynamic Island/statusfältet
+* kameran ska fortsätta hela vägen bakom nedersta home indicator-området
+* inga ljusa, vita eller separata bakgrundsfält får synas högst upp eller längst ner
+* overlay-gränssnittet ska fortfarande respektera safe-area så att knappar och text inte hamnar under Dynamic Island eller home indicator
+
+Kontrollera särskilt:
+
+* html, body, #root
+* AR-sidans yttersta container
+* height: 100dvh
+* min-height
+* position: fixed
+* inset: 0
+* viewport-fit=cover
+* safe-area-insets
+* CameraPreview-konfiguration och om WebView-bakgrunden är transparent
+* att ingen parent-container har begränsad höjd, marginal eller padding
+
+Kameralagret ska vara fullscreen. UI-lagret ovanpå ska använda safe-area-padding separat.
+
+3. Flytta informations-/statusmeddelandet så gränssnittet inte ligger kaka på kaka
+
+Den gula statusrutan, exempelvis:
+
+Svag positionering – använder senaste stabila läge
+
+ligger nu ovanpå raden med information och kontroller. Även den gröna texten om att rikta mot närmaste verk krockar visuellt med övriga statusfält.
+
+Gör en tydligare layout:
+
+* Lägg temporära statusmeddelanden i ett eget toast-/statusområde.
+* Placera det under den översta statussektionen men ovanför själva AR-innehållet, med tydlig marginal.
+* Det får inte överlappa GPS, kompass, dBA, antal verk, infraljud eller knapparna Ljud/Ute/Status.
+* Meddelanden ska kunna staplas eller ersätta varandra utan att ligga ovanpå annan text.
+* Begränsa bredden och ge texten korrekt radbrytning.
+* Lägg dem hellre något längre ner än direkt ovanpå statusraderna.
+* Kontrollera både små och stora iPhone-skärmar.
+
+Även texten:
+
+Närmaste verk …
+
+som nu syns svagt bakom andra element ska inte renderas dubbelt eller ligga under statusmeddelandet.
+
+4. Ta bort synliga utvecklingsloggar från Sverigekartan
+
+Ja, nu kan de synliga utvecklings-/diagnostikloggarna tas bort från den vanliga användarvyn på Sverigekartan.
+
+Krav
+
+* Ta bort eller dölj debugpaneler, loggrader, builddiagnostik och intern sensortext för vanliga användare.
+* Behåll gärna loggningen internt i konsolen.
+* Om diagnostiken fortfarande behövs ska den endast visas bakom ett tydligt utvecklingsläge, exempelvis:
+    * endast i development
+    * via särskild debug-flagga
+    * eller efter flera tryck på versionsnumret
+* Ta inte bort normal användarinformation, felmeddelanden eller laddningsindikatorer.
+* Kontrollera även att inga debugloggar visas i AR-vyn i produktionsbygget.
+
+Verifiering inför nästa testbygge
+
+Kör och redovisa:
+
+1. pnpm typecheck
+2. pnpm native:build
+3. npx cap sync ios
+4. Kontrollera att inga manuella ändringar i Xcode krävs.
+5. Bekräfta att project.pbxproj inte behöver egna poster som Capacitor river ut.
+6. Testa kallstart och första öppningen av AR-vyn.
+7. Kontrollera fullscreen på fysisk iPhone.
+8. Kontrollera att statusmeddelanden inte överlappar andra element.
+9. Kontrollera att Sverigekartan inte visar utvecklingsloggar.
+
+Ändra inte fungerande kart-, GPS-, kompass-, ljud- eller fotomontagefunktioner utöver vad som krävs för dessa fyra korrigeringar.

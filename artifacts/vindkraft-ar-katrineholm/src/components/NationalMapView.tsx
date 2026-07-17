@@ -801,8 +801,8 @@ export function NationalMapView({
           ⊙
         </button>
 
-        {/* MapLibre runtime diagnostics — nm-diag är absolute overlay, påverkar inte kartans höjd */}
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-50">
+        {/* MapLibre runtime diagnostics — visas endast i dev-builds (import.meta.env.DEV) */}
+        {import.meta.env.DEV && <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-50">
         <div className="nm-diag pointer-events-auto text-[10px] font-mono text-white/90">
           {/* Header row */}
           <div className="flex items-center justify-between border-b border-white/20 px-2 py-1">
@@ -912,7 +912,7 @@ export function NationalMapView({
             </div>
           )}
         </div>
-        </div>{/* /pointer-events-none outer wrapper */}
+        </div>}{/* /nm-diag + DEV-gate */}
       </div>
 
       {/* Projektkort */}

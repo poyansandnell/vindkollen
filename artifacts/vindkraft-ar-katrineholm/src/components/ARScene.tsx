@@ -700,18 +700,41 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   // sub-graders sensorbrus virtuellt försvinner visuellt.
   const cameraTargetQuatRef = useRef(new THREE.Quaternion());
 
+  // Callback som låter `visible`-effekten nedan starta om rAF-loopen utan
+  // att behöva tillgång till `raf`/`animate` (som är closure-lokala i
+  // setup-effekten). Sätts av setup-effekten direkt efter att loopen startas.
+  const restartRafRef = useRef<(() => void) | null>(null);
+
   // "Visible=true": loggas EN gång när `visible`-propen (arSessionVisible i
   // Home.tsx) faktiskt slår om till true — se produktkravets punkt 2.
+  // Fix (bugg: "verk saknas vid första öppning"): när `visible` växlar till
+  // true startas rAF-loopen om synkront. På iOS kan appen ha gått till
+  // bakgrunden (rAF pausades) och watchdog-timern hinner inte alltid starta
+  // om loopen exakt när appen återgår till förgrunden — en explicit omstart
+  // här garanterar att den allra första bildrutan efter att AR-vyn öppnas
+  // faktiskt renderas. Dessutom återställs `turbinesVisibleFactorRef` till
+  // sitt rätta startvärde ifall det fastnat vid 0 under en föregående session.
   const loggedVisibleRef = useRef(false);
   useEffect(() => {
-    if (visible && !loggedVisibleRef.current) {
-      loggedVisibleRef.current = true;
-      console.info("[AR][pipeline] Visible=true (ARScene canvas)");
+    if (visible) {
+      if (!loggedVisibleRef.current) {
+        loggedVisibleRef.current = true;
+        console.info("[AR][pipeline] Visible=true (ARScene canvas)");
+      }
+      // Återställ turbinsvisibilitetsfaktorn ifall den fastnat vid 0
+      // (t.ex. om användaren dolde verken i en föregående session och sedan
+      // migrerade appen till bakgrunden med faktorn kvar på 0).
+      if (turbinesVisibleFactorRef.current < 0.01 && turbinesVisible !== false) {
+        turbinesVisibleFactorRef.current = 0.01;
+      }
+      // Starta om rAF-loopen explicit — garanterar en ny renderbildruta
+      // direkt när vyn öppnas, oavsett om watchdog hinner göra det.
+      restartRafRef.current?.();
     }
     if (!visible) {
       loggedVisibleRef.current = false;
     }
-  }, [visible]);
+  }, [visible, turbinesVisible]);
 
   userRef.current = { lat: userLat, lon: userLon };
   modeRef.current = {
@@ -1822,6 +1845,15 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     lastFrameAtRef.current = Date.now();
     console.info("[AR][pipeline] startAR(): render-loop initierad, väntar på första renderFrame()");
     raf = requestAnimationFrame(animate);
+    // Exponera en loop-omstarts-callback till `visible`-effekten ovan (som
+    // inte kan komma åt de lokala `raf`/`animate`-variablerna direkt).
+    // Täcker fallet "appen gick till bakgrunden → rAF pausades → vyn öppnades
+    // igen innan watchdog-intervallet hann starta om loopen".
+    restartRafRef.current = () => {
+      cancelAnimationFrame(raf);
+      lastFrameAtRef.current = Date.now();
+      raf = requestAnimationFrame(animate);
+    };
 
     // Juli 2026-fix ("pilen/verken fryser helt trots bra FPS/AR-
     // stabilitet"): en fristående (rAF-oberoende) vakthund som upptäcker om
