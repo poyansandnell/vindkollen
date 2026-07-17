@@ -27,22 +27,23 @@ check() {
   fi
 }
 
+check_absent() {
+  local desc="$1"
+  local pattern="$2"
+  local file="$3"
+  if grep -q "$pattern" "$file" 2>/dev/null; then
+    echo "  ❌  $desc (hittades — ska EJ finnas)"
+    FAIL=$((FAIL + 1))
+  else
+    echo "  ✅  $desc (frånvarande — korrekt)"
+    PASS=$((PASS + 1))
+  fi
+}
+
 check_file() {
   local desc="$1"
   local file="$2"
   if [ -f "$file" ]; then
-    echo "  ✅  $desc"
-    PASS=$((PASS + 1))
-  else
-    echo "  ❌  $desc"
-    FAIL=$((FAIL + 1))
-  fi
-}
-
-check_dir() {
-  local desc="$1"
-  local dir="$2"
-  if [ -d "$dir" ]; then
     echo "  ✅  $desc"
     PASS=$((PASS + 1))
   else
@@ -56,28 +57,31 @@ echo "=== iOS SPM-verifiering ==="
 echo ""
 
 echo "── project.pbxproj ──"
-check "XCRemoteSwiftPackageReference för capacitor-swift-pm" \
-  'XCRemoteSwiftPackageReference "capacitor-swift-pm"' "$PBXPROJ"
-check "Capacitor produktberoende" \
-  'productName = Capacitor' "$PBXPROJ"
-check "Cordova produktberoende" \
-  'productName = Cordova' "$PBXPROJ"
-check "CapApp-SPM produktberoende" \
+echo "  (Ska matcha officiell Capacitor 8.x SPM-template: enbart CapApp-SPM)"
+check "XCLocalSwiftPackageReference för CapApp-SPM" \
+  'XCLocalSwiftPackageReference "CapApp-SPM"' "$PBXPROJ"
+check "CapApp-SPM produktberoende (XCSwiftPackageProductDependency)" \
   'productName = "CapApp-SPM"' "$PBXPROJ"
-check "Capacitor länkad i Frameworks Build Phase" \
-  'Capacitor in Frameworks' "$PBXPROJ"
-check "Cordova länkad i Frameworks Build Phase" \
-  'Cordova in Frameworks' "$PBXPROJ"
 check "CapApp-SPM länkad i Frameworks Build Phase" \
   'CapApp-SPM in Frameworks' "$PBXPROJ"
-check "capacitor-swift-pm version 8.4.2" \
-  '8\.4\.2' "$PBXPROJ"
+check "Bundle ID satt till se.vindkollen.app" \
+  'PRODUCT_BUNDLE_IDENTIFIER = se\.vindkollen\.app' "$PBXPROJ"
+check_absent "INGEN direkt XCRemoteSwiftPackageReference för capacitor-swift-pm" \
+  'XCRemoteSwiftPackageReference "capacitor-swift-pm"' "$PBXPROJ"
+check_absent "INGET direkt Capacitor-produktberoende i pbxproj (ska gå via CapApp-SPM)" \
+  'productName = Capacitor;' "$PBXPROJ"
 
 echo ""
 echo "── CapApp-SPM/Package.swift ──"
 check_file "Package.swift finns" "$PKG_SWIFT"
-check "capacitor-swift-pm exact 8.4.2" \
-  'capacitor-swift-pm.*exact.*8\.4\.2\|exact.*8\.4\.2.*capacitor-swift-pm' "$PKG_SWIFT"
+if [ -f "$PKG_SWIFT" ]; then
+  check "capacitor-swift-pm exact 8.4.2" \
+    'capacitor-swift-pm.*exact.*8\.4\.2\|exact.*8\.4\.2.*capacitor-swift-pm' "$PKG_SWIFT"
+  check "Capacitor produkt-dependency i CapApp-SPM target" \
+    'product(name: "Capacitor"' "$PKG_SWIFT"
+  check "Cordova produkt-dependency i CapApp-SPM target" \
+    'product(name: "Cordova"' "$PKG_SWIFT"
+fi
 
 echo ""
 echo "── Package.resolved ──"
@@ -97,7 +101,6 @@ if [ -f "$PKG_SWIFT" ]; then
   while IFS= read -r path_line; do
     rel_path=$(echo "$path_line" | grep -oE '"[^"]*node_modules[^"]*"' | tr -d '"' || true)
     if [ -n "$rel_path" ]; then
-      abs_path="$ARTIFACT_DIR/ios/App/CapApp-SPM/$rel_path"
       real_path=$(cd "$ARTIFACT_DIR/ios/App/CapApp-SPM" && realpath "$rel_path" 2>/dev/null || echo "")
       if [ -d "$real_path" ]; then
         echo "  ✅  Lokal sökväg OK: $rel_path"
@@ -121,8 +124,8 @@ if [ $FAIL -gt 0 ]; then
   echo ""
   echo "Vanliga åtgärder:"
   echo "  • Saknade pnpm-sökvägar  → kör: pnpm install  (från monorepo-roten)"
-  echo "  • Saknad Package.resolved → kör: pnpm --filter @workspace/vindkraft-ar-katrineholm run native:ios"
-  echo "  • Saknad project.pbxproj-referens → kontrollera att filen är ej överskrivna av cap add ios"
+  echo "  • Felaktig pbxproj       → kör: git checkout -- ios/App/App.xcodeproj/project.pbxproj"
+  echo "  • Package.swift är gammal → kör: pnpm --filter @workspace/vindkraft-ar-katrineholm exec cap sync ios"
   echo ""
   exit 1
 else
