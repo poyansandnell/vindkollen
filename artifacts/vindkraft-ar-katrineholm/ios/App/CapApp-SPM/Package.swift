@@ -5,18 +5,16 @@ import PackageDescription
 // `cap sync ios` would overwrite it; scripts/fix-ios-package-swift.js
 // (run by `pnpm native:fix-spm` / the `capacitor:sync:after` hook) restores it.
 //
-// Design: plugin Swift sources are compiled as INLINE targets within this
-// package (path: "symlinks/<Name>/ios/Sources/<TargetDir>") rather than as
-// separate Swift package dependencies. This eliminates the need for Xcode to
-// download the remote `capacitor-swift-pm` binary package — Capacitor.xcframework
-// and Cordova.xcframework are vendored locally in vendor/capacitor-swift-pm/ and
-// committed to git. Only ion-ios-camera and ion-ios-geolocation (small Swift
-// source packages) are fetched remotely.
+// Design: ALL dependencies are LOCAL — no network access needed at all.
+//   • Capacitor.xcframework + Cordova.xcframework: vendor/capacitor-swift-pm/
+//   • IONCameraLib Swift sources:    vendor/ion-ios-camera/    (tag 1.0.4)
+//   • IONGeolocationLib Swift sources: vendor/ion-ios-geolocation/ (tag 2.1.1)
+//   • Plugin Swift sources: symlinks/<Name>/ios/Sources/<TargetDir>/
 //
 // Prerequisites for Xcode to build:
-//   1. git pull (gets vendored XCFrameworks in vendor/capacitor-swift-pm/)
+//   1. git pull (gets all vendored sources committed to git)
 //   2. pnpm install (creates node_modules so symlinks/ resolve to plugin sources)
-//   3. Open App.xcodeproj — no other steps needed.
+//   3. Open App.xcodeproj — no other steps needed, no network required.
 let package = Package(
     name: "CapApp-SPM",
     platforms: [.iOS(.v15)],
@@ -26,11 +24,10 @@ let package = Package(
             targets: ["CapApp-SPM"])
     ],
     dependencies: [
-        // LOCAL — XCFrameworks committed to git; no network access needed.
+        // ALL LOCAL — committed to git; zero network access needed.
         .package(name: "capacitor-swift-pm", path: "vendor/capacitor-swift-pm"),
-        // REMOTE — Swift source packages only (~KB); fast to clone.
-        .package(url: "https://github.com/ionic-team/ion-ios-camera.git", exact: "1.0.4"),
-        .package(url: "https://github.com/ionic-team/ion-ios-geolocation.git", exact: "2.1.1"),
+        .package(name: "ion-ios-camera",     path: "vendor/ion-ios-camera"),
+        .package(name: "ion-ios-geolocation", path: "vendor/ion-ios-geolocation"),
     ],
     targets: [
         // Plugin sources compiled inline — no separate Swift package needed.
