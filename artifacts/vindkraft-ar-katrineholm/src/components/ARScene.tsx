@@ -157,7 +157,7 @@ const OCCLUSION_THRESHOLD_HIGH = 0.55;
 // en total, appbrytande osynlighet för samtliga verk samtidigt trots att
 // allt annat (GPS/kompass/world-position) var friskt. Se kommentaren vid
 // `attachOcclusionShader` nedan.
-const OCCLUSION_MIN_ALPHA = 0.18;
+const OCCLUSION_MIN_ALPHA = 0.45;
 // Juli 2026-fix (SJÄTTE kritiska buggrapporten, "verken måste ALLTID synas
 // direkt vid AR-start, även inomhus"): under de första `WORLD_LOCK_BLEND_MS`
 // millisekunderna efter att AR-sessionen blivit synlig tvingas samtliga

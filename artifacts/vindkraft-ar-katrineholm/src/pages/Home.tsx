@@ -489,9 +489,9 @@ export default function Home() {
   // gamla övertoningens redan förflutna tid.
   const [arStartedAtMs, setArStartedAtMs] = useState<number | null>(null);
   useEffect(() => {
-    if (arSessionVisible) {
-      setArStartedAtMs((prev) => prev ?? Date.now());
-    } else {
+    // Nollställ timern när AR-sessionen slutar — nästa LoadingSequence-
+    // avslutning (handleLoadingSequenceComplete) sätter ett nytt värde.
+    if (!arSessionVisible) {
       setArStartedAtMs(null);
     }
   }, [arSessionVisible]);
@@ -1346,7 +1346,17 @@ export default function Home() {
   // detektering), nollställs den effektens 500ms-timer om och om igen så
   // den ALDRIG hinner köra. Det gav exakt buggen där checklistan visuellt
   // blir klar ("Startar AR…") men appen fastnar där för evigt.
-  const handleLoadingSequenceComplete = useCallback(() => setShowLoadingSequence(false), []);
+  const handleLoadingSequenceComplete = useCallback(() => {
+    setShowLoadingSequence(false);
+    // Juli 2026-fix (turbiner osynliga vid AR-start): `arStartedAtMs`-timern
+    // måste starta HÄR — när laddningsskärmen stänger och AR-vyn faktiskt
+    // öppnas — INTE när sensorerna klarna (arSessionVisible=true), vilket kan
+    // ske tiotals sekunder INNAN LoadingSequence stänger. Den 5-sekunders
+    // "force-visible"-perioden (worldLockBlend 0→1) löper då helt under
+    // laddningsskärmen och är redan slut när användaren ser AR-vyn första
+    // gången.
+    setArStartedAtMs(Date.now());
+  }, []);
 
   const handleCalibrate = useCallback(() => {
     orientation.calibrateHorizon();
@@ -1957,7 +1967,7 @@ export default function Home() {
               övertoningen sträcker sig hela vägen till skärmens nederkant.
               Tidigare lösning: paddingBottom på yttre div → gradient slutade
               ovanför safe-area-zonen, vilket såg avklippt ut. */}
-          <div className="flex flex-col gap-3 bg-gradient-to-t from-black to-transparent px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-10">
+          <div className="flex flex-col gap-3 bg-gradient-to-t from-black to-transparent px-4 pb-[max(3.5rem,calc(env(safe-area-inset-bottom)+0.75rem))] pt-10">
             {/* Simulerad betraktarposition — visas högt upp så det är tydligt */}
             {positionOverride && (
               <div className="flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-900/50 px-3 py-1.5 text-xs text-blue-200">
@@ -2006,7 +2016,7 @@ export default function Home() {
             )}
             <button
               onClick={() => setShowMenu(true)}
-              className="w-full rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
+              className="w-full rounded-full border border-white/50 bg-white/20 py-3 text-sm font-semibold text-white shadow-sm hover:bg-white/30"
             >
               ☰ Meny
             </button>
