@@ -95,7 +95,7 @@ export function computeTileLayout(
 
   let zoom = maxZoom + retinaZoomBias;
   let tileRange: { zoom: number; x1: number; x2: number; y1: number; y2: number } | null = null;
-  for (; zoom >= 9; zoom--) {
+  for (; zoom >= 2; zoom--) {
     const x1 = Math.floor(lon2tileX(bounds.minLon, zoom));
     const x2 = Math.floor(lon2tileX(bounds.maxLon, zoom));
     const y1 = Math.floor(lat2tileY(bounds.maxLat, zoom));
@@ -105,6 +105,19 @@ export function computeTileLayout(
       tileRange = { zoom, x1, x2, y1, y2 };
       break;
     }
+  }
+  // Sista utväg: zooma ner till Z=2 oavsett tile-antal — undviker tomt
+  // kartfönster vid extrem zoom-ut (MAX_LAT_SPAN nådd, tile-loop ej hittat
+  // ett zoom-steg som uppfyller maxTiles).
+  if (!tileRange) {
+    const z = 2;
+    tileRange = {
+      zoom: z,
+      x1: Math.floor(lon2tileX(bounds.minLon, z)),
+      x2: Math.floor(lon2tileX(bounds.maxLon, z)),
+      y1: Math.floor(lat2tileY(bounds.maxLat, z)),
+      y2: Math.floor(lat2tileY(bounds.minLat, z)),
+    };
   }
 
   const tiles: MapTile[] = [];

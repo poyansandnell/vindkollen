@@ -1216,9 +1216,12 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
 
         const lightY = y + hubHeightUnits * scaleDamp * 1.02;
         obj.light.position.set(x, lightY, z);
-        obj.light.scale.setScalar(6 * scaleDamp);
+        // Minsta synliga storlek för flygsäkerhetsbelysning oavsett avstånd —
+        // annars försvinner de vid >2 km som enkla pixels. `Math.max` säker-
+        // ställer att lampan alltid syns som minst en tydlig prick på skärmen.
+        obj.light.scale.setScalar(Math.max(6 * scaleDamp, 16));
         obj.glow.position.set(x, lightY, z);
-        obj.glow.scale.setScalar(26 * scaleDamp);
+        obj.glow.scale.setScalar(Math.max(26 * scaleDamp, 70));
 
         drawLabel(obj.label, obj.turbine.name, "");
         drawLabel(obj.distanceLabel, formatDistance(dist), "");

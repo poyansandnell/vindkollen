@@ -61,6 +61,38 @@ const AVG_RPM = TURBINES.reduce((sum, t) => sum + getBladeRpm(t.name), 0) / TURB
 // Läses av: loadStoredProject() nedan vid AR-start.
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
 
+// ---------------------------------------------------------------------------
+// AR-startbanner
+// Visas i 3 sekunder direkt när AR-vyn (turbinerna) blir synlig för första
+// gången — hjälper användaren förstå att verken nu syns och guida kameran.
+// ---------------------------------------------------------------------------
+function ArStartBanner({ visible }: { visible: boolean }) {
+  const [show, setShow] = useState(false);
+  const shownRef = useRef(false);
+
+  useEffect(() => {
+    if (!visible || shownRef.current) return;
+    shownRef.current = true;
+    setShow(true);
+    const t = setTimeout(() => setShow(false), 3500);
+    return () => clearTimeout(t);
+  }, [visible]);
+
+  if (!show) return null;
+
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-4 z-[60] flex items-center justify-center"
+      style={{ top: "calc(max(1rem, env(safe-area-inset-top)) + 80px)" }}
+    >
+      <div className="animate-pulse rounded-2xl border border-[#FF8B01]/50 bg-[#FF8B01]/20 px-5 py-3 text-center shadow-xl backdrop-blur-sm">
+        <p className="text-sm font-bold text-[#FFB347]">🌀 Vindkraftverken syns nu!</p>
+        <p className="mt-0.5 text-xs text-white/80">Peka kameran runt för att hitta dem</p>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Utökat handoff-format — bakåtkompatibelt med det gamla (turbines + savedAt).
  * Nya fält (projectId, projectName, projektMunicipality, source) är valfria
@@ -1920,7 +1952,7 @@ export default function Home() {
           {arSessionVisible && (
           <div
             className="absolute inset-x-0 bottom-0 z-[45]"
-            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(2.5rem, env(safe-area-inset-bottom))" }}
           >
           {/* Gradienten avslutas precis ovanför safe area/home indicator:
               safe area-utrymmet nedan är transparent → kameran syns
@@ -1982,13 +2014,17 @@ export default function Home() {
           </div>
           )}
 
+          {/* AR-startbanner: visas i 3 sekunder när AR-vyn (turbinerna) blir
+              synlig för första gången — guidar användaren att röra kameran. */}
+          <ArStartBanner visible={arSessionVisible} />
+
           {arSessionVisible && showMenu && (
             <div
               className="absolute inset-0 z-[55] flex flex-col justify-end bg-black/60"
               onClick={() => setShowMenu(false)}
             >
               <div
-                className="flex flex-col gap-3 rounded-t-3xl border-t border-white/10 bg-[#111]/95 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl"
+                className="flex flex-col gap-3 rounded-t-3xl border-t border-white/10 bg-[#111]/95 px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between">
