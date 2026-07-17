@@ -473,7 +473,10 @@
 
 /* Fullskärms-views (AR, karta) behöver stretcha hela ytan inkl. safe areas */
 .h-safe-screen {
-  height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
+  /* svh (small viewport height) = höjden NÄR webbläsarens adressfält är synligt
+     (minimumshöjden) — förhindrar layout-hopp när iOS Safari döljer/visar
+     adressfältet (dvh = dynamic ändrar sig, svh = stabilt). */
+  height: calc(100svh - var(--safe-top) - var(--safe-bottom));
 }
 
 /* Viewport-meta för Capacitor: viewport-fit=cover aktiveras i index.html */
@@ -487,8 +490,11 @@
   position: fixed;
   inset: 0;
   width: 100%;
-  height: 100dvh;
-  min-height: 100dvh;
+  /* svh = stable minimum height (ej dynamisk) — förhindrar layout-hopp på iOS.
+     position:fixed + inset:0 garanterar ändå full skärm, dvh/svh behövs bara
+     som golv för inre flexlayout. */
+  height: 100svh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   overflow: hidden;

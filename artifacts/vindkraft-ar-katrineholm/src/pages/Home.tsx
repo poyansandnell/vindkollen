@@ -188,7 +188,36 @@ export default function Home() {
     setProjectState({ status: "loading" });
   }, []);
 
-  const [started, setStarted] = useState(false);
+  // Rensa betraktarpositionen från localStorage direkt vid mount (engångskörning).
+  // Effekten: om appen STÄNGS (eller laddas om) i simulerat läge startar nästa
+  // öppning alltid i riktigt GPS-läge — poängen är att React-staten (positionOverride)
+  // lever kvar för hela den aktuella sessionen men ALDRIG skrivs in igen i storage
+  // av den här komponenten, och vid nästa mount finns den inte kvar.
+  // Turbinplacerings-handoff (AR_HANDOFF_KEY utan viewerLat/viewerLon) bevaras
+  // intakt — vi skriver bara tillbaka utan positionsfälten.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(AR_HANDOFF_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if ("viewerLat" in parsed || "viewerLon" in parsed) {
+        const { viewerLat: _lat, viewerLon: _lon, ...rest } = parsed;
+        localStorage.setItem(AR_HANDOFF_KEY, JSON.stringify(rest));
+      }
+    } catch {
+      // Ignorera — om localStorage är otillgänglig spelar det ingen roll.
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // I simulerat läge (positionOverride satt från PlaceTurbines) hoppar vi
+  // direkt till AR-vyn utan att användaren behöver trycka "Starta
+  // visualisering" — position och turbiner är redan kända, kompass-
+  // kalibreringen behövs inte för simulerad plats.
+  // OBS: startades=true vid mount aktiverar geo/orientation/camera-hookarna
+  // direkt, men det är avsiktligt — kameran behövs fortfarande för AR-bakgrund
+  // och kompassen för att kunna titta runt i AR-scenen.
+  const [started, setStarted] = useState(() => positionOverride !== null);
   const [starting, setStarting] = useState(false);
   // Fel från sekventiell native behörighetsförfrågan — visas i PermissionGate.
   const [nativePermError, setNativePermError] = useState<string | null>(null);
@@ -201,6 +230,8 @@ export default function Home() {
   // nedan; om det äkta `ready`-läget inte hunnit bli klart när sekvensen tar
   // slut visas det befintliga väntar-overlayet (se `!ready`-blocket längre
   // ner) precis som innan.
+  // I simulerat läge startar vi utan laddningssekvens — showLoadingSequence
+  // förblir false och sätts aldrig till true (handleStart anropas inte).
   const [showLoadingSequence, setShowLoadingSequence] = useState(false);
   const [showPetition, setShowPetition] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -602,7 +633,10 @@ export default function Home() {
   // fördröjning) så fort kameran igen ser fri himmel, så vi aldrig döljer en
   // faktisk återhämtning. Se `ar-tracking-freeze-vs-fade-tiering`-mönstret i
   // minnesanteckningarna: samma "instant på bra, fördröjd på dåligt"-princip.
-  const INDOORS_GRACE_MS = 5000;
+  // Utökad grace-period: 20 sek (från 5) — ger användaren tid att verkligen
+  // se turbinerna efter att AR startat innan sky-detekteringen kan dölja dem.
+  // I simulerat läge sätts den aldrig (positionOverride → indoorsOrNoSight=false).
+  const INDOORS_GRACE_MS = 20_000;
   const indoorsSinceRef = useRef<number | null>(null);
   const [indoorsGracePassed, setIndoorsGracePassed] = useState(false);
   // Åttonde kritiska buggrapporten (punkt 1, "verken visas aldrig, inte ens
@@ -677,7 +711,10 @@ export default function Home() {
   // `indoorsGracePassed` (se ovan) istället för det råa `sky.indoors` — så
   // verken hinner visas ett ögonblick innan de dämpas/döljs, men återgår
   // fortfarande omedelbart så fort kameran ser fri himmel igen.
-  const indoorsOrNoSight = ready && sky.ready && indoorsGracePassed;
+  // I simulerat läge vill vi alltid visa turbinerna — användaren har valt en
+  // plats och förväntar sig se verken oavsett vad kameran ser (sky-detektorn
+  // kan bli förvirrad när platsen inte stämmer med verkligheten).
+  const indoorsOrNoSight = positionOverride === null && ready && sky.ready && indoorsGracePassed;
 
   // Liten alltid-synlig statusbadge: "Fri sikt" / "Delvis skymt" / "Ingen
   // fri sikt" — samma graderade inomhus-bedömning som ovan (`indoorsGracePassed`)
