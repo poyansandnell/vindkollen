@@ -124,7 +124,6 @@
                         mainGroup = 504EC2FB1FED79650016851F;
                         packageReferences = (
                                 D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
-                                A1B2C3D41FED79650016851F /* XCRemoteSwiftPackageReference "capacitor-swift-pm" */,
                                 A1B2C3D51FED79650016851F /* XCRemoteSwiftPackageReference "ion-ios-camera" */,
                                 A1B2C3D61FED79650016851F /* XCRemoteSwiftPackageReference "ion-ios-geolocation" */,
                         );
@@ -361,14 +360,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-                A1B2C3D41FED79650016851F /* XCRemoteSwiftPackageReference "capacitor-swift-pm" */ = {
-                        isa = XCRemoteSwiftPackageReference;
-                        repositoryURL = "https://github.com/ionic-team/capacitor-swift-pm.git";
-                        requirement = {
-                                kind = exactVersion;
-                                version = "8.4.2";
-                        };
-                };
                 A1B2C3D51FED79650016851F /* XCRemoteSwiftPackageReference "ion-ios-camera" */ = {
                         isa = XCRemoteSwiftPackageReference;
                         repositoryURL = "https://github.com/ionic-team/ion-ios-camera.git";
