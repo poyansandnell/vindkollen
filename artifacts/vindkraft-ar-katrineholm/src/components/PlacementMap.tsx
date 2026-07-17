@@ -68,6 +68,12 @@ interface PlacementMapProps {
    * (editHandoff != null), dvs. inte i Katrineholms-läge.
    */
   isGenericMode?: boolean;
+  /** Anropas varje gång kartcentrum ändras (pan/zoom) — lat/lon i WGS84. */
+  onCenterChange?: (lat: number, lon: number) => void;
+  /** Visar en blå markör för "betraktarens position" på kartan. */
+  viewerPos?: { lat: number; lon: number } | null;
+  /** Visar ett hårkors i mitten av kartan (för att välja visningsposition). */
+  showViewerCrosshair?: boolean;
 }
 
 const MAX_TILES = 48;
@@ -190,6 +196,9 @@ export function PlacementMap({
   onVertexRemove,
   onVertexAdd,
   isGenericMode = false,
+  onCenterChange,
+  viewerPos = null,
+  showViewerCrosshair = false,
 }: PlacementMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 1, height: 1 });
@@ -202,6 +211,11 @@ export function PlacementMap({
     document.addEventListener("fullscreenchange", handler);
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
+
+  // Rapportera kartcentrum till förälder vid varje pan/zoom.
+  useEffect(() => {
+    onCenterChange?.(view.centerLat, view.centerLon);
+  }, [view.centerLat, view.centerLon, onCenterChange]);
 
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [moveMode, setMoveMode] = useState<MoveModeState | null>(null);
@@ -863,6 +877,37 @@ export function PlacementMap({
             </div>
           </div>
         )}
+
+        {/* Hårkors — visas när betraktarläget är aktivt */}
+        {showViewerCrosshair && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <div className="relative flex h-10 w-10 items-center justify-center">
+              <div className="absolute h-0.5 w-full bg-blue-400/90" />
+              <div className="absolute h-full w-0.5 bg-blue-400/90" />
+              <div className="h-2.5 w-2.5 rounded-full border-2 border-blue-400/90" />
+            </div>
+          </div>
+        )}
+
+        {/* Betraktarpositions-markör */}
+        {viewerPos && (() => {
+          const p = project(viewerPos.lat, viewerPos.lon);
+          if (p.x < -5 || p.x > 105 || p.y < -5 || p.y > 105) return null;
+          return (
+            <div
+              key="viewer-pos"
+              className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full"
+              style={{ left: `${p.x}%`, top: `${p.y}%` }}
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-blue-400 bg-blue-500/25 text-base shadow-lg">
+                👤
+              </div>
+              <div className="mt-0.5 rounded-sm bg-black/70 px-1 text-center text-[9px] font-medium text-blue-200 whitespace-nowrap">
+                Min position
+              </div>
+            </div>
+          );
+        })()}
 
         {menu && menuTurbine && (
           <div

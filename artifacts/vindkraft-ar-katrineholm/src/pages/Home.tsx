@@ -73,6 +73,27 @@ interface StoredPlacement {
   projectName?: string;
   projectMunicipality?: string;
   source?: "handoff" | "editor";
+  /** Simulerad betraktarposition — sätts av PlaceTurbines "Se härifrån"-läget. */
+  viewerLat?: number;
+  viewerLon?: number;
+}
+
+/**
+ * Läser viewerLat/viewerLon ur localStorage-handoff.
+ * Returnerar null om ingen simulerad betraktarposition är satt.
+ */
+function loadPositionOverride(): { lat: number; lon: number } | null {
+  try {
+    const raw = localStorage.getItem(AR_HANDOFF_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredPlacement;
+    if (typeof parsed.viewerLat === "number" && typeof parsed.viewerLon === "number") {
+      return { lat: parsed.viewerLat, lon: parsed.viewerLon };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -132,6 +153,12 @@ export default function Home() {
     const stored = loadStoredProject();
     return stored ? { status: "project", project: stored } : { status: "loading" };
   });
+  // Simulerad betraktarposition — sätts när PlaceTurbines "Se härifrån"-läget
+  // skickar en viewerLat/viewerLon i handoff-nyckeln. Åsidosätter GPS-positionen
+  // vid beräkning av bäringar/avstånd till vindkraftverken.
+  const [positionOverride, setPositionOverride] = useState<{ lat: number; lon: number } | null>(
+    () => loadPositionOverride(),
+  );
 
   const activeProject = projectState.status === "project" ? projectState.project : null;
   const activeTurbines = activeProject?.turbines ?? [];
@@ -155,6 +182,7 @@ export default function Home() {
 
   const handleClearCustomPlacement = useCallback(() => {
     localStorage.removeItem(AR_HANDOFF_KEY);
+    setPositionOverride(null);
     // Återgå till GPS-baserat projektval. Om GPS redan finns körs
     // findNearestProject direkt i effekten nedan; annars väntar vi.
     setProjectState({ status: "loading" });
@@ -304,7 +332,9 @@ export default function Home() {
   // cameraActive: true om kameran är igång — antingen via getUserMedia (webb)
   // eller via native CameraPreview-plugin (iOS/Android).
   const cameraActive = Boolean(camera.stream) || camera.nativePreview;
-  const ready = started && geo.lat !== null && geo.lon !== null && cameraActive;
+  // Med simulerad betraktarposition behövs inte riktigt GPS för "ready".
+  const hasPosition = positionOverride !== null || (geo.lat !== null && geo.lon !== null);
+  const ready = started && hasPosition && cameraActive;
 
   // Juli 2026-fix (fjärde kritiska buggrapporten, punkt "UI-fix"): denna
   // effekt (som mäter topp-barens FAKTISKA höjd, se `topBarRef`s kommentar
@@ -688,7 +718,13 @@ export default function Home() {
   // Stabiliserad GPS-position: ignorerar små GPS-studs (<15 m) så att
   // dBA-uppskattningen nedan inte omberäknas för varje litet, naturligt
   // GPS-brus medan användaren i praktiken står still.
-  const stableGeo = useStableGeoPosition(geo.lat, geo.lon);
+  // Effektiv position: simulerad betraktarposition åsidosätter riktigt GPS.
+  const effectiveLat = positionOverride?.lat ?? geo.lat;
+  const effectiveLon = positionOverride?.lon ?? geo.lon;
+  // Noggrannhet: vid simulerad position används 1m (= alltid stabil/fryst).
+  const effectiveAccuracy = positionOverride ? 1 : geo.accuracy;
+
+  const stableGeo = useStableGeoPosition(effectiveLat, effectiveLon);
 
   // Utjämnad GPS-position (kontinuerligt EMA-filter, ~1.2s tidskonstant) för
   // AR-verkens faktiska placering — till skillnad från `stableGeo` ovan
@@ -696,7 +732,7 @@ export default function Home() {
   // placering) svarar den här mjukt på verklig rörelse men filtrerar bort
   // det meterskaliga GPS-bruset som annars fick verken att "fladdra" i
   // AR-vyn även när användaren stod still.
-  const smoothedGeo = useSmoothedGeoPosition(geo.lat, geo.lon, geo.accuracy, arTracking.freeze);
+  const smoothedGeo = useSmoothedGeoPosition(effectiveLat, effectiveLon, effectiveAccuracy, arTracking.freeze);
 
   // Avstånd (stabiliserad GPS) till samtliga verk — delas av båda
   // uppskattningarna nedan.
@@ -1818,6 +1854,26 @@ export default function Home() {
               safe area-utrymmet nedan är transparent → kameran syns
               sömlöst ända till skärmkanten, ingen mörk "remsa" visas. */}
           <div className="flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-10">
+            {/* Simulerad betraktarposition — visas högt upp så det är tydligt */}
+            {positionOverride && (
+              <div className="flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-900/50 px-3 py-1.5 text-xs text-blue-200">
+                <span className="flex-1 truncate">
+                  👤 Simulerad position · {positionOverride.lat.toFixed(4)}°N {positionOverride.lon.toFixed(4)}°E
+                </span>
+                <button
+                  onClick={() => setPositionOverride(null)}
+                  className="shrink-0 font-semibold text-blue-300 hover:text-white"
+                >
+                  ✕ Rensa
+                </button>
+              </div>
+            )}
+            {/* Statusbanner — placerad ovanför paneler/knappar, inte mellan dem */}
+            {statusBanner && (
+              <div className={`rounded-full px-3 py-1.5 text-center text-xs font-medium shadow-md ${statusBannerToneClasses[statusBanner.tone]}`}>
+                {statusBanner.message}
+              </div>
+            )}
             {ready && showSoundLevel && (
               <SoundLevelPanel
                 estimate={soundLevelEstimate}
@@ -1843,11 +1899,6 @@ export default function Home() {
               >
                 📸 Fotomontage
               </button>
-            )}
-            {statusBanner && (
-              <div className={`rounded-full px-3 py-1.5 text-center text-xs font-medium shadow-md ${statusBannerToneClasses[statusBanner.tone]}`}>
-                {statusBanner.message}
-              </div>
             )}
             <button
               onClick={() => setShowMenu(true)}
@@ -1931,7 +1982,18 @@ export default function Home() {
                     {turbinesVisible ? "🌬️ Dölj verk" : "🌬️ Visa verk"}
                   </button>
                 </div>
-                {usingCustomPlacement && (
+                {positionOverride && (
+                  <button
+                    onClick={() => {
+                      setPositionOverride(null);
+                      setShowMenu(false);
+                    }}
+                    className="w-full rounded-full border border-blue-400/30 bg-blue-900/30 py-2.5 text-xs font-medium text-blue-200 hover:bg-blue-900/50"
+                  >
+                    📍 Rensa simulerad position → mitt riktiga GPS-läge
+                  </button>
+                )}
+                {(usingCustomPlacement || activeProject?.source === "handoff") && (
                   <button
                     onClick={() => {
                       handleClearCustomPlacement();
@@ -1939,7 +2001,7 @@ export default function Home() {
                     }}
                     className="w-full rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white/80 hover:bg-white/10"
                   >
-                    ↩️ Återgå till GPS-baserat projektval
+                    ↩️ Närmaste verk (GPS-baserat projektval)
                   </button>
                 )}
                 <button

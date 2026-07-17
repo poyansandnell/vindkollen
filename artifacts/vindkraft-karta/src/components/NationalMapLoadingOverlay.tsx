@@ -125,9 +125,9 @@ export function NationalMapLoadingOverlay({
       aria-live="polite"
       aria-label={isDoneOrFading ? "Kartdata laddad" : "Laddar kartdata"}
     >
-      <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/72 backdrop-blur-sm" aria-hidden="true" />
 
-      <div className="relative mx-4 w-full max-w-[300px] rounded-2xl border border-white/10 bg-[#111]/95 px-6 py-5 shadow-2xl">
+      <div className="relative mx-4 w-full max-w-[380px] rounded-2xl border border-white/15 bg-[#0e0e0e]/98 px-7 py-6 shadow-2xl">
         {phase === "error" ? (
           <div className="text-center">
             <div className="mb-3 text-2xl" aria-hidden="true">⚠️</div>
@@ -154,18 +154,19 @@ export function NationalMapLoadingOverlay({
                 : "Laddar Sveriges vindkraftsprojekt\u2026"}
             </p>
 
-            <div className="mt-3 flex items-baseline gap-1.5">
+            <div className="mt-4 flex items-baseline gap-2">
               {isDoneOrFading && (
-                <span className="font-bold text-orange-400" aria-hidden="true">
+                <span className="text-xl font-bold text-orange-400" aria-hidden="true">
                   ✓
                 </span>
               )}
-              <span className="tabular-nums text-4xl font-black leading-none text-white">
+              <span className="tabular-nums text-6xl font-black leading-none text-white">
                 {displayCount.toLocaleString("sv-SE")}
               </span>
+              <span className="text-sm text-white/50 pb-1">vindkraftsprojekt</span>
             </div>
 
-            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
               <div
                 className="h-full rounded-full bg-orange-500"
                 style={{

@@ -173,6 +173,19 @@ export default function PlaceTurbines() {
   const [editableBoundary, setEditableBoundary] = useState<LatLon[]>(() => getActiveBoundary());
   const [boundaryVersion, setBoundaryVersion] = useState(0);
   const [nationalTurbinesLoading, setNationalTurbinesLoading] = useState(false);
+  // Betraktarposition — sätts manuellt av användaren för att simulera AR-vy
+  // från en viss plats utan att behöva befinna sig där fysiskt.
+  const [viewerPos, setViewerPos] = useState<{ lat: number; lon: number } | null>(null);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lon: number }>({
+    lat: editHandoff?.centerLat ?? 59.0,
+    lon: editHandoff?.centerLng ?? 16.3,
+  });
+  const [showingViewerPosMode, setShowingViewerPosMode] = useState(false);
+  // Onboarding-modal: visas första gången redigeringsläget öppnas.
+  const ONBOARDING_KEY = "vindkraft-ar-katrineholm:editmode-onboarding-seen";
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(
+    () => !localStorage.getItem(ONBOARDING_KEY),
+  );
 
   // Global runtime-diagnostik — fångar JavaScript-krascher och oupphantade
   // promise-avvisanden som annars bara syns som vit skärm.
@@ -379,8 +392,13 @@ export default function PlaceTurbines() {
   );
 
   function handleReset() {
-    setTurbines(DEFAULT_TURBINES);
-    setCommittedTurbines(DEFAULT_TURBINES);
+    // I redigeringsläge (nationellt projekt): återställ till tomt — verk laddas
+    // om via API-effekten om editHandoff fortfarande är satt.
+    const resetTo = editHandoff ? [] : DEFAULT_TURBINES;
+    setTurbines(resetTo);
+    setCommittedTurbines(resetTo);
+    setViewerPos(null);
+    setShowingViewerPosMode(false);
     setCalculating(false);
     if (commitTimerRef.current) window.clearTimeout(commitTimerRef.current);
   }
@@ -447,7 +465,14 @@ export default function PlaceTurbines() {
   }
 
   function handleViewInAr() {
-    localStorage.setItem(AR_HANDOFF_KEY, JSON.stringify({ turbines, savedAt: Date.now() }));
+    localStorage.setItem(
+      AR_HANDOFF_KEY,
+      JSON.stringify({
+        turbines,
+        savedAt: Date.now(),
+        ...(viewerPos ? { viewerLat: viewerPos.lat, viewerLon: viewerPos.lon } : {}),
+      }),
+    );
     navigate("/");
   }
 
@@ -600,6 +625,17 @@ export default function PlaceTurbines() {
           >
             📷 AR
           </button>
+          <button
+            onClick={() => {
+              localStorage.setItem(ONBOARDING_KEY, "");
+              localStorage.removeItem(ONBOARDING_KEY);
+              setShowOnboarding(true);
+            }}
+            className="rounded-full bg-white/10 px-3 py-1.5 text-sm text-white/60 hover:bg-white/20"
+            aria-label="Visa hjälp"
+          >
+            ?
+          </button>
         </div>
       </div>
 
@@ -705,6 +741,9 @@ export default function PlaceTurbines() {
           onVertexRemove={handleVertexRemove}
           onVertexAdd={handleVertexAdd}
           onToggleEstateBoundary={() => setShowEstateBoundary((v) => !v)}
+          onCenterChange={(lat, lon) => setMapCenter({ lat, lon })}
+          viewerPos={viewerPos}
+          showViewerCrosshair={showingViewerPosMode}
         />
 
         {debugPanelOpen && (
@@ -853,12 +892,55 @@ export default function PlaceTurbines() {
       </div>
 
       <div className="border-t border-white/10 bg-[#0d0d0d] px-4 pt-3 pb-[max(env(safe-area-inset-bottom),12px)]">
+
+        {/* "Se härifrån"-banner: visas när betraktarpositionsläget är aktivt */}
+        {showingViewerPosMode && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-blue-400/30 bg-blue-900/40 px-3 py-2 text-xs text-blue-200">
+            <span className="flex-1">🎯 Panorera kartan till platsen du vill stå på, tryck ✓ för att bekräfta</span>
+            <button
+              onClick={() => { setViewerPos(mapCenter); setShowingViewerPosMode(false); }}
+              className="shrink-0 rounded-full bg-blue-500 px-3 py-1 text-xs font-bold text-white hover:bg-blue-400"
+            >
+              ✓
+            </button>
+            <button
+              onClick={() => setShowingViewerPosMode(false)}
+              className="shrink-0 text-blue-300 hover:text-white"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Betraktarpositions-banner: visas när en position är satt */}
+        {viewerPos && !showingViewerPosMode && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-blue-400/30 bg-blue-900/40 px-3 py-2 text-xs text-blue-200">
+            <span className="flex-1">
+              👤 Visningsposition satt · AR-vyn visar utsikten härifrån
+            </span>
+            <button
+              onClick={() => setShowingViewerPosMode(true)}
+              className="shrink-0 text-blue-300 hover:text-white"
+              title="Ändra position"
+            >
+              ✎
+            </button>
+            <button
+              onClick={() => setViewerPos(null)}
+              className="shrink-0 text-blue-300 hover:text-white"
+              title="Rensa position"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={handleReset}
             className="rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white hover:bg-white/10"
           >
-            🔄 Återställ
+            🔄 Återställ allt
           </button>
           <button
             onClick={handleSave}
@@ -868,18 +950,35 @@ export default function PlaceTurbines() {
             {savingToCloud ? "☁️ Sparar…" : savedFlash ? (isAuthenticated ? "✅ Sparad i molnet!" : "✅ Sparad lokalt!") : "💾 Spara placering"}
           </button>
           <button
-            onClick={() => setCompareOpen((v) => !v)}
-            className="rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white hover:bg-white/10"
+            onClick={() => setShowingViewerPosMode((v) => !v)}
+            className={`rounded-full border py-2.5 text-xs font-medium hover:opacity-80 ${
+              viewerPos
+                ? "border-blue-400/40 bg-blue-500/15 text-blue-200"
+                : showingViewerPosMode
+                  ? "border-blue-400/40 bg-blue-500/25 text-blue-100"
+                  : "border-white/20 bg-white/5 text-white"
+            }`}
           >
-            📊 Jämför ({saved.length})
+            {viewerPos ? "👤 Ändra position" : "👤 Se härifrån"}
           </button>
           <button
             onClick={handleViewInAr}
             className="rounded-full bg-[#FF8B01] py-2.5 text-xs font-semibold text-[#090909] hover:bg-[#FFB347]"
           >
-            👁️ Se denna placering i AR
+            👁️ Se i AR
           </button>
         </div>
+        {editHandoff && (
+          <button
+            onClick={() => {
+              localStorage.removeItem(AR_HANDOFF_KEY);
+              navigate("/");
+            }}
+            className="mt-2 w-full rounded-full border border-white/10 bg-white/[0.03] py-2 text-[11px] font-medium text-white/50 hover:bg-white/10 hover:text-white/70"
+          >
+            📍 Närmaste verk (mitt GPS-läge) → AR
+          </button>
+        )}
 
         {compareOpen && (
           <div className="mt-3 space-y-2">
@@ -961,6 +1060,34 @@ export default function PlaceTurbines() {
             <p className="mt-2 text-center text-[11px] text-white/40">
               Klistra in i en GeoJSON-visare, t.ex. geojson.io
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Onboarding-modal — visas första gången redigeringsläget öppnas */}
+      {showOnboarding && !showWelcome && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 px-4 pb-10 sm:items-center sm:pb-0">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#141414] px-6 py-7 text-white shadow-2xl">
+            <p className="mb-1 text-lg font-semibold">🌬️ Placera vindkraftverken</p>
+            <p className="mb-4 text-sm text-white/60">
+              Flytta, lägg till och ta bort vindkraftverk direkt på kartan. Se hur placeringen påverkar
+              naturen, byborna och ljudmiljön — i realtid.
+            </p>
+            <ul className="mb-5 space-y-2 text-sm text-white/80">
+              <li>✚ <span className="text-white/60">Tryck på tom yta</span> för att lägga till ett verk</li>
+              <li>✋ <span className="text-white/60">Tryck på ett verk</span> för att flytta eller ta bort det</li>
+              <li>👤 <span className="text-white/60">"Se härifrån"</span> väljer betraktarposition för AR-vyn</li>
+              <li>👁️ <span className="text-white/60">"Se i AR"</span> skickar placeringen till kameravyn</li>
+            </ul>
+            <button
+              onClick={() => {
+                localStorage.setItem(ONBOARDING_KEY, "1");
+                setShowOnboarding(false);
+              }}
+              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-semibold text-[#090909] hover:bg-[#FFB347]"
+            >
+              Kom igång
+            </button>
           </div>
         </div>
       )}
