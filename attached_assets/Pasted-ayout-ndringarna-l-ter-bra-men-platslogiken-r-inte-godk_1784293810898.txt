@@ -1,0 +1,114 @@
+ayoutändringarna låter bra, men platslogiken är inte godkänd ännu.
+
+Ni har konstaterat att de 29 turbinerna är hårdkodade för Katrineholm/Länsterberget och att endast avstånd och bäring beräknas från användarens aktuella GPS-position.
+
+Det innebär att en användare på en annan ort fortfarande får Katrineholmsprojektets turbiner, vilket inte är korrekt för Vindkollen som nationell app.
+
+Korrekt önskad logik
+
+A. AR öppnas från ett valt projekt
+
+Om användaren öppnar AR från Sverigekartan eller från ett specifikt projekt ska:
+
+* projektets ID skickas till AR-vyn
+* just det projektets turbiner laddas
+* projektnamn, kommun och antal verk komma från projektets data
+* Katrineholm inte användas som fallback
+
+B. AR öppnas utan valt projekt
+
+Om användaren öppnar AR direkt utan projektval ska:
+
+1. aktuell GPS-position hämtas
+2. tillgängliga projekt jämföras med användarens position
+3. närmaste relevanta projekt väljas inom en definierad maxradie
+4. projektets turbiner laddas
+5. om inget projekt finns i närheten ska ett normalt tomt läge visas
+
+Exempel på meddelande:
+
+Inga registrerade vindkraftsprojekt finns i närheten.
+
+Appen får då inte visa Katrineholms 29 verk.
+
+Projektmodell
+
+Gör projektvalet generiskt så att varje projekt minst kan innehålla:
+
+* projectId
+* name
+* municipality
+* projektets centrumkoordinat
+* lista med turbinernas koordinater
+* antal verk
+* eventuellt projektets underlag, PDF och fotomontage
+
+ARScene ska ta emot det valda projektets turbindata. Den ska inte importera en fast Katrineholmslista direkt.
+
+Katrineholms 29 verk får finnas kvar som ett projekt i datasetet, men inte som global standarddata.
+
+Kontrollera nuvarande kod
+
+Sök efter och redovisa alla förekomster där följande är hårdkodat:
+
+* Katrineholm
+* Länsterberget
+* 29 verk
+* fasta turbinlistor
+* fasta projektkoordinater
+* default project
+* fallback project
+* bundled turbine data
+
+Kontrollera särskilt:
+
+* bundledProjects
+* Home/AR-start
+* route state/query parameters
+* projektval från Sverigekartan
+* ARScene props
+* kallstart utan projekt
+* app resume
+* eventuell localStorage eller senast valt projekt
+
+Krav på fallback
+
+Tillåtet:
+
+* senaste uttryckligen valda projekt, om användaren återgår till samma projektvy
+* testprojekt i development bakom en debugflagga
+
+Inte tillåtet i production:
+
+* automatiskt Katrineholm
+* automatiskt 29 verk
+* fast hårdkodad turbinlista när projekt saknas
+
+Testfall
+
+Verifiera följande:
+
+1. Öppna Katrineholm från Sverigekartan → 29 Katrineholmsverk laddas.
+2. Öppna ett annat projekt → endast det projektets verk laddas.
+3. Öppna AR direkt nära Katrineholm → närmaste Katrineholmsprojekt kan väljas.
+4. Öppna AR direkt långt från alla projekt → inga verk visas och korrekt tomt meddelande visas.
+5. Simulera GPS i Göteborg → Katrineholmsverk får inte visas.
+6. Byt projekt utan att starta om appen → gamla turbiner rensas innan nya laddas.
+7. Gå till bakgrunden och tillbaka → samma valda projekt återställs utan dubbletter.
+
+Rapportera
+
+Efter ändringen vill jag veta:
+
+1. Var de 29 verken tidigare var hårdkodade.
+2. Hur valt projekt nu skickas till AR.
+3. Hur GPS-baserat projektval fungerar.
+4. Vilken maxradie som används för automatiskt val.
+5. Vad användaren ser när inget projekt finns nära.
+6. Vilka filer som ändrades.
+7. Resultat från:
+    * pnpm typecheck
+    * pnpm native:build
+    * npx cap sync ios
+
+Ändra inte de redan fungerande layoutfixarna för fullscreen eller informationsblocken.

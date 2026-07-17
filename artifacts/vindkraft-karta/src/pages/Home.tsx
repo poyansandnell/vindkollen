@@ -137,9 +137,13 @@ export default function Home() {
     return { ...queryParams, detail: isWideView ? ("summary" as const) : ("full" as const) };
   }, [queryParams, isWideView]);
 
+  // Skippar turbine-fetch i wide view (hela-Sverige-zoom) — individuella
+  // turbiner är ointressanta på nationell zoom (de visas klustrade ändå) och
+  // en nationwide-query tar 3–4 s och returnerar 5000+ rader som inte syns.
+  // Turbiner hämtas bara när kartan är tillräckligt inzoomad.
   const turbinesQuery = useListWindTurbines(queryParams, {
     query: {
-      enabled: filters.showTurbines && !!queryParams,
+      enabled: filters.showTurbines && !!queryParams && !isWideView,
       staleTime: 5 * 60 * 1000,
       placeholderData: (prev: WindTurbine[] | undefined) => prev,
     } as unknown as UseQueryOptions<WindTurbine[]>,

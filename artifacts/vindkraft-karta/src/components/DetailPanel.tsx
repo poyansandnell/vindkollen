@@ -16,9 +16,22 @@ import { sourceLabel, sourceUrl } from "@/lib/sourceMeta";
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
 const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
 
-function openInAr(turbines: { id: string; lat: number; lon: number }[]) {
+function openInAr(
+  turbines: { id: string; lat: number; lon: number }[],
+  projectMeta?: { projectId?: number; projectName?: string; projectMunicipality?: string },
+) {
   if (turbines.length === 0) return;
-  localStorage.setItem(AR_HANDOFF_KEY, JSON.stringify({ turbines, savedAt: Date.now() }));
+  localStorage.setItem(
+    AR_HANDOFF_KEY,
+    JSON.stringify({
+      turbines,
+      savedAt: Date.now(),
+      projectId: projectMeta?.projectId,
+      projectName: projectMeta?.projectName,
+      projectMunicipality: projectMeta?.projectMunicipality,
+      source: "handoff",
+    }),
+  );
   window.location.href = "/";
 }
 
@@ -239,7 +252,13 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                     {projectTurbines.length > 0 && (
                       <Button
                         className="w-full bg-[#FF8B01] hover:bg-[#FFB347] text-[#090909] font-semibold"
-                        onClick={() => openInAr(projectTurbines)}
+                        onClick={() =>
+                          openInAr(projectTurbines, {
+                            projectId: projectAreaQuery.data?.id,
+                            projectName: projectAreaQuery.data?.name,
+                            projectMunicipality: projectAreaQuery.data?.kommun ?? undefined,
+                          })
+                        }
                         data-testid="button-ar-project"
                       >
                         📱 Visa {projectTurbines.length} verk i AR

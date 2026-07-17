@@ -31,6 +31,7 @@ import { PhotoMontageModal } from "@/components/PhotoMontageModal";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { TURBINES, type TurbineSweref } from "@/lib/turbines";
+import { findNearestProject, MAX_AUTO_RADIUS_KM, type ActiveProject } from "@/lib/projectSelection";
 import { distanceMeters, bearingDegrees, isNightTime, normalizeAngle, formatDistance } from "@/lib/geo";
 import { swerefToWgs84, wgs84ToSweref } from "@/lib/sweref";
 import { getBladeRpm } from "@/lib/turbineAnimation";
@@ -50,35 +51,45 @@ import {
 } from "@/lib/capacitorBridge";
 import { NativeDiagnostics } from "@/components/NativeDiagnostics";
 
-const PHOTO_WATERMARK_TEXT = "Vindkollen AR – Katrineholm";
 const PHOTO_DISCLAIMER_TEXT = "Fotomontage/visualisering. GPS, kompass, terräng, väder och sikt kan påverka precisionen.";
 
 const AVG_RPM = TURBINES.reduce((sum, t) => sum + getBladeRpm(t.name), 0) / TURBINES.length;
 
-// Nyckeln som "Placera vindkraftverken själv" (`PlaceTurbines.tsx`) skriver
-// till när användaren trycker "Se denna placering i AR" — läses här EN gång
-// vid montering så AR-vyn kan visa användarens egen Ericsberg-placering
-// istället för de 29 planerade Länsterberget-verken. Samma default-mått
-// (grundhöjd/navhöjd/rotordiameter) som de riktiga verken, eftersom
-// placeringsläget bara samlar in lat/lon, inte verkens fysiska mått.
+// Delad localStorage-nyckel för AR-handoff.
+// Skrivs av: DetailPanel.tsx i vindkraft-karta (handoff från Sverigekartan)
+//            och PlaceTurbines.tsx (handoff från /placera-verktyget).
+// Läses av: loadStoredProject() nedan vid AR-start.
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
 
+/**
+ * Utökat handoff-format — bakåtkompatibelt med det gamla (turbines + savedAt).
+ * Nya fält (projectId, projectName, projektMunicipality, source) är valfria
+ * så gamla skrivna poster fortfarande kan läsas.
+ */
 interface StoredPlacement {
   turbines: { id: string; lat: number; lon: number }[];
   savedAt: number;
+  projectId?: string | number;
+  projectName?: string;
+  projectMunicipality?: string;
+  source?: "handoff" | "editor";
 }
 
-function loadCustomPlacement(): TurbineSweref[] | null {
+/**
+ * Läser localStorage-handoff och konverterar till ActiveProject.
+ * Returnerar null om ingen giltig handoff finns.
+ */
+function loadStoredProject(): ActiveProject | null {
   try {
     const raw = localStorage.getItem(AR_HANDOFF_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredPlacement;
     if (!Array.isArray(parsed.turbines) || parsed.turbines.length === 0) return null;
-    return parsed.turbines.map((t, i) => {
+    const turbines: TurbineSweref[] = parsed.turbines.map((t, i) => {
       const { easting, northing } = wgs84ToSweref(t.lat, t.lon);
       return {
         id: t.id,
-        name: `Egen V${i + 1}`,
+        name: `V${i + 1}`,
         easting,
         northing,
         heightMeters: 250,
@@ -88,29 +99,65 @@ function loadCustomPlacement(): TurbineSweref[] | null {
         totalHeightAboveSeaMeters: 310,
       };
     });
+    return {
+      turbines,
+      projectName: parsed.projectName ?? "Vindkraftsprojekt",
+      municipality: parsed.projectMunicipality ?? "",
+      projectId: parsed.projectId ?? "custom",
+      source: parsed.source ?? "handoff",
+      hasPreciseTurbines: true,
+    };
   } catch {
     return null;
   }
 }
 
+/**
+ * Diskriminerat fack för projektvalsstatus i AR-vyn.
+ * "loading"    — ingen handoff, väntar på GPS-fix.
+ * "project"    — projekt valt (turbiner tillgängliga).
+ * "no-project" — GPS-kontroll klar; inget projekt inom MAX_AUTO_RADIUS_KM.
+ */
+type ProjectState =
+  | { status: "loading" }
+  | { status: "project"; project: ActiveProject }
+  | { status: "no-project" };
+
 export default function Home() {
   const [, navigate] = useLocation();
-  const [customTurbines, setCustomTurbines] = useState<TurbineSweref[] | null>(null);
+  // Projektval — diskriminerat fack (se ProjectState ovan).
+  // Synkron init: om localStorage-handoff finns laddas den direkt (undviker
+  // ett render utan turbiner). Annars väntar vi på GPS (status "loading").
+  const [projectState, setProjectState] = useState<ProjectState>(() => {
+    const stored = loadStoredProject();
+    return stored ? { status: "project", project: stored } : { status: "loading" };
+  });
+
+  const activeProject = projectState.status === "project" ? projectState.project : null;
+  const activeTurbines = activeProject?.turbines ?? [];
+  // "usingCustomPlacement" = turbinerna kom från /placera-verktyget (inte
+  // standardprojektets koordinater). Styr "din placering"-texten och
+  // Återgå-knappen i menyn.
+  const usingCustomPlacement = activeProject?.source === "editor";
+
+  // Loggar projektbyte EN gång per statusändring (inte varje rendering).
   useEffect(() => {
-    setCustomTurbines(loadCustomPlacement());
-  }, []);
-  const activeTurbines = customTurbines ?? TURBINES;
-  const usingCustomPlacement = customTurbines !== null;
-  // Juli 2026-fix (kritisk buggrapport punkt 2, "explicit debug logging för
-  // varje pipeline-steg"): "Loaded N turbines" loggas EN gång per faktisk
-  // ändring av datakällan (standard- eller anpassad placering), inte varje
-  // rendering — annars svämmar konsolen över utan att tillföra något.
-  useEffect(() => {
-    console.info(`[AR][pipeline] Loaded ${activeTurbines.length} turbines`);
-  }, [activeTurbines]);
+    if (projectState.status === "project") {
+      const p = projectState.project;
+      console.info(
+        `[AR][pipeline] Active project: "${p.projectName}" — ${p.turbines.length} turbines` +
+          ` (source: ${p.source}, precise: ${p.hasPreciseTurbines})`,
+      );
+    } else {
+      console.info(`[AR][pipeline] Project state: ${projectState.status}`);
+    }
+  }, [projectState]);
+
   const handleClearCustomPlacement = useCallback(() => {
     localStorage.removeItem(AR_HANDOFF_KEY);
-    setCustomTurbines(null);
+    // Återgå till GPS-baserat projektval. Om GPS redan finns körs
+    // findNearestProject direkt i effekten nedan; annars väntar vi.
+    setProjectState({ status: "loading" });
   }, []);
 
   const [started, setStarted] = useState(false);
@@ -391,6 +438,28 @@ export default function Home() {
       console.info(`[AR][pipeline] GPS OK (lat=${geo.lat.toFixed(5)}, lon=${geo.lon.toFixed(5)}, accuracy=${geo.accuracy ?? "okänd"}m)`);
     }
   }, [geo.lat, geo.lon, geo.accuracy]);
+
+  // GPS-baserat projektval: körs när GPS-position är tillgänglig och vi
+  // fortfarande är i "loading"-läge (ingen localStorage-handoff lästs in).
+  // Triggas aldrig om projektet redan valts via handoff (handoff/editor-källan
+  // har högre prioritet och sätter status="project" synkront vid init).
+  useEffect(() => {
+    if (projectState.status !== "loading") return;
+    if (geo.lat === null || geo.lon === null) return;
+    const nearest = findNearestProject(geo.lat, geo.lon);
+    if (nearest) {
+      console.info(
+        `[AR][pipeline] GPS-automatval: "${nearest.projectName}" (${nearest.municipality}),` +
+          ` ${nearest.turbines.length} verk, precise=${nearest.hasPreciseTurbines}`,
+      );
+      setProjectState({ status: "project", project: nearest });
+    } else {
+      console.info(
+        `[AR][pipeline] GPS-automatval: inget projekt inom ${MAX_AUTO_RADIUS_KM} km`,
+      );
+      setProjectState({ status: "no-project" });
+    }
+  }, [geo.lat, geo.lon, projectState.status]);
   useEffect(() => {
     if (orientation.hasFix && !loggedCompassOkRef.current) {
       loggedCompassOkRef.current = true;
@@ -1263,10 +1332,14 @@ export default function Home() {
       ctx.textBaseline = "alphabetic";
       ctx.font = `600 ${Math.round(width * 0.032)}px Inter, sans-serif`;
       ctx.textAlign = "left";
+      const watermark =
+        activeProject?.municipality
+          ? `Vindkollen AR – ${activeProject.municipality}`
+          : "Vindkollen AR";
       ctx.fillStyle = "rgba(0,0,0,0.55)";
-      ctx.fillText(PHOTO_WATERMARK_TEXT, pad + 1, height - pad + 1);
+      ctx.fillText(watermark, pad + 1, height - pad + 1);
       ctx.fillStyle = "#FF8B01";
-      ctx.fillText(PHOTO_WATERMARK_TEXT, pad, height - pad);
+      ctx.fillText(watermark, pad, height - pad);
 
       // Ansvarsfriskrivning längst ned, på egen rad med halvtransparent fält
       // för läsbarhet oavsett bakgrund.
@@ -1283,7 +1356,7 @@ export default function Home() {
     } catch {
       setPhotoError("Kunde inte skapa fotomontage. Försök igen.");
     }
-  }, [camera.nativePreview]);
+  }, [camera.nativePreview, activeProject]);
 
   return (
     <div className={`fixed inset-0 overflow-hidden text-white ${camera.nativePreview ? "bg-transparent" : "bg-[#090909]"}`}>
@@ -1541,6 +1614,33 @@ export default function Home() {
             </div>
           )}
 
+          {/* Tomt-läge: visas när GPS-kontrollen är klar men inget vindkraftsprojekt
+              hittades inom MAX_AUTO_RADIUS_KM km. Blockerar INTE kameran —
+              kamerabakgrunden är fortfarande aktiv under overlayen. */}
+          {ready && projectState.status === "no-project" && (
+            <div className="pointer-events-auto absolute inset-0 z-30 flex flex-col items-center justify-center gap-5 bg-black/65 px-8 text-center">
+              <p className="text-5xl">🌬️</p>
+              <div className="space-y-2">
+                <p className="text-lg font-semibold text-white">
+                  Inga registrerade vindkraftsprojekt finns i närheten.
+                </p>
+                <p className="text-sm text-white/70">
+                  Du befinner dig mer än {MAX_AUTO_RADIUS_KM} km från närmaste
+                  projekt i databasen.
+                </p>
+              </div>
+              <button
+                onClick={openSverigekartan}
+                className="rounded-full bg-[#FF8B01] px-6 py-3 text-sm font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/30 hover:bg-[#FFB347]"
+              >
+                🗺️ Öppna Sverigekartan – välj projekt
+              </button>
+              <p className="text-xs text-white/40">
+                Du kan också flytta dig till ett område med planerade vindkraftverk.
+              </p>
+            </div>
+          )}
+
           {/* Juli 2026-fix (kritisk buggrapport punkt 4, "turbinerna måste
               förbli synliga inomhus — aldrig helt försvinna"): den tidigare
               skärmtäckande svarta "inomhus"-overlayen (bg-black/85, z-40) är
@@ -1628,7 +1728,7 @@ export default function Home() {
               <div className="min-w-0 shrink">
                 <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKOLLEN AR</p>
                 <p className="text-sm text-white/90">
-                  {usingCustomPlacement ? "Vindkollen" : "Katrineholm"} · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}
+                  {activeProject?.projectName ?? "Vindkollen"} · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}{activeProject && !activeProject.hasPreciseTurbines && <span className="ml-1 opacity-60">≈</span>}
                 </p>
               </div>
               {/* Höger sida: dBA + Infraljud (alltid synliga) + Nattläge-indikator */}
@@ -1749,7 +1849,7 @@ export default function Home() {
             {ready && showNoiseImpact && (
               <NoiseImpactPanel result={noiseImpact} onClose={() => setShowNoiseImpact(false)} />
             )}
-            {KATRINEHOLM_PROJECT.campaign?.enabled && (
+            {KATRINEHOLM_PROJECT.campaign?.enabled && activeProject?.projectId === KATRINEHOLM_PROJECT.id && (
             <button
               onClick={() => setShowPetition(true)}
               className="w-full rounded-full bg-[#FF8B01] py-3.5 text-sm font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/30 hover:bg-[#FFB347]"
@@ -1855,7 +1955,7 @@ export default function Home() {
                     }}
                     className="w-full rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white/80 hover:bg-white/10"
                   >
-                    ↩️ Återgå till planerad placering (29 verk)
+                    ↩️ Återgå till GPS-baserat projektval
                   </button>
                 )}
                 <button
