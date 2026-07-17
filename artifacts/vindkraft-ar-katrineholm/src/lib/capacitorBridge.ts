@@ -55,6 +55,33 @@ export function consumeFreshPlaceraFlag(): boolean {
   return val;
 }
 
+/**
+ * Konsumerar flaggan som `openPlaceraEditor()` sätter för att hoppa direkt
+ * till editor-läget (utan att visa den nationella välkomst-/projektväljar-
+ * kartan). Returnerar `true` en gång och tar bort flaggan.
+ */
+export function consumeDirectEditorFlag(): boolean {
+  const val = sessionStorage.getItem("vindkollen:placeraEditorDirect") === "1";
+  if (val) sessionStorage.removeItem("vindkollen:placeraEditorDirect");
+  return val;
+}
+
+/**
+ * Öppnar PlaceTurbines-editorn direkt (utan att visa den nationella
+ * projektväljarkartan). Används av "Visa karta" i AR-vyn.
+ *
+ * - Sätter sessionStorage-flaggan `vindkollen:placeraEditorDirect`.
+ * - Stoppar native kamerapreview (synkront) innan hash-navigeringen.
+ * - På webb: sätter hash direkt (PlaceTurbines monteras alltid färsk).
+ */
+export function openPlaceraEditor(): void {
+  if (isNative()) {
+    void stopNativeCameraPreview();
+  }
+  sessionStorage.setItem("vindkollen:placeraEditorDirect", "1");
+  window.location.hash = "/placera";
+}
+
 // ---------------------------------------------------------------------------
 // Kamera — native camera preview (CameraPreview plugin)
 // ---------------------------------------------------------------------------

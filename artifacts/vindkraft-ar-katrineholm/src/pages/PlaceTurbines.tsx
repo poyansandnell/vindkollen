@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { apiUrl } from "@/lib/apiUrl";
-import { consumeFreshPlaceraFlag, isNative, openSverigekartan } from "@/lib/capacitorBridge";
+import { consumeDirectEditorFlag, consumeFreshPlaceraFlag, isNative, openSverigekartan } from "@/lib/capacitorBridge";
 import { PlacementMap } from "@/components/PlacementMap";
 import { PlacementScorePanel } from "@/components/PlacementScorePanel";
 import {
@@ -147,7 +147,12 @@ export default function PlaceTurbines() {
   // engångs ur sessionStorage. Om välkomstläge: tom karta som startläge.
   const [showWelcome, setShowWelcome] = useState<boolean>(() => {
     const fresh = consumeFreshPlaceraFlag();
+    // consumeDirectEditorFlag() konsumeras EFTER consumeFreshPlaceraFlag() —
+    // den sätts av "Visa karta" i AR-vyn och hoppar direkt till editor-läge.
+    const direct = consumeDirectEditorFlag();
     const hasHandoff = editHandoff !== null;
+    // "Visa karta"-flödet: hoppa alltid direkt till editor, oavsett plattform.
+    if (direct) return false;
     // På native: visa alltid Sverigekartan när det inte finns en sparad
     // projektreferens i localStorage. Förhindrar tyst fallback till
     // Katrineholms standardprojekt när sessionStorage-flaggan inte läses

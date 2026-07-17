@@ -44,14 +44,21 @@ export function InfoPanel({ onClose }: { onClose: () => void }) {
               påverkan. Syftet är att ge invånarna ett mer konkret underlag inför den fortsatta
               diskussionen om etableringen.
             </p>
-            <a
-              href="/samradsyttrande-forsvarsmakten.pdf"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 flex items-center gap-2 rounded-xl border border-[#FF8B01]/30 bg-[#FF8B01]/10 px-3 py-2 text-sm font-medium text-[#FFB347] hover:bg-[#FF8B01]/20"
+            <button
+              onClick={() => {
+                // Explicit window.open() för att säkerställa att PDF öppnas
+                // i extern webbläsare/PDF-visare på iOS Capacitor-native
+                // (target="_blank" på <a> kan fastna i WKWebView internt).
+                const base = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim() ?? "";
+                const url = base
+                  ? `${base}/samradsyttrande-forsvarsmakten.pdf`
+                  : "/samradsyttrande-forsvarsmakten.pdf";
+                window.open(url, "_blank", "noopener,noreferrer");
+              }}
+              className="mt-3 flex w-full items-center gap-2 rounded-xl border border-[#FF8B01]/30 bg-[#FF8B01]/10 px-3 py-2 text-left text-sm font-medium text-[#FFB347] hover:bg-[#FF8B01]/20"
             >
               📄 Försvarsmaktens samrådsyttrande (PDF)
-            </a>
+            </button>
           </div>
         </div>
 

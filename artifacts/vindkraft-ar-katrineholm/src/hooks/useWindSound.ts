@@ -175,6 +175,23 @@ export function useWindSound() {
     }, AUDIO_TICK_MS);
   }
 
+  // Pausa/återuppta AudioContext när appen bakgrundas eller stängs (t.ex. iOS
+  // hemknapp, byte av app). Förhindrar att ljud fortsätter spela när appen
+  // inte är synlig.
+  useEffect(() => {
+    const handleVisibility = () => {
+      const ctx = ctxRef.current;
+      if (!ctx) return;
+      if (document.hidden) {
+        void ctx.suspend();
+      } else if (ctx.state === "suspended") {
+        void ctx.resume();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
   useEffect(() => {
     return () => {
       stopAudioLoop();

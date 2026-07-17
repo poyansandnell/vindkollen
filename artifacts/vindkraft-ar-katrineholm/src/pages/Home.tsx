@@ -12,7 +12,6 @@ import { useArTrackingStability, WEAK_SIGNAL_MESSAGE } from "@/hooks/useArTracki
 import { useSmoothedDba } from "@/hooks/useSmoothedDba";
 import { CameraBackground } from "@/components/CameraBackground";
 import { ARScene, type ARSceneHandle, MAX_RENDER_DISTANCE_M } from "@/components/ARScene";
-import { MapView } from "@/components/MapView";
 import { PetitionModal } from "@/components/PetitionModal";
 import { PermissionGate } from "@/components/PermissionGate";
 import { LoadingSequence } from "@/components/LoadingSequence";
@@ -45,6 +44,7 @@ import {
   captureNativeCameraPhoto,
   isNative,
   lockPortraitOrientation,
+  openPlaceraEditor,
   openSverigekartan,
   requestAllPermissionsSequentially,
   unlockOrientation,
@@ -202,7 +202,6 @@ export default function Home() {
   // slut visas det befintliga väntar-overlayet (se `!ready`-blocket längre
   // ner) precis som innan.
   const [showLoadingSequence, setShowLoadingSequence] = useState(false);
-  const [showMap, setShowMap] = useState(false);
   const [showPetition, setShowPetition] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   // Juli 2026-fix ("AR-vyn känns rörig, knappar överlappar"): "Visa karta",
@@ -684,7 +683,7 @@ export default function Home() {
   // fri sikt" — samma graderade inomhus-bedömning som ovan (`indoorsGracePassed`)
   // plus `sky.skyRatio` för ett mjukare mellanläge (skymd av t.ex. några träd,
   // men inte "inomhus") så signalen inte bara är på/av.
-  const PARTIAL_SKY_RATIO_THRESHOLD = 0.6;
+  const PARTIAL_SKY_RATIO_THRESHOLD = 0.5;
   const lineOfSightStatus: "clear" | "partial" | "indoors" = !sky.ready
     ? "clear"
     : indoorsGracePassed
@@ -956,9 +955,11 @@ export default function Home() {
   // monitorn och den nya "peka mot närmaste verk"-pilen, så de aldrig kan
   // råka peka/räkna mot olika verk.
   const nearestTurbineInfo = useMemo(() => {
-    if (geo.lat === null || geo.lon === null) return null;
-    const lat0 = geo.lat;
-    const lon0 = geo.lon;
+    // Använd effektiv position (simulerad eller riktigt GPS) — annars visas
+    // real GPS-avstånd (hundratals km) när betraktarpositionen är simulerad.
+    if (effectiveLat === null || effectiveLon === null) return null;
+    const lat0 = effectiveLat;
+    const lon0 = effectiveLon;
     return activeTurbines.reduce<{ distanceM: number; bearingDeg: number } | null>((closest, t) => {
       const { lat, lon } = swerefToWgs84(t.easting, t.northing);
       const distanceM = distanceMeters(lat0, lon0, lat, lon);
@@ -967,7 +968,7 @@ export default function Home() {
       }
       return closest;
     }, null);
-  }, [activeTurbines, geo.lat, geo.lon]);
+  }, [activeTurbines, effectiveLat, effectiveLon]);
 
   // Vinkelskillnad (grader, alltid ≥0) mellan aktuell kompassriktning och
   // bäringen till närmaste verk (produktkrav 2: "angular diff
@@ -1418,6 +1419,22 @@ export default function Home() {
 
           <CameraBackground stream={camera.stream} videoRef={videoElRef} nativePreview={camera.nativePreview} />
 
+          {/* Orange simuleringsram — visas när betraktarpositionen är simulerad (inte riktigt GPS).
+              pointer-events-none så ramen inte blockerar tryck/svep på AR-ytan. */}
+          {positionOverride !== null && (
+            <div className="pointer-events-none absolute inset-0 z-50">
+              {/* Orange kantlinje runt hela vyn */}
+              <div className="absolute inset-0 border-[3px] border-[#FF8B01]/70" />
+              {/* Simulerat-badge — centrerat under safe-area-inset */}
+              <div
+                className="absolute left-1/2 -translate-x-1/2 rounded-full bg-[#FF8B01] px-3 py-0.5 text-[10px] font-bold text-black shadow-lg"
+                style={{ top: "calc(env(safe-area-inset-top, 4px) + 4px)" }}
+              >
+                📍 SIMULERAT LÄGE
+              </div>
+            </div>
+          )}
+
           {/* PRESTANDA (produktkrav juli 2026): `ARScene` monteras redan här,
               så fort `started` är sant — INTE bara när `arSessionVisible`
               blir sant. Dess tunga engångskostnad (bygga 29 procedurella
@@ -1790,11 +1807,22 @@ export default function Home() {
             <div className="flex items-center gap-1.5">
               {ready && (
                 <button
-                  onClick={() => setShowSoundLevel((v) => !v)}
-                  aria-pressed={showSoundLevel}
+                  onClick={() => {
+                    // "Ljud"-knappen är en kombinerad ljud-av/på + panel-toggle:
+                    // Om ljud spelar → stoppa ljud OCH dölj panel.
+                    // Om ljud är tystat → starta ljud OCH visa panel.
+                    if (wind.playing) {
+                      void wind.toggle();
+                      setShowSoundLevel(false);
+                    } else {
+                      void wind.toggle();
+                      setShowSoundLevel(true);
+                    }
+                  }}
+                  aria-pressed={wind.playing}
                   className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
                 >
-                  🔊 Ljud
+                  {wind.playing ? "🔊 Ljud" : "🔇 Ljud"}
                 </button>
               )}
               <button
@@ -1931,7 +1959,7 @@ export default function Home() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => {
-                      setShowMap(true);
+                      openPlaceraEditor();
                       setShowMenu(false);
                     }}
                     className="flex-1 rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
@@ -2019,9 +2047,6 @@ export default function Home() {
         </>
       )}
 
-      {showMap && (
-        <MapView turbines={activeTurbines} userLat={geo.lat} userLon={geo.lon} onClose={() => setShowMap(false)} />
-      )}
       {showPetition && <PetitionModal onClose={() => setShowPetition(false)} />}
       {showInfo && <InfoPanel onClose={() => setShowInfo(false)} />}
       {capturedPhoto && (
