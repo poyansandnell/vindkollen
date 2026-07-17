@@ -48,10 +48,20 @@ function openInEditor(
   turbines: { id: string; lat: number; lon: number }[],
   centerLat?: number | null,
   centerLng?: number | null,
+  projectId?: number | null,
 ) {
   localStorage.setItem(
     EDIT_HANDOFF_KEY,
-    JSON.stringify({ projectName, turbines, centerLat: centerLat ?? null, centerLng: centerLng ?? null, savedAt: Date.now() }),
+    JSON.stringify({
+      projectName,
+      turbines,
+      centerLat: centerLat ?? null,
+      centerLng: centerLng ?? null,
+      // projectId krävs av PlaceTurbines för att hämta verk via API
+      // när exakta koordinater saknas i kartvy (nationell zoom)
+      projectId: projectId != null ? String(projectId) : undefined,
+      savedAt: Date.now(),
+    }),
   );
   // Native: "/#/placera" (hash routing); webb: "/placera" (path routing)
   window.location.href = isCapacitorNative() ? "/#/placera" : "/placera";
@@ -246,6 +256,7 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                         projectTurbines,
                         projectAreaQuery.data?.centerLat,
                         projectAreaQuery.data?.centerLng,
+                        projectAreaQuery.data?.id,
                       )}
                       data-testid="button-edit-project"
                     >
