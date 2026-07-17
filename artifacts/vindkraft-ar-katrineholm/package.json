@@ -13,7 +13,8 @@
     "native:cap-add-ios": "cap add ios && pnpm native:plist",
     "native:sync": "pnpm native:build && cap sync && ([ ! -f ios/App/App/Info.plist ] || pnpm native:plist)",
     "native:ios": "pnpm native:build && ([ -d ios ] || cap add ios) && cap sync ios && pnpm native:plist && xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj && cap open ios",
-    "native:android": "pnpm native:build && cap sync android && cap open android"
+    "native:android": "pnpm native:build && cap sync android && cap open android",
+    "native:ios:verify": "bash scripts/ios-verify.sh"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

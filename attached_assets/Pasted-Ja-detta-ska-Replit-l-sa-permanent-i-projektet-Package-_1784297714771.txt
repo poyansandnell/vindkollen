@@ -1,0 +1,148 @@
+Ja — detta ska Replit lösa permanent i projektet. Package.resolved räckte uppenbarligen inte, eftersom Xcode fortfarande inte kopplar in själva Capacitor-packageprodukten i targeten.
+
+Skicka detta exakt till Replit:
+
+⸻
+
+iOS build blocker kvarstår: No such module 'Capacitor'
+
+Efter ren sync, rensad DerivedData och nytt Xcode-bygge får vi fortfarande:
+
+No such module 'Capacitor'
+
+i:
+
+import Capacitor
+
+Detta betyder att Package.resolved inte ensam löste grundproblemet. Xcode-projektet har fortfarande inte en korrekt, reproducerbar Swift Package-koppling till App-targeten.
+
+Jag vill att ni löser detta permanent i repot, inte med manuella Xcode-steg.
+
+Verifiera och fixa följande
+
+1. Kontrollera project.pbxproj
+
+Kontrollera att ios/App/App.xcodeproj/project.pbxproj innehåller en korrekt Swift Package-reference till Capacitor-paketet.
+
+Det ska finnas:
+
+* XCRemoteSwiftPackageReference för Capacitor-paketet
+* rätt repository-URL
+* rätt version requirement
+* XCSwiftPackageProductDependency för:
+    * Capacitor
+    * Cordova
+    * IONCameraLib
+    * IONGeolocationLib
+* att dessa products är kopplade till App-targetens Frameworks Build Phase
+
+Det räcker inte att bara ha Package.resolved.
+
+2. Kontrollera rätt Capacitor-upplägg för version 8.4.2
+
+Verifiera hur Capacitor 8.4.2 ska kopplas i ett Swift Package-baserat iOS-projekt.
+
+Kontrollera särskilt om projektet ska använda:
+
+* lokala package paths från node_modules
+* eller remote package references
+* eller Capacitors genererade SPM-integration via npx cap sync ios
+
+Projektet får inte vara beroende av pnpm-virtual-store-paths som bryts på en annan dator.
+
+3. Kontrollera Package.swift
+
+Granska:
+
+ios/App/CapApp-SPM/Package.swift
+
+eller motsvarande genererad package-fil.
+
+Verifiera att sökvägarna pekar på stabila, verkliga package-paths och inte på maskinspecifika eller pnpm-interna sökvägar som exempelvis:
+
+node_modules/.pnpm/...
+
+Om pnpm skapar trasiga paths för Xcode ska setup-scriptet skapa stabila symlinks eller använda korrekta relativa paths.
+
+4. Kontrollera att cap sync ios inte skriver över fixen
+
+Kör detta från helt rent läge:
+
+git clean -xfd
+pnpm install
+pnpm native:build
+npx cap sync ios
+
+Kontrollera sedan att:
+
+* package references fortfarande finns
+* product dependencies fortfarande finns
+* App-targeten fortfarande länkar Capacitor
+* inga manuella Xcode-ändringar krävs
+
+5. Lägg in automatisk verifiering
+
+Skapa gärna ett script, exempelvis:
+
+pnpm native:ios:verify
+
+som verifierar att följande finns efter sync:
+
+* Capacitor package reference
+* Capacitor product dependency
+* Cordova product dependency
+* Camera package dependency
+* Geolocation package dependency
+* App-target framework linkage
+* Package.resolved
+
+Scriptet ska faila tydligt om något saknas.
+
+6. Verifiera med riktig macOS/Xcode-build
+
+Linux-typecheck räcker inte för detta fel.
+
+Verifiera på macOS med:
+
+xcodebuild \
+  -resolvePackageDependencies \
+  -project ios/App/App.xcodeproj \
+  -scheme App
+
+och därefter:
+
+xcodebuild \
+  -project ios/App/App.xcodeproj \
+  -scheme App \
+  -destination 'generic/platform=iOS' \
+  build
+
+Uppgiften är inte klar förrän detta fungerar utan:
+
+* Reset Package Caches
+* Resolve Package Versions
+* manuellt tillagd package
+* manuellt ändrad target membership
+* manuellt ändrad project.pbxproj
+
+Viktigt
+
+Ta inte bort:
+
+import Capacitor
+
+Det är korrekt kod. Felet är att Capacitor inte är korrekt länkat till App-targeten.
+
+Rapportera exakt
+
+1. Varför Package.resolved inte räckte.
+2. Vilken package reference som saknades.
+3. Vilka poster som lades till i project.pbxproj.
+4. Om CapApp-SPM/Package.swift ändrades.
+5. Hur pnpm-pathproblemet löstes.
+6. Hur ni säkerställer att npx cap sync ios inte river fixen.
+7. Resultat från riktig xcodebuild på macOS.
+
+⸻
+
+Det här är nu tydligt ett projektkonfigurationsfel. Replit behöver alltså verifiera själva Xcode-targetkopplingen, inte bara versionslåset.
