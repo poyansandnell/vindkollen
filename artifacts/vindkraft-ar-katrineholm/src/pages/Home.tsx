@@ -1957,7 +1957,7 @@ export default function Home() {
               övertoningen sträcker sig hela vägen till skärmens nederkant.
               Tidigare lösning: paddingBottom på yttre div → gradient slutade
               ovanför safe-area-zonen, vilket såg avklippt ut. */}
-          <div className="flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-10">
+          <div className="flex flex-col gap-3 bg-gradient-to-t from-black to-transparent px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-10">
             {/* Simulerad betraktarposition — visas högt upp så det är tydligt */}
             {positionOverride && (
               <div className="flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-900/50 px-3 py-1.5 text-xs text-blue-200">

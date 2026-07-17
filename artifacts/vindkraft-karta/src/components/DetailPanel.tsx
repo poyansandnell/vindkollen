@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, X } from "lucide-react";
 import {
   useGetWindTurbine,
@@ -109,7 +108,7 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
           <X className="h-4 w-4" />
         </Button>
       </div>
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto overscroll-contain">
         <div className="p-4">
           {isLoading && (
             <div className="flex justify-center py-8">
@@ -308,7 +307,7 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
