@@ -3,9 +3,11 @@ import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { openSverigekartan } from "@/lib/capacitorBridge";
 
-/** Ändra denna sträng inför varje ny native-testbygge. Ta bort raden inför release. */
+/** Ändra VERSION och BUILD_LABEL inför varje ny native-testbygge. Ta bort inför release. */
+const VERSION = "12";
 const BUILD_LABEL = "🧪 Native TEST 12";
 const BUILD_ID = (import.meta.env.VITE_BUILD_ID as string | undefined) ?? "";
+const SHORT_HASH = BUILD_ID.split("@")[0] ?? "";
 
 interface PermissionGateProps {
   onStart: () => void;
@@ -144,9 +146,9 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
                 {BUILD_LABEL}
               </p>
             )}
-            {BUILD_ID && (
-              <p className="text-center text-[10px] text-white/40 font-mono">
-                {BUILD_ID}
+            {SHORT_HASH && (
+              <p className="text-center text-[10px] text-white/35 font-mono">
+                Version {VERSION} · Build {SHORT_HASH}
               </p>
             )}
           </>
