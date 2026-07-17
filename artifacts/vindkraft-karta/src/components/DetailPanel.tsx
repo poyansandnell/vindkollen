@@ -16,6 +16,13 @@ import { sourceLabel, sourceUrl } from "@/lib/sourceMeta";
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
 const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
 
+// På native Capacitor använder AR-appen hash-routing (/#/sida).
+// På webb används vanlig path-routing (/sida). Detekteras via window.Capacitor.
+function isCapacitorNative(): boolean {
+  return !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
+    .Capacitor?.isNativePlatform?.();
+}
+
 function openInAr(
   turbines: { id: string; lat: number; lon: number }[],
   projectMeta?: { projectId?: number; projectName?: string; projectMunicipality?: string },
@@ -32,7 +39,8 @@ function openInAr(
       source: "handoff",
     }),
   );
-  window.location.href = "/";
+  // Native: hash-routing; webb: path-routing
+  window.location.href = isCapacitorNative() ? "/#/" : "/";
 }
 
 function openInEditor(
@@ -45,7 +53,8 @@ function openInEditor(
     EDIT_HANDOFF_KEY,
     JSON.stringify({ projectName, turbines, centerLat: centerLat ?? null, centerLng: centerLng ?? null, savedAt: Date.now() }),
   );
-  window.location.href = "/placera";
+  // Native: "/#/placera" (hash routing); webb: "/placera" (path routing)
+  window.location.href = isCapacitorNative() ? "/#/placera" : "/placera";
 }
 
 interface DetailPanelProps {

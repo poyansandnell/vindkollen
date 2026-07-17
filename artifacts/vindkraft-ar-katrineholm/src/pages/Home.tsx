@@ -1950,14 +1950,14 @@ export default function Home() {
               `arSessionVisible` för att inte blöda igenom bakom
               `LoadingSequence`. */}
           {arSessionVisible && (
-          <div
-            className="absolute inset-x-0 bottom-0 z-[45]"
-            style={{ paddingBottom: "max(2.5rem, env(safe-area-inset-bottom))" }}
-          >
-          {/* Gradienten avslutas precis ovanför safe area/home indicator:
-              safe area-utrymmet nedan är transparent → kameran syns
-              sömlöst ända till skärmkanten, ingen mörk "remsa" visas. */}
-          <div className="flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-10">
+          <div className="absolute inset-x-0 bottom-0 z-[45]">
+          {/* Gradienten täcker hela bottenytan inklusive safe-area/home-indicator:
+              pb-[max(2.5rem,...)] skjuter upp knapparna med minst 40 px (täcker
+              home-indikatorn på alla iPhone-modeller) medan bakgrunden och
+              övertoningen sträcker sig hela vägen till skärmens nederkant.
+              Tidigare lösning: paddingBottom på yttre div → gradient slutade
+              ovanför safe-area-zonen, vilket såg avklippt ut. */}
+          <div className="flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-10">
             {/* Simulerad betraktarposition — visas högt upp så det är tydligt */}
             {positionOverride && (
               <div className="flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-900/50 px-3 py-1.5 text-xs text-blue-200">
