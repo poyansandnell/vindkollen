@@ -19,35 +19,21 @@ Vindkollen är förberedd för iOS via [Capacitor 8](https://capacitorjs.com/). 
 
 ## Klona och öppna i Xcode (komplett från ren checkout)
 
-`ios/` är **committad i repot** och innehåller alla nödvändiga projektfiler inkl. `Package.resolved` med pinnade SPM-versioner. Öppna projektet i Xcode direkt efter dessa steg utan att behöva Reset Package Caches, Resolve Package Versions eller lägga till filer manuellt:
+`ios/` är **committad i repot** och innehåller alla nödvändiga projektfiler inkl. `Package.resolved` med pinnade SPM-versioner och **committade SPM-symlinks** (se nedan). Använd alltid `pnpm native:ios` — kör aldrig `npx cap sync ios` direkt från monorepo-roten eller manuellt utan att sedan köra fix-skriptet:
 
 ```bash
 # 1. Klona
 git clone <din-repo-url>
 cd <repo>
 
-# 2. Installera npm-beroenden (skapar pnpm virtual store med lokala plugin-sökvägar)
+# 2. Installera npm-beroenden (skapar pnpm virtual store + artifact-lokala node_modules)
 pnpm install
 
-# 3. Bygg webb-bundeln och synkronisera Capacitor
-pnpm --filter @workspace/vindkraft-ar-katrineholm run native:build
-
-# 4. Synkronisera Capacitor (kopierar webb-filer + regenererar CapApp-SPM/Package.swift)
-#    OBS: måste köras från artifact-katalogen
-cd artifacts/vindkraft-ar-katrineholm
-npx cap sync ios
-cd ../..
-
-# 5. Öppna i Xcode — fungerar direkt, inga manuella steg
-open artifacts/vindkraft-ar-katrineholm/ios/App/App.xcodeproj
-```
-
-**Alternativt: använd pnpm-skriptet** (gör steg 3–5 i ett enda kommando):
-
-```bash
-pnpm install
+# 3. Bygg, synka, fixa SPM-sökvägar och öppna Xcode (ett enda kommando)
 pnpm --filter @workspace/vindkraft-ar-katrineholm run native:ios
 ```
+
+> Öppna **inte** Xcode manuellt direkt efter `git clone + pnpm install`. `native:ios` måste köras minst en gång för att `CapApp-SPM/symlinks/` ska skapas/uppdateras och `xcodebuild -resolvePackageDependencies` ska hämta SPM-paketen.
 
 ---
 
@@ -56,12 +42,27 @@ pnpm --filter @workspace/vindkraft-ar-katrineholm run native:ios
 `project.pbxproj` matchar den **officiella Capacitor 8.x SPM-template** och refererar enbart till det lokala `CapApp-SPM`-paketet:
 
 ```
-ios/App/CapApp-SPM/Package.swift   ← hanteras av "cap sync ios"
+ios/App/CapApp-SPM/Package.swift   ← hanteras av "cap sync ios" + fix-skript
 ```
+
+### Symlink-lösning (kritisk för Xcode 15/16)
+
+Xcode misslyckas ibland att lösa pnpm virtual store-sökvägar med `+`/`@` i katalognamnen (t.ex. `node_modules/.pnpm/@capacitor+camera@8.2.1_@capacitor+core@8.4.2/...`). Projektet använder därför committade **relativa symlinks** med rena namn:
+
+```
+ios/App/CapApp-SPM/symlinks/
+  CapacitorCamera              → ../../../../node_modules/@capacitor/camera
+  CapacitorGeolocation         → ../../../../node_modules/@capacitor/geolocation
+  CapacitorCommunityCameraPreview → ../../../../node_modules/@capacitor-community/camera-preview
+```
+
+Symlinkar pekar på pnpm:s **artifact-lokala node_modules** (med rena namn, inte virtual store-sökvägar). Dessa symlinks är committade med relativa sökvägar — de fungerar på alla maskiner efter `pnpm install`.
+
+`CapApp-SPM/Package.swift` refererar till `symlinks/CapacitorCamera` etc. (rena korta sökvägar), och `cap sync ios` körs alltid följt av `scripts/fix-ios-package-swift.js` (via `native:fix-spm`) som återskapar symlinks och rättar Package.swift om `cap sync` skriver över den.
 
 `CapApp-SPM/Package.swift` refererar i sin tur till:
 - `capacitor-swift-pm` (fjärr-GitHub, pinnad)
-- `@capacitor/camera`, `@capacitor/geolocation`, `@capacitor-community/camera-preview` (lokala sökvägar i pnpm virtual store)
+- `symlinks/CapacitorCamera`, `symlinks/CapacitorGeolocation`, `symlinks/CapacitorCommunityCameraPreview` (via relativa symlinks)
 
 `Package.resolved` är committad på:
 `ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`
@@ -91,9 +92,10 @@ VITE_API_BASE_URL=https://<repl-name>--<owner>.repl.co \
 `native:ios` gör i ordning:
 1. `vite build --config vite.native.config.ts` → bygger till `dist-native/`
 2. `cap sync ios` → kopierar webbfiler + regenererar `CapApp-SPM/Package.swift`
-3. `scripts/ios-setup.sh` → skriver in Info.plist privacy strings
-4. `xcodebuild -resolvePackageDependencies` → löser SPM-paket och uppdaterar `Package.resolved`
-5. `cap open ios` → öppnar Xcode
+3. `scripts/fix-ios-package-swift.js` → återskapar symlinks + rättar Package.swift till rena sökvägar
+4. `scripts/ios-setup.sh` → skriver in Info.plist privacy strings
+5. `xcodebuild -resolvePackageDependencies` → löser SPM-paket och uppdaterar `Package.resolved`
+6. `cap open ios` → öppnar Xcode
 
 > **OBS:** `cap sync ios` och `cap open ios` måste köras från `artifacts/vindkraft-ar-katrineholm/`-katalogen — pnpm-skriptet hanterar detta automatiskt. Kör aldrig `npx cap sync ios` från monorepo-roten.
 
