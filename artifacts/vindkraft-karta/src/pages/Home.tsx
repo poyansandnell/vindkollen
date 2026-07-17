@@ -262,7 +262,7 @@ export default function Home() {
   }
 
   return (
-    <div className="relative h-[100dvh] w-full overflow-hidden overscroll-none bg-background">
+    <div className="relative h-[100svh] w-full overflow-hidden overscroll-none bg-background">
       <MapCanvas
         key={flyToken}
         mapboxToken={mapboxToken}

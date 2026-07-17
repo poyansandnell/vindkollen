@@ -835,7 +835,7 @@ export function NationalMapView({
 
         {/* MapLibre runtime diagnostics — visas endast i dev-builds (import.meta.env.DEV) */}
         {import.meta.env.DEV && <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-50">
-        <div className="nm-diag pointer-events-auto text-[10px] font-mono text-white/90">
+        <div className={`nm-diag text-[10px] font-mono text-white/90 ${diagExpanded ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           {/* Header row */}
           <div className="flex items-center justify-between border-b border-white/20 px-2 py-1">
             <span className="font-bold text-[#FFB347]">MapLibre diagnostik</span>
@@ -990,6 +990,7 @@ export function NationalMapView({
             <button
               onClick={() => onEnterEditor(selectedProject)}
               className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01]"
+              style={{ touchAction: 'manipulation' }}
             >
               📐 Öppna projektet
             </button>

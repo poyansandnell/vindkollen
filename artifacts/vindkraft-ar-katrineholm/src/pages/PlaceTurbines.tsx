@@ -160,7 +160,7 @@ export default function PlaceTurbines() {
     if (isNative() && !hasHandoff) return true;
     return fresh && !hasHandoff;
   });
-  const initialTurbines = editHandoff?.turbines ?? (showWelcome ? [] : DEFAULT_TURBINES);
+  const initialTurbines = (editHandoff?.turbines?.length ? editHandoff.turbines : null) ?? (showWelcome ? [] : DEFAULT_TURBINES);
   const [turbines, setTurbines] = useState<PlacedTurbine[]>(initialTurbines);
   const [committedTurbines, setCommittedTurbines] = useState<PlacedTurbine[]>(initialTurbines);
   const { isAuthenticated, login } = useAuth();
@@ -272,8 +272,10 @@ export default function PlaceTurbines() {
           lat: t.lat as number,
           lon: t.lng as number,
         }));
-        setTurbines(placed);
-        setCommittedTurbines(placed);
+        if (placed.length > 0) {
+          setTurbines(placed);
+          setCommittedTurbines(placed);
+        }
       })
       .catch((err) => {
         console.error("[PlaceTurbines] Kunde inte hämta nationella verk:", err);
