@@ -1,9 +1,5 @@
 App/build
 App/Pods
-# Vendored XCFrameworks are extracted at setup time from the committed ZIPs;
-# the unzipped directories must not be committed (large binary dirs).
-App/CapApp-SPM/vendor/capacitor-swift-pm/Capacitor.xcframework
-App/CapApp-SPM/vendor/capacitor-swift-pm/Cordova.xcframework
 App/output
 App/App/public
 DerivedData

@@ -3,59 +3,61 @@
  * fix-ios-package-swift.js
  *
  * Runs automatically as the `capacitor:sync:after` hook after every `cap sync ios`.
- * `cap sync ios` overwrites CapApp-SPM/Package.swift with raw pnpm virtual-store
- * paths and a remote capacitor-swift-pm URL. This script fixes both problems:
+ * `cap sync ios` overwrites CapApp-SPM/Package.swift with a version that uses
+ * pnpm virtual-store paths AND a remote capacitor-swift-pm GitHub URL — both
+ * of which cause Xcode to fail.
  *
- * 1. Extracts Capacitor.xcframework + Cordova.xcframework from the committed ZIPs
- *    in vendor/ so Xcode never needs to download binary XCFrameworks from GitHub.
- * 2. (Re)creates stable relative symlinks in CapApp-SPM/symlinks/ pointing to the
- *    artifact-local node_modules/@capacitor/... entries.
- * 3. Patches CapApp-SPM/Package.swift to:
- *    a) reference symlinks/<Name> instead of the long pnpm virtual-store path.
- *    b) reference vendor/capacitor-swift-pm (local) instead of the remote GitHub URL.
- * 4. Patches each plugin's own Package.swift to replace the remote
- *    capacitor-swift-pm URL with a local relative path so Xcode's SPM resolver
- *    never needs to fetch that remote binary package either.
+ * This script replaces Package.swift with an inline-target design that:
+ *  - Compiles plugin Swift sources directly as CapApp-SPM targets (no separate
+ *    plugin Swift packages) via symlinks/… paths.
+ *  - Uses the locally vendored capacitor-swift-pm (Capacitor.xcframework and
+ *    Cordova.xcframework are committed to git in vendor/capacitor-swift-pm/).
+ *  - Only fetches ion-ios-camera + ion-ios-geolocation remotely (Swift source
+ *    packages, not binary — small and fast to download).
+ *
+ * As a result, after `git pull && pnpm install`, opening App.xcodeproj in Xcode
+ * requires NO extra setup steps and downloads NO binary XCFrameworks from GitHub.
  */
 
 import {
   existsSync, mkdirSync, symlinkSync, unlinkSync,
-  readFileSync, writeFileSync, realpathSync
+  readFileSync, writeFileSync
 } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname  = dirname(__filename);
 
-const artifactDir   = resolve(__dirname, '..');
-const capAppSpmDir  = resolve(artifactDir, 'ios/App/CapApp-SPM');
-const symlinksDir   = resolve(capAppSpmDir, 'symlinks');
-const vendorDir     = resolve(capAppSpmDir, 'vendor');
-const vendorPkgDir  = resolve(vendorDir, 'capacitor-swift-pm');
+const artifactDir      = resolve(__dirname, '..');
+const capAppSpmDir     = resolve(artifactDir, 'ios/App/CapApp-SPM');
+const symlinksDir      = resolve(capAppSpmDir, 'symlinks');
+const vendorDir        = resolve(capAppSpmDir, 'vendor');
+const vendorPkgDir     = resolve(vendorDir, 'capacitor-swift-pm');
 const packageSwiftPath = resolve(capAppSpmDir, 'Package.swift');
 
 // ---------------------------------------------------------------------------
-// Step 1 — Extract XCFrameworks from committed ZIPs
+// Step 1 — Ensure XCFrameworks exist in vendor/capacitor-swift-pm/
+//   They are committed to git, so this is normally a no-op.
+//   As a fallback, unzip from the committed ZIPs if somehow missing.
 // ---------------------------------------------------------------------------
 const frameworks = [
-  { zip: resolve(vendorDir, 'Capacitor.xcframework.zip'),  xcfw: resolve(vendorPkgDir, 'Capacitor.xcframework') },
-  { zip: resolve(vendorDir, 'Cordova.xcframework.zip'),    xcfw: resolve(vendorPkgDir, 'Cordova.xcframework')   },
+  { zip: resolve(vendorDir, 'Capacitor.xcframework.zip'), xcfw: resolve(vendorPkgDir, 'Capacitor.xcframework') },
+  { zip: resolve(vendorDir, 'Cordova.xcframework.zip'),   xcfw: resolve(vendorPkgDir, 'Cordova.xcframework')   },
 ];
 
 mkdirSync(vendorPkgDir, { recursive: true });
 
 for (const { zip, xcfw } of frameworks) {
-  if (!existsSync(xcfw)) {
-    if (!existsSync(zip)) {
-      console.error(`[fix-ios] Missing ZIP: ${zip} — re-run from the monorepo root.`);
-      process.exit(1);
-    }
+  if (existsSync(xcfw)) {
+    console.log(`[fix-ios] ${xcfw.split('/').pop()} present (committed) — skipping extraction.`);
+  } else if (existsSync(zip)) {
     console.log(`[fix-ios] Extracting ${zip} → ${vendorPkgDir}`);
     execSync(`unzip -q "${zip}" -d "${vendorPkgDir}"`, { stdio: 'inherit' });
   } else {
-    console.log(`[fix-ios] ${xcfw.split('/').pop()} already extracted — skipping.`);
+    console.error(`[fix-ios] Missing both ${xcfw} and ${zip}. Run git pull and try again.`);
+    process.exit(1);
   }
 }
 
@@ -83,90 +85,78 @@ for (const plugin of plugins) {
 }
 
 // ---------------------------------------------------------------------------
-// Step 3 — Patch CapApp-SPM/Package.swift
-//   a) Replace pnpm virtual-store plugin paths with symlinks/<Name>
-//   b) Replace remote capacitor-swift-pm URL with local vendor/ path
+// Step 3 — Write the correct Package.swift (inline-target design)
+//   `cap sync ios` regenerates this file with the wrong content; we always
+//   overwrite it after sync.
 // ---------------------------------------------------------------------------
-if (!existsSync(packageSwiftPath)) {
-  console.warn('[fix-ios] Package.swift not found — skipping patch.');
-  process.exit(0);
-}
+const PACKAGE_SWIFT = `\
+// swift-tools-version: 5.9
+import PackageDescription
 
-let content = readFileSync(packageSwiftPath, 'utf8');
-let patched = content;
+// IMPORTANT: This file is restored by scripts/fix-ios-package-swift.js after
+// every \`cap sync ios\` (which overwrites it). Do not edit by hand.
+//
+// Plugin Swift sources are compiled as INLINE targets so that Xcode never needs
+// to download the remote capacitor-swift-pm binary package. Capacitor.xcframework
+// and Cordova.xcframework are vendored in vendor/capacitor-swift-pm/ (committed
+// to git). Only ion-ios-camera + ion-ios-geolocation (small Swift source packages)
+// are fetched remotely.
+let package = Package(
+    name: "CapApp-SPM",
+    platforms: [.iOS(.v15)],
+    products: [
+        .library(
+            name: "CapApp-SPM",
+            targets: ["CapApp-SPM"])
+    ],
+    dependencies: [
+        // LOCAL — XCFrameworks committed to git; no network access needed.
+        .package(name: "capacitor-swift-pm", path: "vendor/capacitor-swift-pm"),
+        // REMOTE — Swift source packages only; fast to clone.
+        .package(url: "https://github.com/ionic-team/ion-ios-camera.git", exact: "1.0.4"),
+        .package(url: "https://github.com/ionic-team/ion-ios-geolocation.git", exact: "2.1.1"),
+    ],
+    targets: [
+        .target(
+            name: "CameraPlugin",
+            dependencies: [
+                .product(name: "Capacitor",    package: "capacitor-swift-pm"),
+                .product(name: "Cordova",      package: "capacitor-swift-pm"),
+                .product(name: "IONCameraLib", package: "ion-ios-camera"),
+            ],
+            path: "symlinks/CapacitorCamera/ios/Sources/CameraPlugin"
+        ),
+        .target(
+            name: "GeolocationPlugin",
+            dependencies: [
+                .product(name: "Capacitor",        package: "capacitor-swift-pm"),
+                .product(name: "Cordova",          package: "capacitor-swift-pm"),
+                .product(name: "IONGeolocationLib", package: "ion-ios-geolocation"),
+            ],
+            path: "symlinks/CapacitorGeolocation/ios/Sources/GeolocationPlugin"
+        ),
+        .target(
+            name: "CameraPreviewPlugin",
+            dependencies: [
+                .product(name: "Capacitor", package: "capacitor-swift-pm"),
+                .product(name: "Cordova",   package: "capacitor-swift-pm"),
+            ],
+            path: "symlinks/CapacitorCommunityCameraPreview/ios/Sources/CameraPreviewPlugin"
+        ),
+        .target(
+            name: "CapApp-SPM",
+            dependencies: [
+                .product(name: "Capacitor", package: "capacitor-swift-pm"),
+                .product(name: "Cordova",   package: "capacitor-swift-pm"),
+                "CameraPlugin",
+                "GeolocationPlugin",
+                "CameraPreviewPlugin",
+            ]
+        )
+    ]
+)
+`;
 
-// a) Plugin paths → symlinks/
-for (const plugin of plugins) {
-  const regex = new RegExp(
-    `\\.package\\(name:\\s*"${plugin.name}",\\s*path:\\s*"[^"]*"\\)`,
-    'g'
-  );
-  patched = patched.replace(
-    regex,
-    `.package(name: "${plugin.name}", path: "symlinks/${plugin.name}")`
-  );
-}
-
-// b) Remote capacitor-swift-pm → local vendor/
-patched = patched.replace(
-  /\.package\(\s*url:\s*"https:\/\/github\.com\/ionic-team\/capacitor-swift-pm\.git"[^)]*\)/g,
-  `.package(name: "capacitor-swift-pm", path: "vendor/capacitor-swift-pm")`
-);
-
-if (patched !== content) {
-  writeFileSync(packageSwiftPath, patched, 'utf8');
-  console.log('[fix-ios] CapApp-SPM/Package.swift patched (symlink paths + local vendor).');
-} else {
-  console.log('[fix-ios] CapApp-SPM/Package.swift already correct.');
-}
-
-// ---------------------------------------------------------------------------
-// Step 4 — Patch each plugin's own Package.swift
-//   Replace the remote capacitor-swift-pm URL with a local relative path.
-//   From inside symlinks/<Name>/ the vendor package is at ../../vendor/capacitor-swift-pm.
-// ---------------------------------------------------------------------------
-for (const plugin of plugins) {
-  const linkPath = resolve(symlinksDir, plugin.name);
-  let realPkgSwift;
-  try {
-    // Follow symlink to real file in node_modules
-    const realDir = realpathSync(linkPath);
-    realPkgSwift  = resolve(realDir, 'Package.swift');
-  } catch {
-    console.warn(`[fix-ios] Could not resolve symlink for ${plugin.name} — skipping plugin patch.`);
-    continue;
-  }
-
-  if (!existsSync(realPkgSwift)) {
-    console.warn(`[fix-ios] ${plugin.name}/Package.swift not found — skipping.`);
-    continue;
-  }
-
-  const pluginContent = readFileSync(realPkgSwift, 'utf8');
-
-  // Replace any remote capacitor-swift-pm reference with our local vendor path.
-  //
-  // We MUST use an ABSOLUTE path here because SPM resolves local package paths
-  // relative to the Package.swift's CANONICAL (real, symlink-resolved) location,
-  // which is deep inside node_modules/.pnpm/... — not relative to the symlink at
-  // CapApp-SPM/symlinks/<Name>/. A relative path would resolve to the wrong place.
-  //
-  // Using the absolute path to vendorPkgDir (computed on this machine by the fix
-  // script) gives SPM a path it can always find. SPM deduplicates local packages by
-  // their resolved absolute path, so CapApp-SPM's relative "vendor/capacitor-swift-pm"
-  // and these absolute paths all collapse to the same identity. ✓
-  const absoluteVendorPath = vendorPkgDir;
-  const patchedPlugin = pluginContent.replace(
-    /\.package\(\s*url:\s*"https:\/\/github\.com\/ionic-team\/capacitor-swift-pm\.git"[^)]*\)/g,
-    `.package(name: "capacitor-swift-pm", path: "${absoluteVendorPath}")`
-  );
-
-  if (patchedPlugin !== pluginContent) {
-    writeFileSync(realPkgSwift, patchedPlugin, 'utf8');
-    console.log(`[fix-ios] ${plugin.name}/Package.swift patched (local vendor/capacitor-swift-pm).`);
-  } else {
-    console.log(`[fix-ios] ${plugin.name}/Package.swift already correct or no match.`);
-  }
-}
-
+writeFileSync(packageSwiftPath, PACKAGE_SWIFT, 'utf8');
+console.log('[fix-ios] CapApp-SPM/Package.swift written (inline-target design, local vendor).');
 console.log('[fix-ios] Done.');
