@@ -487,7 +487,7 @@ export function NationalMapView({
         filter: ['has', 'point_count'],
         paint: {
           'circle-color': ['step', ['get', 'point_count'], '#FF8B01', 10, '#FFB347', 30, '#FF6B00'],
-          'circle-radius': ['step', ['get', 'point_count'], 18, 10, 24, 30, 30],
+          'circle-radius': ['step', ['get', 'point_count'], 14, 10, 17, 50, 21, 200, 25, 1000, 29],
           'circle-opacity': 0.9,
           'circle-stroke-width': 2,
           'circle-stroke-color': '#090909',
@@ -514,12 +514,15 @@ export function NationalMapView({
           'circle-color': ['match', ['get', 'status'],
             'operational', '#22c55e',
             'cancelled', '#94a3b8',
-            'permitted', '#eab308',
-            'under_construction', '#eab308',
-            '#FF8B01',
+            'permitted', '#FF8B01',
+            'under_construction', '#FF8B01',
+            'planned', '#3B82F6',
+            'proposed', '#3B82F6',
+            'consultation', '#3B82F6',
+            '#94a3b8',
           ],
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 6, 10, 9],
-          'circle-stroke-width': 2,
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 4, 8, 6, 12, 8],
+          'circle-stroke-width': 1.5,
           'circle-stroke-color': '#090909',
           'circle-opacity': 0.95,
         },
@@ -781,7 +784,7 @@ export function NationalMapView({
 
         {/* Debug badge — build-ID visas för att bekräfta rätt version på iPhone */}
         <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full bg-[#FF8B01] px-4 py-1 text-[11px] font-bold text-[#090909] shadow-lg">
-          TEST 14 · {apiDiag.buildId || 'dev'}
+          TEST 15 · {apiDiag.buildId || 'dev'}
         </div>
 
         {/* Återcentrera-knapp */}

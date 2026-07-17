@@ -172,6 +172,7 @@ export default function PlaceTurbines() {
   const [boundaryEditMode, setBoundaryEditMode] = useState(false);
   const [editableBoundary, setEditableBoundary] = useState<LatLon[]>(() => getActiveBoundary());
   const [boundaryVersion, setBoundaryVersion] = useState(0);
+  const [nationalTurbinesLoading, setNationalTurbinesLoading] = useState(false);
 
   // Initialisera/uppdatera editableBoundary från projektets polygon när
   // editHandoff sätts — antingen vid mount (från localStorage) eller direkt
@@ -182,6 +183,74 @@ export default function PlaceTurbines() {
       setBoundaryVersion((v) => v + 1);
     }
   }, [editHandoff]);
+
+  // Hämta verk för nationella API-projekt (editHandoff.turbines är alltid tom vid öppning
+  // eftersom ApiProjectArea bara innehåller antal, inte koordinater).
+  // Frågar /api/wind/turbines med en bbox runt projektets centrum och filtrerar på
+  // projectAreaId om det matchar — annars används alla verk i bbox som fallback.
+  useEffect(() => {
+    const projectId = editHandoff?.projectId;
+    if (!projectId) return;
+    if ((editHandoff?.turbines?.length ?? 0) > 0) return;
+    const centerLat = editHandoff?.centerLat;
+    const centerLng = editHandoff?.centerLng;
+    if (!centerLat || !centerLng) return;
+
+    let cancelled = false;
+    setNationalTurbinesLoading(true);
+
+    const delta = 0.3; // ≈25 km latitud
+    const minLat = (centerLat - delta).toFixed(5);
+    const maxLat = (centerLat + delta).toFixed(5);
+    const minLng = (centerLng - delta * 2.0).toFixed(5);
+    const maxLng = (centerLng + delta * 2.0).toFixed(5);
+    const url = apiUrl(
+      `/api/wind/turbines?minLat=${minLat}&maxLat=${maxLat}&minLng=${minLng}&maxLng=${maxLng}&limit=200`,
+    );
+
+    console.log("[PlaceTurbines] Hämtar nationella verk", { projectId, centerLat, centerLng });
+
+    fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<{ id: number; lat?: number; lng?: number; projectAreaId?: number | null }[]>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const numId = parseInt(projectId, 10);
+        // Matcha exakt på projectAreaId om möjligt; annars alla verk i bbox
+        const byId = data.filter(
+          (t) => typeof t.lat === "number" && typeof t.lng === "number" && t.projectAreaId === numId,
+        );
+        const filtered =
+          byId.length > 0
+            ? byId
+            : data.filter((t) => typeof t.lat === "number" && typeof t.lng === "number");
+        console.log("[PlaceTurbines] Verk hämtade", {
+          projectId,
+          allFromApi: data.length,
+          byProjectAreaId: byId.length,
+          filtered: filtered.length,
+        });
+        const placed: PlacedTurbine[] = filtered.map((t) => ({
+          id: `nt-${t.id}`,
+          lat: t.lat as number,
+          lon: t.lng as number,
+        }));
+        setTurbines(placed);
+        setCommittedTurbines(placed);
+      })
+      .catch((err) => {
+        console.error("[PlaceTurbines] Kunde inte hämta nationella verk:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setNationalTurbinesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editHandoff?.projectId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [boundarySavedFlash, setBoundarySavedFlash] = useState(false);
   const [currentLatSpan, setCurrentLatSpan] = useState<number>(0.25);
   const [locationContext, setLocationContext] = useState<LocationContext | null>(null);
@@ -472,57 +541,6 @@ export default function PlaceTurbines() {
     );
   }
 
-  // Tomt redigeringsläge — projekt utan detaljerat redigeringsunderlag i appen
-  if (editHandoff && !editHandoff.boundary) {
-    return (
-      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
-        <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3 pt-[max(env(safe-area-inset-top),12px)]">
-          <div>
-            <p className="text-xs font-semibold tracking-wide text-[#FFB347]">REDIGERA PLACERING</p>
-            <p className="text-sm text-white/70">{editHandoff.projectName}</p>
-          </div>
-          <button
-            onClick={() => setShowWelcome(true)}
-            className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/20"
-          >
-            ← Karta
-          </button>
-        </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-8 text-center">
-          <div className="text-5xl">🗺️</div>
-          <div>
-            <p className="text-lg font-semibold text-white">Inget redigeringsunderlag</p>
-            <p className="mt-2 text-sm leading-relaxed text-white/60">
-              {editHandoff.projectName} har ännu inget detaljerat redigeringsunderlag tillgängligt i appen.
-            </p>
-          </div>
-          {/* Diagnostik — synlig för att underlätta felsökning */}
-          <div className="w-full rounded-xl bg-white/5 px-4 py-3 text-left text-xs text-white/40">
-            <p>Projekt-ID: {editHandoff.projectId ?? "–"}</p>
-            <p>Projekt: {editHandoff.projectName}</p>
-            {editHandoff.municipality && <p>Kommun: {editHandoff.municipality}</p>}
-            <p>Gränspunkter: 0</p>
-            <p>Verk (laddade): {editHandoff.turbines.length}</p>
-            <p>
-              Koordinater:{" "}
-              {editHandoff.centerLat != null
-                ? `${editHandoff.centerLat.toFixed(4)}, ${editHandoff.centerLng?.toFixed(4)}`
-                : "–"}
-            </p>
-          </div>
-          <div className="flex w-full flex-col gap-2">
-            <button
-              onClick={() => setShowWelcome(true)}
-              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20"
-            >
-              ← Tillbaka till Sverigekartan
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
 
@@ -588,7 +606,9 @@ export default function PlaceTurbines() {
         >
           🐞 Felsökning (poäng)
         </button>
-        <p className="text-[11px] text-white/40">{turbines.length} verk placerade</p>
+        <p className="text-[11px] text-white/40">
+          {nationalTurbinesLoading ? "Hämtar verk…" : `${turbines.length} verk placerade`}
+        </p>
       </div>
 
       {boundaryEditMode && (

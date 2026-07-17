@@ -1,0 +1,193 @@
+Skicka detta till Replit:
+
+⸻
+
+TEST 15 – förbättra markörerna och fixa att verk försvinner i redigeringsläget
+
+Bra – Sverigekartan fungerar nu i TEST 14 och datan laddas korrekt:
+
+* 3586 projekt
+* 13 738 verk
+* baskartan syns
+* projekt kan öppnas
+
+Nu återstår två tydliga saker.
+
+1. Förbättra projektmarkörerna på Sverigekartan
+
+På låg zoom visas nu väldigt stora orange kluster som täcker stora delar av kartan. Gör dem mindre och mer lättlästa.
+
+Önskat beteende:
+
+* På långt avstånd: små kluster, inte stora bubblor
+* Storleken ska öka försiktigt med antal projekt
+* Högsta storleken ska begränsas tydligt
+* När man zoomar in ska klustren delas upp snabbt i mindre kluster och enskilda projekt
+* Enskilda projekt ska ha små markörer
+
+Färglogik:
+
+* Planerade projekt: blå
+* Pågående/samråd: orange
+* Befintliga/uppförda: grön
+* Avslagna/inte aktuella: grå
+* Fliken “Alla” ska fortfarande visa korrekt statusfärg, inte göra alla orange
+
+Förslag på storlekar:
+
+circle-radius: [
+  "step",
+  ["get", "point_count"],
+  14,
+  10, 17,
+  50, 21,
+  200, 25,
+  1000, 29
+]
+
+Ingen klustermarkör ska bli större än cirka 30 px radie på mobil.
+
+För enskilda projekt:
+
+circle-radius: [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5, 4,
+  8, 6,
+  12, 8
+]
+
+Förbättra också texten i klustren så att exempelvis 2.1k är lätt att läsa utan att cirkeln blir enorm.
+
+Behåll svart tunn kant runt markörerna, men minska kanttjockleken något.
+
+⸻
+
+2. Kritisk bugg: vindkraftverken försvinner i redigeringsverktyget
+
+När man öppnar ett projekt från Sverigekartan, exempelvis Riskebo, visar projektkortet korrekt:
+
+* 7 planerade verk
+
+Men i redigeringsvyn står:
+
+* 0 verk placerade
+* kartan visar inga verk
+
+Det betyder att projektet öppnas korrekt, men att turbindata inte förs vidare eller inte normaliseras till redigeringsverktygets format.
+
+Spåra hela kedjan:
+
+NationalMapView
+→ valt projekt
+→ Open project
+→ navigation/state
+→ PlaceTurbines
+→ turbine data
+→ editor markers
+
+Kontrollera särskilt:
+
+1. Om projektkortet använder turbineCount, men redigeraren kräver en faktisk array med koordinater.
+2. Om API-projektets verk ligger i:
+    * turbines
+    * windTurbines
+    * positions
+    * coordinates
+    * features
+    * eller måste hämtas från ett separat endpoint.
+3. Om projekt-ID:t som skickas till redigeraren är rätt ID.
+4. Om redigeraren bara läser lokala Katrineholm-projekt och därför saknar stöd för nationella API-projekt.
+5. Om lat/lng normaliseras fel.
+6. Om verk filtreras bort eftersom status, ID eller koordinater har annan struktur.
+7. Om navigationen skickar projektets sammanfattning men inte full projektdata.
+
+Lägg in diagnostik vid öppning:
+
+console.log("Opening national project", {
+  projectId,
+  projectName,
+  projectTurbineCount,
+  turbinesArrayLength,
+  rawProject
+});
+
+Och i redigeringsverktyget:
+
+console.log("Editor project input", {
+  projectId,
+  source,
+  turbinesReceived,
+  validTurbines,
+  invalidTurbines
+});
+
+Krav på lösning
+
+När ett projekt från Sverigekartan öppnas ska redigeringsverktyget:
+
+* visa samtliga befintliga/planerade verk direkt
+* centrera kartan över projektets verk
+* visa rätt antal, exempelvis 7 verk placerade
+* låta användaren flytta, ta bort och lägga till verk
+* behålla samma verk vid växling mellan “Kartan”, “Lokala projekt” och “AR”
+* inte nollställa projektet vid navigation eller rerender
+* inte blanda ihop projektets verkliga verk med en tom lokal draft
+
+Om API:t bara innehåller antal verk men inte koordinater måste appen:
+
+1. hämta fullständig turbindata från rätt endpoint innan redigeraren öppnas, eller
+2. tydligt visa att exakta koordinater saknas
+
+Den får inte visa 0 verk placerade när projektkortet samtidigt säger 7 verk.
+
+⸻
+
+3. Separera nationella projekt från lokala sparade projekt
+
+Redigeraren verkar idag vara byggd främst för lokala/Katrineholm-projekt.
+
+Inför en tydlig källa:
+
+source: "national" | "local"
+
+För nationella projekt ska redigeraren initialiseras från API-data.
+
+För lokala projekt ska den initialiseras från lokal sparad data.
+
+De två källorna får inte skriva över varandra eller falla tillbaka till en tom array.
+
+Exempel:
+
+const initialTurbines =
+  source === "national"
+    ? normalizedNationalProject.turbines
+    : localProject.turbines;
+
+⸻
+
+4. Verifiering före TEST 15
+
+Verifiera på riktig iPhone:
+
+1. Sverigekartan visar små och balanserade kluster.
+2. Planerade projekt är blå.
+3. Pågående projekt är orange.
+4. Befintliga är gröna.
+5. “Alla” visar blandade statusfärger.
+6. Riskebo visar 7 verk i projektkortet.
+7. Riskebo visar samma 7 verk i redigeringsverktyget.
+8. Verkens markörer syns på kartan.
+9. Verk kan flyttas.
+10. Verk kan tas bort.
+11. Verk kan läggas till.
+12. Återställ återför ursprungliga API-koordinater.
+13. Spara placering sparar en separat redigerad version utan att förstöra originaldata.
+14. Katrineholmsvyn och AR-vyn fungerar oförändrat.
+
+Skapa därefter TEST 15 med nytt build-ID.
+
+Gör inga fler kosmetiska ändringar utöver markörstorlek och statusfärg innan turbindatan fungerar hela vägen in i redigeringsverktyget.
+
+⸻
