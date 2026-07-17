@@ -1051,37 +1051,64 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
     }
 
     // Produktkrav (juli 2026, "vakthund mot total sensortystnad"): den
-    // BEFINTLIGA frys-/gyro-fallback-logiken i `handleOrientation` (se
-    // `HEADING_STALE_MS`) upptäcker bara att GIRVÄRDET står still MEDAN
-    // event fortfarande strömmar in — den har ingen möjlighet att upptäcka
-    // att webbläsaren/OS:et helt har SLUTAT leverera event alls (ett känt,
-    // sporadiskt fel på bl.a. Android-webbläsare efter skärmlåsning/
-    // bakgrund-förgrund-växlingar). I produktion visade sig just detta som
-    // "pilen och alla verk fryser helt, trots att FPS/AR-stabilitet
-    // fortsatte visa bra värden" — eftersom `headingStabilityRef`/
-    // `pitchStabilityRef` bara muteras INIFRÅN ett event och därför frös
-    // kvar på sitt SENASTE (goda) värde istället för att spegla att inga
-    // nya avläsningar längre kommer in. Denna vakthund kollar
-    // `lastOrientationEventAtRef` oberoende av om något event kommer in,
-    // och när tystnaden varat längre än `ORIENTATION_STALLED_MS`: (1)
-    // tvingar ner stabilitetsmåtten så `useArTrackingStability` genast ser
-    // en genuin försämring (istället för ett falskt bra läge), och (2)
-    // river och återskapar lyssnarna — ett känt, ofarligt sätt att väcka
-    // liv i en "fastnad" sensorpipeline på flera Android-webbläsare.
+    // befintliga frys-/fallback-logiken i `handleOrientation` kan inte
+    // upptäcka att webbläsaren/OS:et SLUTAT leverera event alls — t.ex.
+    // efter bakgrunds-/förgrundsbyte på iOS (WKWebView). I produktion syntes
+    // det som "pilen och verken fryser helt trots bra FPS". Vakthunden
+    // nedan kollar `lastOrientationEventAtRef` oberoende av event, tvingar
+    // ner stabilitetsmåtten när tystnaden överstiger `ORIENTATION_STALLED_MS`
+    // och försöker återansluta alla sensorlyssnare var 2:e sekund tills
+    // event börjar komma in igen. `visibilitychange`-lyssnaren är ett
+    // komplement för bakgrunds-/förgrundsbyte.
+    //
+    // Hjälpfunktion: koppla bort och återanslut ALLA sensorlyssnare (orientering
+    // + motion) atomärt. Ofarligt att kalla flera gånger — addEventListener
+    // dedupas av webbläsaren om exakt samma funktion+options redan är
+    // registrerad; removeEventListener är ett no-op om lyssnaren inte finns.
+    // Inkluderar `devicemotion` som de tidigare, separata återanslutningarna
+    // saknade — ett gyro som frusit efter bakgrunds-/förgrundsbyte kan ge
+    // felaktigt `gyroConfirmsRealMotion === false` och därmed onödigt lång
+    // utjämningsfördröjning.
+    function reconnectSensors() {
+      window.removeEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
+      window.removeEventListener("deviceorientation", handleOrientation as EventListener, true);
+      window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
+      window.addEventListener("deviceorientation", handleOrientation as EventListener, true);
+      if ("DeviceMotionEvent" in window) {
+        window.removeEventListener("devicemotion", handleMotion as EventListener);
+        window.addEventListener("devicemotion", handleMotion as EventListener);
+      }
+    }
+
+    // Tidsstämpel för senaste återanslutningsförsök — förhindrar att vakthunden
+    // hammrar `reconnectSensors()` varje 400ms-tick utan att ge iOS en fair
+    // chans att svara. Tas bort om lyssnarna återskapas via visibilitychange.
+    let lastReconnectAt = 0;
+
     const watchdog = window.setInterval(() => {
       const lastAt = lastOrientationEventAtRef.current;
       if (lastAt === null) return;
-      const stalled = Date.now() - lastAt > ORIENTATION_STALLED_MS;
-      if (stalled && !orientationStalledRef.current) {
-        orientationStalledRef.current = true;
-        setOrientationStalled(true);
+      const nowMs = Date.now();
+      const stalled = nowMs - lastAt > ORIENTATION_STALLED_MS;
+      if (stalled) {
+        if (!orientationStalledRef.current) {
+          orientationStalledRef.current = true;
+          setOrientationStalled(true);
+        }
+        // Frys ner stabilitetsmåtten direkt — annars fryser de kvar på sitt
+        // senaste goda värde och döljer det verkliga felet för nedströms-
+        // konsumenterna (t.ex. `useArTrackingStability`).
         headingStabilityRef.current = 0;
         pitchStabilityRef.current = 0;
-        window.removeEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
-        window.removeEventListener("deviceorientation", handleOrientation as EventListener, true);
-        window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
-        window.addEventListener("deviceorientation", handleOrientation as EventListener, true);
-      } else if (!stalled && orientationStalledRef.current) {
+        // Försök återansluta var 2:e sekund MEDAN sensortystnaden pågår —
+        // inte bara vid första detekteringen (ett enda försök räcker inte
+        // på iOS, som ibland kräver flera re-registreringar efter ett
+        // bakgrunds-/förgrundsbyte för att börja leverera event igen).
+        if (nowMs - lastReconnectAt >= 2000) {
+          lastReconnectAt = nowMs;
+          reconnectSensors();
+        }
+      } else if (orientationStalledRef.current) {
         orientationStalledRef.current = false;
         setOrientationStalled(false);
       }
@@ -1094,21 +1121,42 @@ export function useDeviceOrientation(enabled: boolean): DeviceOrientationApi {
       if (valuesFrozenRef.current && !stalled) {
         headingStabilityRef.current = 0;
         pitchStabilityRef.current = 0;
-        window.removeEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
-        window.removeEventListener("deviceorientation", handleOrientation as EventListener, true);
-        window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);
-        window.addEventListener("deviceorientation", handleOrientation as EventListener, true);
+        if (nowMs - lastReconnectAt >= 2000) {
+          lastReconnectAt = nowMs;
+          reconnectSensors();
+        }
       }
 
       // Felsökningsfält ("Heading updates/sec", "Last update: Nms") —
       // uppdateras här (var 400:e ms) istället för per event, så det inte
       // triggar en re-render 15-60 gånger/sekund.
       setUpdatesPerSecond(updatesPerSecondRef.current);
-      setLastUpdateAgeMs(lastUpdateAtRef.current === null ? null : Date.now() - lastUpdateAtRef.current);
+      setLastUpdateAgeMs(lastUpdateAtRef.current === null ? null : nowMs - lastUpdateAtRef.current);
     }, ORIENTATION_WATCHDOG_INTERVAL_MS);
+
+    // Bakgrunds-/förgrundsbyte: iOS (WKWebView) slutar leverera
+    // DeviceOrientation- och DeviceMotion-event när appen inte är aktiv.
+    // `visibilitychange` är det tillförlitligaste sättet att fånga "app kom
+    // tillbaka i förgrunden" och återansluta alla sensorlyssnare direkt.
+    // Nollställer även `lastOrientationEventAtRef` (som annars kan ha en
+    // gammal tidsstämpel från precis INNAN bakgrundsbytet) för att ge iOS
+    // upp till `ORIENTATION_STALLED_MS` ms att leverera det allra första
+    // eventet utan att vakthunden ovan omedelbart räknar den perioden som
+    // "stalled" och triggar ett parallellt reconnect-försök.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        reconnectSensors();
+        lastReconnectAt = Date.now();
+        if (lastOrientationEventAtRef.current !== null) {
+          lastOrientationEventAtRef.current = Date.now();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.clearInterval(watchdog);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("orientationchange", updateScreenAngle);
       window.removeEventListener("resize", updateScreenAngle);
       window.removeEventListener("deviceorientationabsolute", handleOrientation as EventListener, true);

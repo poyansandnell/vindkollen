@@ -1,0 +1,93 @@
+Skicka detta till Replit:
+
+⸻
+
+Nu är AR-vyn mycket bättre visuellt, men tre tekniska problem återstår i iOS-versionen. Åtgärda dem utan att ändra den fungerande placeringen, storleken eller utseendet på vindkraftverken.
+
+1. Kameran reagerar för långsamt på ljus och fokus
+
+Kamerabilden är seg när mobilen flyttas mellan mörka och ljusa miljöer. Exponering, vitbalans och skärpa verkar uppdateras för långsamt.
+
+Kontrollera den native iOS-kameran och säkerställ att:
+
+* continuous autofocus används
+* continuous auto exposure används
+* continuous auto white balance används
+* focus point och exposure point uppdateras till mitten av kamerabilden när AR-vyn startas
+* exponering och fokus inte låses efter uppstart
+* kameran inte kör med onödigt låg bildfrekvens eller för låg capture preset
+* kamerans preview inte fryses eller återanvänder gamla bildrutor
+* ändringar endast görs i native iOS-kameralagret och inte påverkar webbversionen
+
+När appen återgår från bakgrunden ska kameran återaktiveras korrekt och återgå till kontinuerlig fokus och exponering.
+
+2. Vindkraftverken fastnar på skärmen
+
+Efter en stund slutade verken följa kompassens riktning. De låg kvar på samma skärmposition och följde med hur mobilen än vreds.
+
+Detta får aldrig ske.
+
+Gå igenom hela sensorflödet för:
+
+* device orientation
+* compass heading
+* motion/device motion
+* requestAnimationFrame
+* app background/foreground
+* komponentens mount/unmount
+* event listeners och subscriptions
+
+Säkerställ att:
+
+* sensordata fortsätter uppdateras hela tiden när AR-vyn är aktiv
+* render-loopen inte kan stoppas av ett React state-fel eller en tappad subscription
+* senaste giltiga heading inte permanent fryser när ett tillfälligt ogiltigt sensorvärde kommer
+* NaN, null, extrema hopp eller låg kompassnoggrannhet inte stoppar framtida uppdateringar
+* sensorlyssnare återstartas när appen blir aktiv igen
+* gamla lyssnare städas bort innan nya skapas
+* det bara finns en aktiv render-loop och en uppsättning sensorlyssnare
+* turbinerna alltid beräknas från aktuell heading, pitch och roll – inte från en gammal skärmposition
+* om sensorerna inte lämnat ett giltigt värde under exempelvis 1–2 sekunder ska systemet automatiskt försöka starta om sensorflödet
+
+Lägg gärna in en diskret intern watchdog, men ingen ny synlig ruta för användaren.
+
+3. Lås skärmrotation under kompasskalibreringen
+
+När iOS visar kompasskalibreringen snurrar fortfarande hela appens gränssnitt mellan stående och liggande läge. Det ska inte ske.
+
+Vindkollen ska använda stående porträttläge i iPhone-appen, särskilt under:
+
+* uppstart
+* behörighetsdialoger
+* kompasskalibrering
+* hela AR-vyn
+
+Gör detta native i iOS-projektet, inte bara med CSS.
+
+Kontrollera bland annat:
+
+* Info.plist
+* UISupportedInterfaceOrientations
+* UISupportedInterfaceOrientations~ipad
+* AppDelegate/SceneDelegate eller aktuell Capacitor-konfiguration
+* eventuell kod som tillåter rotation till landscape
+* att orientation lock redan är aktiv innan kompasskalibreringen startar
+
+För iPhone ska endast portrait tillåtas. iPad får behålla befintligt beteende om det behövs, men ändringen får inte påverka kartans zoomning eller touchfunktioner.
+
+Viktigt
+
+* Ta inte bort kompassvarningen eller riktningspilen.
+* Ändra inte turbinernas nuvarande visuella storlek eller placering.
+* Ändra inte ljudberäkningen.
+* Ändra inte kartvyn.
+* Dölj Native Diagnostics i vanlig produktion efter att felsökningen är klar.
+* Kör typecheck, native build och kontrollera att iOS-projektet fortfarande bygger utan varningar eller fel.
+
+Rapportera efteråt:
+
+1. Grundorsaken till att sensorerna kunde frysa.
+2. Vilka native kamerainställningar som ändrades.
+3. Exakt hur porträttläget låstes.
+4. Vilka filer som ändrades.
+5. Resultatet från typecheck och native build.

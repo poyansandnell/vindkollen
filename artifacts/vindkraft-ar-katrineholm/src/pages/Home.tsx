@@ -1932,8 +1932,8 @@ export default function Home() {
         />
       )}
 
-      {/* Diagnostikpanel — visas automatiskt på native (iOS/Android) */}
-      <NativeDiagnostics />
+      {/* Diagnostikpanel — bara synlig i lokalt dev-läge, ej i producerade byggen */}
+      {import.meta.env.DEV && <NativeDiagnostics />}
     </div>
   );
 }
