@@ -1,0 +1,106 @@
+Jag har 2 ändringar. Visa diff, vänta på OK.
+
+═══════════════════════════════════════════════════════════════════════════════
+BAKGRUND
+═══════════════════════════════════════════════════════════════════════════════
+
+Bugg 12 är ÅTER tillbaka efter V8. Bilder visar att projektkortets wrapper i
+NationalMapView.tsx (rad ~1029) och knappen i projektkortet (📐 Öppna projektet)
+fortfarande klipps av hemindikatorn.
+
+VIKTIGT: Detta är V9, INTE V8. V8 ändrade 16px → 1.5rem. Det räcker inte.
+Vi behöver:
+1. Öka till 2.5rem
+2. Ändra flex-struktur så projektkortet inte längre pushas upp av något
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 1: src/components/NationalMapView.tsx — Bugg 12 ordentlig fix
+═══════════════════════════════════════════════════════════════════════════════
+
+VIKTIGT: Rör ALDRIG V5/V6/V7/V8-fixar (focusNearestId, setFocusNearestId,
+📍-badge, 📐-knappen med disabled-guard, knapptext "Tillbaka till översikten").
+
+───────────────────────────────────────────────────────────────────────────────
+1A: Öka padding på projektkort-wrapper
+───────────────────────────────────────────────────────────────────────────────
+
+Hitta (runt rad 1029):
+
+    <div className="bg-[#090909] px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
+
+Byt till:
+
+    <div className="bg-[#090909] px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-4">
+
+───────────────────────────────────────────────────────────────────────────────
+1B: Säkerställ att nm-viewport inte trycker ner projektkortet
+───────────────────────────────────────────────────────────────────────────────
+
+VIKTIGT: Denna ändring kräver att du INTE bryter flexbox-strukturen. Bara ändra
+nm-viewport-klassen för att begränsa dess höjd så projektkortet alltid syns.
+
+Hitta (runt rad 716, nm-viewport):
+
+    <div className="nm-viewport">
+
+Byt till:
+
+    <div className="nm-viewport" style={{ minHeight: 0 }}>
+
+(OBS: Du kan behöva lägga till `flex: 1 1 0; min-height: 0;` istället om nm-viewport
+redan använder flex.)
+
+───────────────────────────────────────────────────────────────────────────────
+1C: Lägg till bottom-safe-area även på hela sidan
+───────────────────────────────────────────────────────────────────────────────
+
+Hitta (runt rad 690, nm-page wrapper):
+
+    <div className="nm-page">
+
+Byt till:
+
+    <div className="nm-page" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 2: src/components/NationalMapView.tsx — Visa räknaranimation igen
+═══════════════════════════════════════════════════════════════════════════════
+
+V5 hade en räknaranimation ("Laddar projekt... 3587 av 3587") som försvann i V6.
+Lägg tillbaka den under rubriken.
+
+Hitta (runt rad 695, under h1-rubriken):
+
+            <h1 className="text-sm font-bold text-white">
+              {loadState === 'loading'
+                ? 'Laddar projekt…'
+                : loadState === 'bundled-loading-live'
+                  ? `${filteredProjects.length} projekt · hämtar live…`
+                  : `${filteredProjects.length} projekt${turbineTotal > 0 ? ` · ${turbineTotal} verk` : ''}`}
+            </h1>
+
+Lägg till ENDAST OM animatedCount > 0 (behöver animatedCount som redan finns i state):
+
+            {loadState === 'bundled-loading-live' && animatedCount > 0 && animatedCount < turbineTotal && (
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-[#FF8B01] transition-all duration-75"
+                    style={{ width: `${(animatedCount / turbineTotal) * 100}%` }}
+                  />
+                </div>
+                <span className="shrink-0 tabular-nums text-[10px] text-[#FFB347]">
+                  {animatedCount.toLocaleString('sv-SE')} verk
+                </span>
+              </div>
+            )}
+
+═══════════════════════════════════════════════════════════════════════════════
+EFTER ÄNDRINGAR
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Visa diff för båda ändringarna
+2. Kör typecheck
+3. Rör inga andra filer
+4. Bygg INTE om
+5. Vänta på mitt OK

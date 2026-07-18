@@ -821,7 +821,7 @@ export function NationalMapView({
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="nm-page">
+    <div className="nm-page" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       {/* Sidhuvud */}
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 pt-[max(env(safe-area-inset-top),12px)]">
         <div>
@@ -839,7 +839,7 @@ export function NationalMapView({
                 : `${filteredProjects.length} projekt${turbineTotal > 0 ? ` · ${turbineTotal} verk` : ''}`}
           </h1>
           {/* Räknaranimation — visas under laddning och strax efter */}
-          {animatedCount > 0 && animatedCount < turbineTotal && (
+          {loadState === 'bundled-loading-live' && animatedCount > 0 && animatedCount < turbineTotal && (
             <div className="mt-0.5 flex items-center gap-1.5">
               <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
                 <div
@@ -879,7 +879,7 @@ export function NationalMapView({
       </div>
 
       {/* MapLibre GL-karta */}
-      <div className="nm-viewport">
+      <div className="nm-viewport" style={{ minHeight: 0 }}>
         {/* Kartbehållare — MapLibre monteras här */}
         <div ref={containerRef} className="nm-canvas" />
 
@@ -1023,7 +1023,7 @@ export function NationalMapView({
       </div>
 
       {/* Projektkort */}
-      <div className="bg-[#090909] px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
+      <div className="bg-[#090909] px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-4">
         {selectedProject ? (
           // Bugg 10: stopPropagation förhindrar att kart-klick utanför kortet
           // av misstag stänger selectedProject MEDAN användaren trycker på knappen.
