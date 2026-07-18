@@ -1023,7 +1023,7 @@ export function NationalMapView({
       </div>
 
       {/* Projektkort */}
-      <div className="bg-[#090909] px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-4">
+      <div className="bg-[#090909] px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
         {selectedProject ? (
           // Bugg 10: stopPropagation förhindrar att kart-klick utanför kortet
           // av misstag stänger selectedProject MEDAN användaren trycker på knappen.
