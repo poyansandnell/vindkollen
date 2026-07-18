@@ -1,0 +1,136 @@
+Bra idé — jag dyker först ner i MyProjects och några av de andra potentiella problemen så vi får med allt i en enda körning.Nu har jag hela bilden. Här är **allt** du ska klistra in i Replit Agent — både de bekräftade buggfixarna och de extra förbättringarna jag hittat vid genomgången:
+
+---
+
+```
+I repot artifacts/vindkraft-ar-katrineholm, gör följande 6 ändringar:
+
+═══════════════════════════════════════════════════
+ÄNDRING 1 — capacitor.config.ts (rad 10)
+═══════════════════════════════════════════════════
+Ändra:
+    contentInset: "always",
+Till:
+    contentInset: "automatic",
+
+Orsak: "always" gör att WKWebView lägger på egna insets utöver de CSS redan hanterar med env(safe-area-inset-*). Dubbelkompensation → layout hoppar.
+
+═══════════════════════════════════════════════════
+ÄNDRING 2 — index.html (rad 5)
+═══════════════════════════════════════════════════
+Ändra viewport-meta från:
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+Till:
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+
+Orsak: Utan interactive-widget=resizes-content trycker iOS-tangentbordet upp hela layouten istället för att storleksanpassa den.
+
+═══════════════════════════════════════════════════
+ÄNDRING 3 — src/index.css (efter rad 316, inuti body-blocket)
+═══════════════════════════════════════════════════
+Efter raden `overscroll-behavior: none;` inuti body-blocket, lägg till:
+    /* Förhindrar 300 ms klickfördröjning och dubbelklickszoom */
+    touch-action: manipulation;
+    /* Förhindrar oavsiktlig textmarkering vid svep/tryck */
+    -webkit-user-select: none;
+    user-select: none;
+
+Orsak: touch-action: manipulation eliminerar 300 ms tap-fördröjning och dubbelklickszoom som kan trigga layoutskiften. user-select: none stoppar iOS textmarkerings-Loupe från att rubba layouten.
+
+═══════════════════════════════════════════════════
+ÄNDRING 4 — src/pages/PlaceTurbines.tsx (runt rad 608–654)
+═══════════════════════════════════════════════════
+Inuti onEnterEditor-callbacken, ersätt hela if (isNative()) { ... } else { ... }-blocket med EN gemensam path. 
+
+Dvs efter raden som slutar med `return [];` och `})();` — där det nu står:
+
+    if (isNative()) {
+      try {
+        localStorage.setItem(EDIT_HANDOFF_KEY, JSON.stringify({ ... }));
+      } catch { }
+      sessionStorage.setItem("vindkollen:placeraEditorDirect", "1");
+      window.location.hash = "/";
+      setTimeout(() => { window.location.hash = "/placera"; }, 80);
+    } else {
+      setEditHandoff({ ... });
+      setTurbines(preloadedTurbines);
+      setCommittedTurbines(preloadedTurbines);
+      setShowWelcome(false);
+    }
+
+Ersätt ALLT detta med:
+
+    setEditHandoff({
+      projectId: String(project.id),
+      projectName: project.name,
+      municipality: project.kommun ?? undefined,
+      turbines: preloadedTurbines,
+      centerLat: project.centerLat ?? null,
+      centerLng: project.centerLng ?? null,
+      boundary,
+    });
+    setTurbines(preloadedTurbines);
+    setCommittedTurbines(preloadedTurbines);
+    setShowWelcome(false);
+
+OBS: Den avslutande `}}` (stänger onEnterEditor + NationalMapView) ska vara kvar EFTER detta block. Ta inte bort den.
+
+Orsak: Hash-bounce (#/ → #/placera med 80ms timeout) var opålitligt i WKWebView — hashändelser koalesceras eller tappas, redigeringsvyn öppnas aldrig. React state fungerar pålitligt på alla plattformar.
+
+═══════════════════════════════════════════════════
+ÄNDRING 5 — src/pages/Home.tsx (rad 2051–2063)
+═══════════════════════════════════════════════════
+Hitta "Visa karta"-knappen i menyn (runt rad 2051). Ersätt hela onClick med ett anrop till openPlaceraEditor() från capacitorBridge:
+
+Ändra:
+    onClick={() => {
+      sessionStorage.setItem("vindkollen:placeraEditorDirect", "1");
+      if (isNative()) {
+        void stopNativeCameraPreview();
+        window.location.hash = "/placera";
+      } else {
+        navigate("/placera");
+      }
+      setShowMenu(false);
+    }}
+
+Till:
+    onClick={() => {
+      openPlaceraEditor();
+      setShowMenu(false);
+    }}
+
+Se till att openPlaceraEditor är importerad överst i filen (från "@/lib/capacitorBridge"). Om den inte finns där, lägg till den i import-raden som redan importerar från capacitorBridge.
+
+Orsak: Duplicerad navigationslogik. capacitorBridge.ts har redan en centraliserad openPlaceraEditor() som gör exakt samma sak. Att ha två kopior ökar risken att de glider isär vid framtida ändringar.
+
+═══════════════════════════════════════════════════
+ÄNDRING 6 — src/pages/MyProjects.tsx (rad 147)
+═══════════════════════════════════════════════════
+Ändra rot-divens className från:
+    <div className="min-h-screen bg-[#090909] text-white">
+Till:
+    <div className="min-h-screen bg-[#090909] text-white pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+
+Orsak: Sidan saknar safe-area-padding. På iPhone med notch/dynamic island hamnar innehållet under statusfältet och hem-indikatorn. Alla andra vyer i appen har redan safe-area-hantering.
+
+═══════════════════════════════════════════════════
+EFTER ALLA ÄNDRINGAR
+═══════════════════════════════════════════════════
+Kör i terminalen:
+cd artifacts/vindkraft-ar-katrineholm && pnpm native:build && pnpm native:sync && pnpm native:ios
+
+Det bygger native-bundlen, synkar med Capacitor och öppnar Xcode. Välj din iPhone och tryck ▶ Run.
+
+═══════════════════════════════════════════════════
+SAMMANFATTNING AV VAD DETTA LÖSER
+═══════════════════════════════════════════════════
+Ändring 4: "Trycker på projekt i kartan → redigeringsvyn öppnas inte" — FIXAT
+Ändring 1+2+3: "Appen hoppar/anpassar sig inte till iPhone" — FIXAT
+Ändring 5: Duplicerad kod borttagen, förebygger framtida buggar
+Ändring 6: MyProjects-sidan respekterar safe areas (notch/hem-indikator)
+```
+
+---
+
+Klistra in hela blocket ovan i Replit Agent så kör den allt i ett svep. Vill du att jag även tittar på AR-vyn / kameran specifikt?

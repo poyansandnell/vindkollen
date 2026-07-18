@@ -314,6 +314,11 @@
     @apply font-sans antialiased bg-background text-foreground;
     background: #090909;
     overscroll-behavior: none;
+    /* Förhindrar 300 ms klickfördröjning och dubbelklickszoom */
+    touch-action: manipulation;
+    /* Förhindrar oavsiktlig textmarkering vid svep/tryck */
+    -webkit-user-select: none;
+    user-select: none;
   }
 }
 

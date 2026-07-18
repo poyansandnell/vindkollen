@@ -44,6 +44,7 @@ import {
   captureNativeCameraPhoto,
   isNative,
   lockPortraitOrientation,
+  openPlaceraEditor,
   openSverigekartan,
   requestAllPermissionsSequentially,
   stopNativeCameraPreview,
@@ -2050,16 +2051,7 @@ export default function Home() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => {
-                      // Sätt direktflagga (hoppar nationell projektkarta)
-                      sessionStorage.setItem("vindkollen:placeraEditorDirect", "1");
-                      if (isNative()) {
-                        // Native använder hash-routing; stoppa kameran explicit
-                        void stopNativeCameraPreview();
-                        window.location.hash = "/placera";
-                      } else {
-                        // Webb använder path-routing — wouter navigate
-                        navigate("/placera");
-                      }
+                      openPlaceraEditor();
                       setShowMenu(false);
                     }}
                     className="flex-1 rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"

@@ -144,7 +144,7 @@ export default function MyProjects() {
   }
 
   return (
-    <div className="min-h-screen bg-[#090909] text-white">
+    <div className="min-h-screen bg-[#090909] text-white pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       <div className="mx-auto max-w-2xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between">
           <button

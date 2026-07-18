@@ -607,51 +607,18 @@ export default function PlaceTurbines() {
             return [];
           })();
 
-          if (isNative()) {
-            // ── Native-path ────────────────────────────────────────────────────
-            // Problemet: vi är redan monterade vid #/placera (openSverigekartan()
-            // navigerade hit). Att sätta window.location.hash = "/placera" igen
-            // är en no-op — ingen hashchange, ingen omountering, inget nytt
-            // useState-initialiseringsanrop, setShowWelcome(false) fungerar inte
-            // alltid tillförlitligt i WKWebView under dessa förhållanden.
-            //
-            // Lösning: spara handoff till localStorage (precis som karta-appen
-            // gör via EDIT_HANDOFF_KEY), sätt direkteditor-flaggan, och bounca
-            // hash via "/" → "/placera" för att garantera en färsk mount där
-            // consumeEditHandoff() + consumeDirectEditorFlag() kan köras.
-            try {
-              localStorage.setItem(EDIT_HANDOFF_KEY, JSON.stringify({
-                projectId: String(project.id),
-                projectName: project.name,
-                municipality: project.kommun ?? undefined,
-                turbines: preloadedTurbines,
-                centerLat: project.centerLat ?? null,
-                centerLng: project.centerLng ?? null,
-                boundary: boundary ?? null,
-                savedAt: Date.now(),
-              }));
-            } catch { /* localStorage kan vara blockerat */ }
-            sessionStorage.setItem("vindkollen:placeraEditorDirect", "1");
-            // Bounce: #/ → #/placera garanterar hashchange och färsk mount
-            window.location.hash = "/";
-            setTimeout(() => { window.location.hash = "/placera"; }, 80);
-          } else {
-            // ── Webb-path ──────────────────────────────────────────────────────
-            // På webben fungerar setState-uppdatering pålitligt — ingen bounce
-            // behövs. Wouter path-routing hanterar /placera korrekt.
-            setEditHandoff({
-              projectId: String(project.id),
-              projectName: project.name,
-              municipality: project.kommun ?? undefined,
-              turbines: preloadedTurbines,
-              centerLat: project.centerLat ?? null,
-              centerLng: project.centerLng ?? null,
-              boundary,
-            });
-            setTurbines(preloadedTurbines);
-            setCommittedTurbines(preloadedTurbines);
-            setShowWelcome(false);
-          }
+          setEditHandoff({
+            projectId: String(project.id),
+            projectName: project.name,
+            municipality: project.kommun ?? undefined,
+            turbines: preloadedTurbines,
+            centerLat: project.centerLat ?? null,
+            centerLng: project.centerLng ?? null,
+            boundary,
+          });
+          setTurbines(preloadedTurbines);
+          setCommittedTurbines(preloadedTurbines);
+          setShowWelcome(false);
         }}
         onBack={() => navigate("/")}
       />
