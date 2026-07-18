@@ -1,0 +1,308 @@
+Jag har exakt 4 ändringar. Applicera ALLA exakt som beskrivet. Visa diff, vänta på OK.
+
+═══════════════════════════════════════════════════════════════════════════════
+BAKGRUND
+═══════════════════════════════════════════════════════════════════════════════
+
+V11 tog bort Katrineholm-låset i NationalMapView — knappen "📐 Öppna projektet"
+visas nu för alla projekt. MEN: handleEnterEditorDirect i PlaceTurbines.tsx
+ger fortfarande bara DEFAULT_TURBINES till project.id === 10001. Alla andra
+projekt får preloadedTurbines = [] (tom karta). API-fetchen hittar sällan mer
+än 0–1 verk matchade på projectAreaId.
+
+V12 gör redigeraren generisk: ALLA projekt får ett automatiskt genererat rutnät
+av turbiner baserat på turbineCountPlannedMin + centerLat/centerLng.
+Katrineholm (id=10001) behåller sina exakta DEFAULT_TURBINES.
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 1: NY FIL — src/lib/projectGridLayout.ts
+═══════════════════════════════════════════════════════════════════════════════
+
+Skapa en NY fil src/lib/projectGridLayout.ts med exakt detta innehåll:
+
+/**
+ * Genererar ett automatiskt rutnät av vindkraftverk inom ett projektområde.
+ *
+ * Används som default när redigeraren öppnas för ett projekt som saknar
+ * fördefinierade turbinkoordinater (alla projekt utom Katrineholm/Ericsberg).
+ */
+
+import type { PlacedTurbine } from "./placementScoring";
+
+export interface LatLon {
+  lat: number;
+  lon: number;
+}
+
+const METERS_PER_DEG_LAT = 111_320;
+const TURBINE_SPACING_M = 500;
+
+function pointInPolygon(lat: number, lon: number, polygon: LatLon[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lon, yi = polygon[i].lat;
+    const xj = polygon[j].lon, yj = polygon[j].lat;
+    if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function seededRandom(seed: number): () => number {
+  let s = seed;
+  return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+}
+
+export function generateProjectGrid(
+  centerLat: number,
+  centerLng: number,
+  turbineCount: number,
+  polygon?: LatLon[] | null,
+  seed?: number,
+): PlacedTurbine[] {
+  if (turbineCount <= 0) return [];
+  const rand = seededRandom(seed ?? Math.round(centerLat * 1e6));
+  const cols = Math.max(1, Math.round(Math.sqrt(turbineCount * 1.2)));
+  const rows = Math.max(1, Math.ceil(turbineCount / cols));
+  const spacingLat = TURBINE_SPACING_M / METERS_PER_DEG_LAT;
+  const cosLat = Math.cos((centerLat * Math.PI) / 180);
+  const spacingLng = TURBINE_SPACING_M / (METERS_PER_DEG_LAT * cosLat);
+  const startLat = centerLat - ((rows - 1) / 2) * spacingLat;
+  const startLng = centerLng - ((cols - 1) / 2) * spacingLng;
+  const candidates: { lat: number; lon: number; dist: number }[] = [];
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const lat = startLat + r * spacingLat + (rand() - 0.5) * spacingLat * 0.3;
+      const lng = startLng + c * spacingLng + (rand() - 0.5) * spacingLng * 0.3;
+      if (polygon && polygon.length >= 3 && !pointInPolygon(lat, lng, polygon)) continue;
+      const dLat = (lat - centerLat) * METERS_PER_DEG_LAT;
+      const dLng = (lng - centerLng) * METERS_PER_DEG_LAT * cosLat;
+      candidates.push({ lat, lon: lng, dist: Math.sqrt(dLat * dLat + dLng * dLng) });
+    }
+  }
+
+  candidates.sort((a, b) => a.dist - b.dist);
+  return candidates.slice(0, turbineCount).map((t, i) => ({
+    id: `auto-${i + 1}`,
+    lat: t.lat,
+    lon: t.lon,
+  }));
+}
+
+export function translateDefaultTurbines(
+  centerLat: number,
+  centerLng: number,
+  count: number,
+): PlacedTurbine[] {
+  const template: { dLat: number; dLng: number }[] = [
+    { dLat: 0.0044, dLng: 0.0038 },
+    { dLat: 0.0057, dLng: 0.0181 },
+    { dLat: -0.0112, dLng: 0.0220 },
+    { dLat: 0.0031, dLng: 0.0312 },
+    { dLat: -0.0014, dLng: 0.0408 },
+    { dLat: -0.0086, dLng: 0.0402 },
+    { dLat: -0.0583, dLng: -0.0257 },
+    { dLat: -0.0637, dLng: -0.0508 },
+  ];
+  return template.slice(0, Math.min(count, template.length)).map((t, i) => ({
+    id: `tpl-${i + 1}`,
+    lat: centerLat + t.dLat,
+    lon: centerLng + t.dLng,
+  }));
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 2: src/pages/PlaceTurbines.tsx — Lägg till import
+═══════════════════════════════════════════════════════════════════════════════
+
+Hitta import-blocket högst upp i PlaceTurbines.tsx (runt rad 1–25).
+LÄGG TILL denna rad bland de andra importen:
+
+import { generateProjectGrid, translateDefaultTurbines } from "@/lib/projectGridLayout";
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 3: src/pages/PlaceTurbines.tsx — Ersätt handleEnterEditorDirect
+═══════════════════════════════════════════════════════════════════════════════
+
+Hitta funktionen handleEnterEditorDirect (runt rad 527–555). Den ser ut så här:
+
+  const handleEnterEditorDirect = useCallback((project: ApiProjectArea) => {
+    const boundary = apiPolygonToLatLon(project.polygon ?? null);
+    const isBundledKatrineholm = project.id === 10001;
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';
+    const nativeNoApi = isNative() && !apiBase;
+    const preloadedTurbines = (() => {
+      if (isBundledKatrineholm) return DEFAULT_TURBINES;
+      if (nativeNoApi && project.centerLat && project.centerLng) {
+        return translateTurbinesToCenter(DEFAULT_TURBINES, project.centerLat, project.centerLng);
+      }
+      return [];
+    })();
+    setEditHandoff({ ... });
+    setTurbines(preloadedTurbines);
+    setCommittedTurbines(preloadedTurbines);
+    setShowWelcome(false);
+  }, []);
+
+ERSÄTT HELA funktionen med:
+
+  const handleEnterEditorDirect = useCallback((project: ApiProjectArea) => {
+    const boundary = apiPolygonToLatLon(project.polygon ?? null);
+    const isBundledKatrineholm = project.id === 10001;
+    const turbineCount = project.turbineCountPlannedMin ?? project.turbineCountPlannedMax ?? 8;
+    const hasCoords = typeof project.centerLat === 'number' && typeof project.centerLng === 'number';
+
+    const preloadedTurbines = (() => {
+      if (isBundledKatrineholm) return DEFAULT_TURBINES;
+      if (!hasCoords) return [];
+      if (boundary && boundary.length >= 3) {
+        return generateProjectGrid(project.centerLat!, project.centerLng!, turbineCount, boundary);
+      }
+      if (turbineCount <= 10) {
+        return translateDefaultTurbines(project.centerLat!, project.centerLng!, turbineCount);
+      }
+      return generateProjectGrid(project.centerLat!, project.centerLng!, turbineCount, null);
+    })();
+
+    setEditHandoff({
+      projectId: String(project.id),
+      projectName: project.name,
+      municipality: project.kommun ?? undefined,
+      turbines: preloadedTurbines,
+      centerLat: project.centerLat ?? null,
+      centerLng: project.centerLng ?? null,
+      boundary,
+    });
+    setTurbines(preloadedTurbines);
+    setCommittedTurbines(preloadedTurbines);
+    setShowWelcome(false);
+  }, []);
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 4: src/pages/PlaceTurbines.tsx — Ta bort translateTurbinesToCenter
+═══════════════════════════════════════════════════════════════════════════════
+
+Hitta och TA BORT funktionen translateTurbinesToCenter (runt rad 40–55).
+Hela funktionen (inklusive JSDoc-kommentaren ovanför):
+
+function translateTurbinesToCenter(
+  turbines: PlacedTurbine[],
+  targetLat: number,
+  targetLon: number,
+): PlacedTurbine[] {
+  if (turbines.length === 0) return [];
+  const avgLat = turbines.reduce((s, t) => s + t.lat, 0) / turbines.length;
+  const avgLon = turbines.reduce((s, t) => s + t.lon, 0) / turbines.length;
+  return turbines.map((t) => ({
+    ...t,
+    id: `relocated-${t.id}`,
+    lat: targetLat + (t.lat - avgLat),
+    lon: targetLon + (t.lon - avgLon),
+  }));
+}
+
+Ta bort den helt.
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 5: src/pages/PlaceTurbines.tsx — Förbättra API-fetch useEffect
+═══════════════════════════════════════════════════════════════════════════════
+
+Hitta useEffect som hämtar nationella verk (runt rad 246–295).
+Den har checken:  if ((editHandoff?.turbines?.length ?? 0) > 0) return;
+Problemet: efter V12 har vi ALLTID preloaded turbiner → API-fetchen körs ALDRIG.
+
+ERSÄTT HELA useEffect-blocket (från "// Hämta verk för nationella API-projekt..."
+till sista "}, [editHandoff?.projectId];") med:
+
+  // Hämta verk från API för att förbättra/förfina rutnätet.
+  // Körs ALLTID när vi har editHandoff med centerLat/Lng.
+  useEffect(() => {
+    const projectId = editHandoff?.projectId;
+    if (!projectId) return;
+    const centerLat = editHandoff?.centerLat;
+    const centerLng = editHandoff?.centerLng;
+    if (!centerLat || !centerLng) return;
+
+    let cancelled = false;
+    setNationalTurbinesLoading(true);
+
+    const turbineCount = editHandoff?.turbines?.length ?? 8;
+    const delta = Math.max(0.15, Math.min(0.5, Math.sqrt(turbineCount) * 0.06));
+    const minLat = (centerLat - delta).toFixed(5);
+    const maxLat = (centerLat + delta).toFixed(5);
+    const minLng = (centerLng - delta * 2.0).toFixed(5);
+    const maxLng = (centerLng + delta * 2.0).toFixed(5);
+    const url = apiUrl(
+      `/api/wind/turbines?minLat=${minLat}&maxLat=${maxLat}&minLng=${minLng}&maxLng=${maxLng}&limit=200`,
+    );
+
+    console.log("[PlaceTurbines] Hämtar nationella verk", {
+      projectId, centerLat, centerLng, delta, preloadedCount: editHandoff?.turbines?.length ?? 0,
+    });
+
+    fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<{ id: number; lat?: number; lng?: number; projectAreaId?: number | null }[]>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const numId = parseInt(projectId, 10);
+        const byId = data.filter(
+          (t) => typeof t.lat === "number" && typeof t.lng === "number" && t.projectAreaId === numId,
+        );
+        const useAll = byId.length < 3;
+        const source = useAll ? data : byId;
+        const filtered = source
+          .filter((t) => typeof t.lat === "number" && typeof t.lng === "number")
+          .slice(0, 50);
+
+        console.log("[PlaceTurbines] Verk hämtade", {
+          projectId, allFromApi: data.length, byProjectAreaId: byId.length,
+          usingAllInBbox: useAll, filtered: filtered.length,
+        });
+
+        if (filtered.length === 0) {
+          setNationalTurbinesLoading(false);
+          return; // Behåll preloaded rutnät
+        }
+
+        const placed: PlacedTurbine[] = filtered.map((t) => ({
+          id: `nt-${t.id}`,
+          lat: t.lat as number,
+          lon: t.lng as number,
+        }));
+        setTurbines(placed);
+        setCommittedTurbines(placed);
+        setNationalTurbinesLoading(false);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.warn("[PlaceTurbines] API fail, behåller rutnät:", err);
+          setNationalTurbinesLoading(false);
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [editHandoff?.projectId, editHandoff?.centerLat, editHandoff?.centerLng]);
+
+═══════════════════════════════════════════════════════════════════════════════
+SAMMANFATTNING
+═══════════════════════════════════════════════════════════════════════════════
+
+| Fil | Ändring |
+|-----|---------|
+| src/lib/projectGridLayout.ts | NY — rutnätsgenerator + translateDefaultTurbines |
+| src/pages/PlaceTurbines.tsx | +import, ny handleEnterEditorDirect, bort translateTurbinesToCenter, ny API-fetch |
+
+═══════════════════════════════════════════════════════════════════════════════
+EFTER ÄNDRINGAR
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Visa diff för ALLA ändrade filer
+2. Kör typecheck (tsc --noEmit eller pnpm typecheck)
+3. Rör INGA andra filer (speciellt inte ARScene, PermissionGate, Home, NationalMapView)
+4. Bygg INTE om — vänta på OK
+5. Committa med: V12: generisk redigerings-editor för alla projekt

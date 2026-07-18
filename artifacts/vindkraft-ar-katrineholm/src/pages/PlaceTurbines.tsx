@@ -20,6 +20,7 @@ import {
   type LatLon,
 } from "@/lib/ericsbergArea";
 import { type ApiProjectArea } from "@/lib/bundledProjects";
+import { generateProjectGrid, translateDefaultTurbines } from "@/lib/projectGridLayout";
 import { NationalMapView } from "@/components/NationalMapView";
 
 const SAVED_KEY = "vindkraft-ar-katrineholm:savedPlacements";
@@ -29,27 +30,6 @@ const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
 // ─── API-typer och hjälpfunktioner för nationellt projektläge ─────────────
 // ApiProjectArea importeras från @/lib/bundledProjects — delas med bundlade projekt.
 
-/**
- * Förflyttar en uppsättning turbiner så att deras geometriska mittpunkt hamnar
- * på (targetLat, targetLon).  Används som fallback på iOS native när API-anrop
- * inte är möjliga (VITE_API_BASE_URL saknas) — ger användaren ett visuellt
- * utgångspunkt att justera istället för en helt tom karta.
- */
-function translateTurbinesToCenter(
-  turbines: PlacedTurbine[],
-  targetLat: number,
-  targetLon: number,
-): PlacedTurbine[] {
-  if (turbines.length === 0) return [];
-  const avgLat = turbines.reduce((s, t) => s + t.lat, 0) / turbines.length;
-  const avgLon = turbines.reduce((s, t) => s + t.lon, 0) / turbines.length;
-  return turbines.map((t) => ({
-    ...t,
-    id: `relocated-${t.id}`,
-    lat: targetLat + (t.lat - avgLat),
-    lon: targetLon + (t.lon - avgLon),
-  }));
-}
 
 /** Konverterar API GeoJSON Polygon/MultiPolygon till LatLon[] för gränseditorn. */
 function apiPolygonToLatLon(polygon: ApiProjectArea["polygon"]): LatLon[] | null {
@@ -241,14 +221,11 @@ export default function PlaceTurbines() {
     }
   }, [editHandoff]);
 
-  // Hämta verk för nationella API-projekt (editHandoff.turbines är alltid tom vid öppning
-  // eftersom ApiProjectArea bara innehåller antal, inte koordinater).
-  // Frågar /api/wind/turbines med en bbox runt projektets centrum och filtrerar på
-  // projectAreaId om det matchar — annars används alla verk i bbox som fallback.
+  // Hämta verk från API för att förbättra/förfina rutnätet.
+  // Körs ALLTID när vi har editHandoff med centerLat/Lng.
   useEffect(() => {
     const projectId = editHandoff?.projectId;
     if (!projectId) return;
-    if ((editHandoff?.turbines?.length ?? 0) > 0) return;
     const centerLat = editHandoff?.centerLat;
     const centerLng = editHandoff?.centerLng;
     if (!centerLat || !centerLng) return;
@@ -256,7 +233,8 @@ export default function PlaceTurbines() {
     let cancelled = false;
     setNationalTurbinesLoading(true);
 
-    const delta = 0.3; // ≈25 km latitud
+    const turbineCount = editHandoff?.turbines?.length ?? 8;
+    const delta = Math.max(0.15, Math.min(0.5, Math.sqrt(turbineCount) * 0.06));
     const minLat = (centerLat - delta).toFixed(5);
     const maxLat = (centerLat + delta).toFixed(5);
     const minLng = (centerLng - delta * 2.0).toFixed(5);
@@ -265,7 +243,9 @@ export default function PlaceTurbines() {
       `/api/wind/turbines?minLat=${minLat}&maxLat=${maxLat}&minLng=${minLng}&maxLng=${maxLng}&limit=200`,
     );
 
-    console.log("[PlaceTurbines] Hämtar nationella verk", { projectId, centerLat, centerLng });
+    console.log("[PlaceTurbines] Hämtar nationella verk", {
+      projectId, centerLat, centerLng, delta, preloadedCount: editHandoff?.turbines?.length ?? 0,
+    });
 
     fetch(url)
       .then((r) => {
@@ -275,41 +255,43 @@ export default function PlaceTurbines() {
       .then((data) => {
         if (cancelled) return;
         const numId = parseInt(projectId, 10);
-        // Matcha exakt på projectAreaId om möjligt; annars alla verk i bbox
         const byId = data.filter(
           (t) => typeof t.lat === "number" && typeof t.lng === "number" && t.projectAreaId === numId,
         );
-        const filtered =
-          byId.length > 0
-            ? byId
-            : data.filter((t) => typeof t.lat === "number" && typeof t.lng === "number");
+        const useAll = byId.length < 3;
+        const source = useAll ? data : byId;
+        const filtered = source
+          .filter((t) => typeof t.lat === "number" && typeof t.lng === "number")
+          .slice(0, 50);
+
         console.log("[PlaceTurbines] Verk hämtade", {
-          projectId,
-          allFromApi: data.length,
-          byProjectAreaId: byId.length,
-          filtered: filtered.length,
+          projectId, allFromApi: data.length, byProjectAreaId: byId.length,
+          usingAllInBbox: useAll, filtered: filtered.length,
         });
+
+        if (filtered.length === 0) {
+          setNationalTurbinesLoading(false);
+          return; // Behåll preloaded rutnät
+        }
+
         const placed: PlacedTurbine[] = filtered.map((t) => ({
           id: `nt-${t.id}`,
           lat: t.lat as number,
           lon: t.lng as number,
         }));
-        if (placed.length > 0) {
-          setTurbines(placed);
-          setCommittedTurbines(placed);
-        }
+        setTurbines(placed);
+        setCommittedTurbines(placed);
+        setNationalTurbinesLoading(false);
       })
       .catch((err) => {
-        console.error("[PlaceTurbines] Kunde inte hämta nationella verk:", err);
-      })
-      .finally(() => {
-        if (!cancelled) setNationalTurbinesLoading(false);
+        if (!cancelled) {
+          console.warn("[PlaceTurbines] API fail, behåller rutnät:", err);
+          setNationalTurbinesLoading(false);
+        }
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [editHandoff?.projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { cancelled = true; };
+  }, [editHandoff?.projectId, editHandoff?.centerLat, editHandoff?.centerLng]);
   const [boundarySavedFlash, setBoundarySavedFlash] = useState(false);
   const [currentLatSpan, setCurrentLatSpan] = useState<number>(0.25);
   const [locationContext, setLocationContext] = useState<LocationContext | null>(null);
@@ -526,21 +508,22 @@ export default function PlaceTurbines() {
   // MÅSTE definieras före if(showWelcome)-returnstatementen (React hooks-regeln).
   const handleEnterEditorDirect = useCallback((project: ApiProjectArea) => {
     const boundary = apiPolygonToLatLon(project.polygon ?? null);
-    // V12: matcha både bundled id=10001 OCH live-API id=32 (samma projekt, olika id-källa)
-    const isBundledKatrineholm =
-      String(project.id) === "10001" || /katrineholm|ericsberg/i.test(project.name);
-    console.info('[PlaceTurbines] handleEnterEditorDirect', {
-      id: project.id, name: project.name, isBundledKatrineholm,
-    });
-    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';
-    const nativeNoApi = isNative() && !apiBase;
+    const isBundledKatrineholm = project.id === 10001;
+    const turbineCount = project.turbineCountPlannedMin ?? project.turbineCountPlannedMax ?? 8;
+    const hasCoords = typeof project.centerLat === 'number' && typeof project.centerLng === 'number';
+
     const preloadedTurbines = (() => {
       if (isBundledKatrineholm) return DEFAULT_TURBINES;
-      if (nativeNoApi && project.centerLat && project.centerLng) {
-        return translateTurbinesToCenter(DEFAULT_TURBINES, project.centerLat, project.centerLng);
+      if (!hasCoords) return [];
+      if (boundary && boundary.length >= 3) {
+        return generateProjectGrid(project.centerLat!, project.centerLng!, turbineCount, boundary);
       }
-      return [];
+      if (turbineCount <= 10) {
+        return translateDefaultTurbines(project.centerLat!, project.centerLng!, turbineCount);
+      }
+      return generateProjectGrid(project.centerLat!, project.centerLng!, turbineCount, null);
     })();
+
     setEditHandoff({
       projectId: String(project.id),
       projectName: project.name,
@@ -553,7 +536,7 @@ export default function PlaceTurbines() {
     setTurbines(preloadedTurbines);
     setCommittedTurbines(preloadedTurbines);
     setShowWelcome(false);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleVertexAdd = useCallback((lat: number, lon: number) => {
     setEditableBoundary((prev) => {
