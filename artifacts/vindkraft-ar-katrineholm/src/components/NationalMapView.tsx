@@ -605,9 +605,14 @@ export function NationalMapView({
             'consultation', '#3B82F6',
             '#94a3b8',
           ],
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.5, 7, 4, 10, 6],
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            4, 6,
+            8, 8,
+            12, 10,
+          ],
           'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#090909',
+          'circle-stroke-color': '#ffffff',
           'circle-opacity': 0.95,
         },
       });
@@ -814,14 +819,15 @@ export function NationalMapView({
   useEffect(() => {
     if (!selectedProject) return;
     const updated = projects.find(p => String(p.id) === String(selectedProject.id));
-    if (!updated) setSelectedProject(null);
-    else if (updated !== selectedProject) setSelectedProject(updated);
+    // Behåll selectedProject även om det inte finns i uppdaterad lista —
+    // undviker att knappen "📐 Öppna projektet" försvinner efter 1 sek.
+    if (updated && updated !== selectedProject) setSelectedProject(updated);
   }, [projects]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="nm-page" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <div className="nm-page pb-[max(env(safe-area-inset-bottom),1rem)]">
       {/* Sidhuvud */}
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 pt-[max(env(safe-area-inset-top),12px)]">
         <div>
