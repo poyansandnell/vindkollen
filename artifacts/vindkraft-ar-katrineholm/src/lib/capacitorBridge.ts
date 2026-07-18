@@ -86,6 +86,23 @@ export function openPlaceraEditor(): void {
   window.location.hash = "/placera";
 }
 
+/**
+ * Öppnar den NATIVE PlaceTurbines-vyn (med MapLibre-karta och V5-fokus-flagga)
+ * istället för att öppna SFSafariViewController mot webbsidan.
+ *
+ * - Sätter båda flaggorna: focusNearest (för 📍-badge) och placeraFresh (för mount).
+ * - Stoppar native kamerapreview om vi är i native.
+ * - Navigerar till /placera.
+ */
+export async function openPlaceraWithFocus(): Promise<void> {
+  sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
+  sessionStorage.setItem("vindkollen:placeraFresh", "1");
+  if (isNative()) {
+    void stopNativeCameraPreview();
+  }
+  window.location.hash = "/placera";
+}
+
 // ---------------------------------------------------------------------------
 // Kamera — native camera preview (CameraPreview plugin)
 // ---------------------------------------------------------------------------

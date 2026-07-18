@@ -1,0 +1,98 @@
+Jag har exakt 2 ändringar. Applicera exakt som beskrivet. Bygg INTE om, visa diff,
+vänta på OK innan commit.
+
+═══════════════════════════════════════════════════════════════════════════════
+BAKGRUND
+═══════════════════════════════════════════════════════════════════════════════
+
+Just nu öppnar B4-knappen i PermissionGate SFSafariViewController med
+vindkollen.com/vindkraft-karta/. Den webbsidan är en separat deployment som
+använder Google Maps och inte har V5/V6-fixar.
+
+VI VILL ISTÄLLET att B4 öppnar den NATIVE PlaceTurbines-vyn som har V5+V6
+(MapLibre, focusNearestId, 📍-badge, 2-knappars permission).
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 1: src/lib/capacitorBridge.ts
+═══════════════════════════════════════════════════════════════════════════════
+
+Lägg till en NY funktion (efter openPlaceraEditor-funktionen, runt rad 80):
+
+/**
+ * Öppnar den NATIVE PlaceTurbines-vyn (med MapLibre-karta och V5-fokus-flagga)
+ * istället för att öppna SFSafariViewController mot webbsidan.
+ *
+ * - Sätter båda flaggorna: focusNearest (för 📍-badge) och placeraFresh (för mount).
+ * - Stoppar native kamerapreview om vi är i native.
+ * - Navigerar till /placera.
+ */
+export async function openPlaceraWithFocus(): Promise<void> {
+  sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
+  sessionStorage.setItem("vindkollen:placeraFresh", "1");
+  if (isNative()) {
+    try {
+      const { stopNativeCameraPreview } = await import("@/lib/capacitorBridge");
+      void stopNativeCameraPreview();
+    } catch (err) {
+      console.warn("[Vindkollen] stopNativeCameraPreview misslyckades:", err);
+    }
+  }
+  window.location.hash = "/placera";
+}
+
+NOTERA: Ta bort den inre "import"-raden om stopNativeCameraPreview redan finns
+importerat högst upp i filen. Använd då direkt void stopNativeCameraPreview().
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 2: src/components/PermissionGate.tsx
+═══════════════════════════════════════════════════════════════════════════════
+
+Hitta importen på rad 4:
+
+    import { openSverigekartan } from "@/lib/capacitorBridge";
+
+Byt till:
+
+    import { openPlaceraWithFocus, openSverigekartan } from "@/lib/capacitorBridge";
+
+───────────────────────────────────────────────────────────────────────────────
+
+Hitta B4-knappen (ska vara DEN ENDA kartknappen kvar, med text
+"🗺️ Öppna Sverigekartan – välj projekt"):
+
+            {/* V6: B4 öppnar Sverigekartan med auto-fokus på närmaste projekt */}
+            <button
+              onClick={() => {
+                sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
+                void openSverigekartan();
+              }}
+              disabled={starting}
+              className="w-full rounded-full border border-white/10 bg-white/[0.03] py-3 text-sm font-medium text-white/70 transition hover:bg-white/10 disabled:opacity-60"
+            >
+              🗺️ Öppna Sverigekartan – välj projekt
+            </button>
+
+Byt UT HELA blocket mot:
+
+            {/* V7: B4 öppnar NATIVE PlaceTurbines (med V5-focus + MapLibre), inte webbsidan */}
+            <button
+              onClick={() => {
+                void openPlaceraWithFocus();
+              }}
+              disabled={starting}
+              className="w-full rounded-full border border-white/10 bg-white/[0.03] py-3 text-sm font-medium text-white/70 transition hover:bg-white/10 disabled:opacity-60"
+            >
+              🗺️ Öppna Sverigekartan – välj projekt
+            </button>
+
+VIKTIGT: Behåll exakt samma knapptext, klasser, disabled — bara onClick ändras.
+
+═══════════════════════════════════════════════════════════════════════════════
+EFTER ÄNDRINGAR
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Visa diffen för båda filer
+2. Kör typecheck
+3. Rör inga andra filer
+4. Bygg INTE om
+5. Vänta på mitt OK innan du committar

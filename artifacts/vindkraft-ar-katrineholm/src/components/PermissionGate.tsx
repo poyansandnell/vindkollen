@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
-import { openSverigekartan } from "@/lib/capacitorBridge";
+import { openPlaceraWithFocus, openSverigekartan } from "@/lib/capacitorBridge";
 
 /** Ändra VERSION och BUILD_LABEL inför varje ny native-testbygge. Ta bort inför release. */
 const VERSION = "21";
@@ -129,11 +129,10 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
             >
               {starting ? "Startar…" : "📷 Starta AR"}
             </button>
-            {/* V6: B4 öppnar Sverigekartan med auto-fokus på närmaste projekt */}
+            {/* V7: B4 öppnar NATIVE PlaceTurbines (med V5-focus + MapLibre), inte webbsidan */}
             <button
               onClick={() => {
-                sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
-                void openSverigekartan();
+                void openPlaceraWithFocus();
               }}
               disabled={starting}
               className="w-full rounded-full border border-white/10 bg-white/[0.03] py-3 text-sm font-medium text-white/70 transition hover:bg-white/10 disabled:opacity-60"
