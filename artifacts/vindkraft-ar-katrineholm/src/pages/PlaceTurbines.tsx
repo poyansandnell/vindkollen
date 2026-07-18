@@ -521,6 +521,35 @@ export default function PlaceTurbines() {
     setEditableBoundary((prev) => (prev.length > 3 ? prev.filter((_, i) => i !== index) : prev));
   }, []);
 
+  // Öppna editor direkt från Sverigekartan. Definieras som useCallback eftersom
+  // den skickas som prop till NationalMapView (stabila referensen minskar re-renders).
+  // MÅSTE definieras före if(showWelcome)-returnstatementen (React hooks-regeln).
+  const handleEnterEditorDirect = useCallback((project: ApiProjectArea) => {
+    const boundary = apiPolygonToLatLon(project.polygon ?? null);
+    const isBundledKatrineholm = project.id === 10001;
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';
+    const nativeNoApi = isNative() && !apiBase;
+    const preloadedTurbines = (() => {
+      if (isBundledKatrineholm) return DEFAULT_TURBINES;
+      if (nativeNoApi && project.centerLat && project.centerLng) {
+        return translateTurbinesToCenter(DEFAULT_TURBINES, project.centerLat, project.centerLng);
+      }
+      return [];
+    })();
+    setEditHandoff({
+      projectId: String(project.id),
+      projectName: project.name,
+      municipality: project.kommun ?? undefined,
+      turbines: preloadedTurbines,
+      centerLat: project.centerLat ?? null,
+      centerLng: project.centerLng ?? null,
+      boundary,
+    });
+    setTurbines(preloadedTurbines);
+    setCommittedTurbines(preloadedTurbines);
+    setShowWelcome(false);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleVertexAdd = useCallback((lat: number, lon: number) => {
     setEditableBoundary((prev) => {
       if (prev.length < 3) return [...prev, { lat, lon }];
@@ -589,37 +618,7 @@ export default function PlaceTurbines() {
   if (showWelcome) {
     return (
       <NationalMapView
-        onEnterEditor={(project) => {
-          // Bygg upp editHandoff från det valda API-projektet.
-          // boundary sätts från polygon om tillgänglig (summary-läge ger null →
-          // editableBoundary-effekten ovan används inte; editor startar utan gräns).
-          const boundary = apiPolygonToLatLon(project.polygon ?? null);
-          const isBundledKatrineholm = project.id === 10001;
-          const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';
-          const nativeNoApi = isNative() && !apiBase;
-          // På native utan API-åtkomst: centrera standard-turbinerna vid projektets
-          // koordinater istället för att lämna editorn helt tom.
-          const preloadedTurbines = (() => {
-            if (isBundledKatrineholm) return DEFAULT_TURBINES;
-            if (nativeNoApi && project.centerLat && project.centerLng) {
-              return translateTurbinesToCenter(DEFAULT_TURBINES, project.centerLat, project.centerLng);
-            }
-            return [];
-          })();
-
-          setEditHandoff({
-            projectId: String(project.id),
-            projectName: project.name,
-            municipality: project.kommun ?? undefined,
-            turbines: preloadedTurbines,
-            centerLat: project.centerLat ?? null,
-            centerLng: project.centerLng ?? null,
-            boundary,
-          });
-          setTurbines(preloadedTurbines);
-          setCommittedTurbines(preloadedTurbines);
-          setShowWelcome(false);
-        }}
+        onEnterEditorDirect={handleEnterEditorDirect}
         onBack={() => navigate("/")}
       />
     );

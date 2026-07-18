@@ -220,10 +220,10 @@ const SOURCE_ID = 'projects';
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function NationalMapView({
-  onEnterEditor,
+  onEnterEditorDirect,
   onBack,
 }: {
-  onEnterEditor: (project: ApiProjectArea) => void;
+  onEnterEditorDirect: (project: ApiProjectArea) => void;
   onBack: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -706,24 +706,27 @@ export function NationalMapView({
       setDiag(prev => ({ ...prev, containerW: r.width, containerH: r.height }));
     };
 
+    // Debounsa ResizeObserver med ett rAF-pass för att förhindra feedback-loopar
+    // där map.resize() i sin tur triggar en ny ResizeObserver-callback.
+    let resizeScheduled = false;
     const ro = new ResizeObserver(() => {
-      if (cancelled) return;
-      map.resize();
-      requestAnimationFrame(() => { if (!cancelled) map.resize(); });
-      updateCanvasSize();
-      updateContainerDims();
+      if (cancelled || resizeScheduled) return;
+      resizeScheduled = true;
+      requestAnimationFrame(() => {
+        resizeScheduled = false;
+        if (cancelled) return;
+        map.resize();
+        updateCanvasSize();
+        updateContainerDims();
+      });
     });
     ro.observe(container);
 
+    // Initiell resize direkt vid mount (inga upprepad timeout-kedja behövs).
     map.resize();
-    requestAnimationFrame(() => { if (!cancelled) map.resize(); });
     updateContainerDims();
-    const t1 = setTimeout(() => { if (!cancelled) { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @150ms'); } }, 150);
-    const t2 = setTimeout(() => { if (!cancelled) { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @500ms'); } }, 500);
-    const t3 = setTimeout(() => { if (!cancelled) { map.resize(); updateCanvasSize(); updateContainerDims(); addLog('resize @1500ms'); } }, 1500);
 
     disposers.push(
-      () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); },
       () => { ro.disconnect(); },
       () => { mapReadyRef.current = false; try { map.remove(); } catch {} mapRef.current = null; },
     );
@@ -834,7 +837,7 @@ export function NationalMapView({
         </button>
 
         {/* MapLibre runtime diagnostics — visas endast i dev-builds (import.meta.env.DEV) */}
-        {import.meta.env.DEV && <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-50">
+        {import.meta.env.DEV && <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-50" style={{ maxHeight: diagExpanded ? '42dvh' : '24px', overflow: 'hidden' }}>
         <div className={`nm-diag text-[10px] font-mono text-white/90 ${diagExpanded ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           {/* Header row */}
           <div className="flex items-center justify-between border-b border-white/20 px-2 py-1">
@@ -988,7 +991,7 @@ export function NationalMapView({
               </button>
             </div>
             <button
-              onClick={() => onEnterEditor(selectedProject)}
+              onClick={() => onEnterEditorDirect(selectedProject)}
               className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01]"
               style={{ touchAction: 'manipulation' }}
             >

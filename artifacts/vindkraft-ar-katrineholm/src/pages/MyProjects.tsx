@@ -137,7 +137,7 @@ export default function MyProjects() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#090909] text-white">
+      <div className="flex min-h-screen items-center justify-center bg-[#090909] text-white pb-[env(safe-area-inset-bottom)]">
         <p className="text-white/50">Laddar…</p>
       </div>
     );
