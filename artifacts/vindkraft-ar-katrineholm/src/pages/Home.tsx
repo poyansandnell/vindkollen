@@ -45,7 +45,6 @@ import {
   isNative,
   lockPortraitOrientation,
   openPlaceraEditor,
-  openSverigekartan,
   requestAllPermissionsSequentially,
   stopNativeCameraPreview,
   unlockOrientation,
@@ -1821,7 +1820,14 @@ export default function Home() {
                 </p>
               </div>
               <button
-                onClick={openSverigekartan}
+                onClick={() => {
+                  sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
+                  sessionStorage.setItem("vindkollen:placeraFresh", "1");
+                  if (isNative()) {
+                    void stopNativeCameraPreview();
+                  }
+                  window.location.hash = "/placera";
+                }}
                 className="rounded-full bg-[#FF8B01] px-6 py-3 text-sm font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/30 hover:bg-[#FFB347]"
               >
                 🗺️ Öppna Sverigekartan – välj projekt
@@ -2120,7 +2126,14 @@ export default function Home() {
                   </button>
                 </div>
                 <button
-                  onClick={openSverigekartan}
+                  onClick={() => {
+                    sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
+                    sessionStorage.setItem("vindkollen:placeraFresh", "1");
+                    if (isNative()) {
+                      void stopNativeCameraPreview();
+                    }
+                    window.location.hash = "/placera";
+                  }}
                   className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
                 >
                   🗺️ Sverigekartan – Öppna kartverktyg

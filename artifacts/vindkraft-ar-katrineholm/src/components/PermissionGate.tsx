@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
-import { openPlaceraWithFocus, openSverigekartan } from "@/lib/capacitorBridge";
+import { openPlaceraWithFocus } from "@/lib/capacitorBridge";
 
 /** Ändra VERSION och BUILD_LABEL inför varje ny native-testbygge. Ta bort inför release. */
 const VERSION = "21";

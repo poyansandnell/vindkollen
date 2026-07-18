@@ -40,6 +40,8 @@ export async function openSverigekartan(): Promise<void> {
       // med det inbyggda PlaceTurbines-kartverktyget (ESRI World Imagery).
       console.warn("[Vindkollen] Browser.open misslyckades, faller tillbaka till /placera:", err);
       void stopNativeCameraPreview();
+      // V13: sätt FOKUS-flagga också, så NationalMapView auto-fokuserar på närmaste projekt
+      sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
       sessionStorage.setItem("vindkollen:placeraFresh", "1");
       window.location.hash = "/placera";
     }

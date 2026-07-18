@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { apiUrl } from "@/lib/apiUrl";
-import { consumeDirectEditorFlag, consumeFreshPlaceraFlag, isNative, openSverigekartan } from "@/lib/capacitorBridge";
+import { consumeDirectEditorFlag, consumeFreshPlaceraFlag, isNative } from "@/lib/capacitorBridge";
 import { PlacementMap } from "@/components/PlacementMap";
 import { PlacementScorePanel } from "@/components/PlacementScorePanel";
 import {
@@ -635,14 +635,9 @@ export default function PlaceTurbines() {
           </button>
           <button
             onClick={() => {
-              if (editHandoff) {
-                // Vi är redan på #/placera — setShowWelcome(true) visar NationalMapView
-                // direkt utan att navigera bort, vilket är den enda tillförlitliga
-                // vägen tillbaka på native när hash redan är /placera.
-                setShowWelcome(true);
-              } else {
-                openSverigekartan();
-              }
+              // Vi är redan på #/placera — setShowWelcome(true) visar NationalMapView
+              // direkt utan att navigera bort (tillförlitligt på native).
+              setShowWelcome(true);
             }}
             className="rounded-full bg-white/10 px-4 py-1.5 text-sm text-white hover:bg-white/20"
           >
@@ -886,7 +881,7 @@ export default function PlaceTurbines() {
               🗺️ Vill du gå tillbaka till Sverigekartan?
             </p>
             <button
-              onClick={openSverigekartan}
+              onClick={() => setShowWelcome(true)}
               className="pointer-events-auto shrink-0 rounded-full bg-[#FF8B01] px-4 py-1.5 text-xs font-semibold text-[#090909] hover:bg-[#FFB347]"
             >
               Ja, gå tillbaka
