@@ -29,6 +29,28 @@ const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
 // ─── API-typer och hjälpfunktioner för nationellt projektläge ─────────────
 // ApiProjectArea importeras från @/lib/bundledProjects — delas med bundlade projekt.
 
+/**
+ * Förflyttar en uppsättning turbiner så att deras geometriska mittpunkt hamnar
+ * på (targetLat, targetLon).  Används som fallback på iOS native när API-anrop
+ * inte är möjliga (VITE_API_BASE_URL saknas) — ger användaren ett visuellt
+ * utgångspunkt att justera istället för en helt tom karta.
+ */
+function translateTurbinesToCenter(
+  turbines: PlacedTurbine[],
+  targetLat: number,
+  targetLon: number,
+): PlacedTurbine[] {
+  if (turbines.length === 0) return [];
+  const avgLat = turbines.reduce((s, t) => s + t.lat, 0) / turbines.length;
+  const avgLon = turbines.reduce((s, t) => s + t.lon, 0) / turbines.length;
+  return turbines.map((t) => ({
+    ...t,
+    id: `relocated-${t.id}`,
+    lat: targetLat + (t.lat - avgLat),
+    lon: targetLon + (t.lon - avgLon),
+  }));
+}
+
 /** Konverterar API GeoJSON Polygon/MultiPolygon till LatLon[] för gränseditorn. */
 function apiPolygonToLatLon(polygon: ApiProjectArea["polygon"]): LatLon[] | null {
   if (!polygon?.coordinates) return null;
@@ -576,7 +598,18 @@ export default function PlaceTurbines() {
           // inga API-turbiner — förifyll med DEFAULT_TURBINES (de 29 planerade
           // verken) så att editorn inte öppnas med en tom karta.
           const isBundledKatrineholm = project.id === 10001;
-          const preloadedTurbines = isBundledKatrineholm ? DEFAULT_TURBINES : [];
+          const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';
+          const nativeNoApi = isNative() && !apiBase;
+          // På native utan API-åtkomst: centrera standard-turbinerna vid projektets
+          // koordinater istället för att lämna editorn helt tom. Används som
+          // visuellt utgångspunkt — användaren kan flytta/lägga till/ta bort verk.
+          const preloadedTurbines = (() => {
+            if (isBundledKatrineholm) return DEFAULT_TURBINES;
+            if (nativeNoApi && project.centerLat && project.centerLng) {
+              return translateTurbinesToCenter(DEFAULT_TURBINES, project.centerLat, project.centerLng);
+            }
+            return [];
+          })();
           setEditHandoff({
             projectId: String(project.id),
             projectName: project.name,
