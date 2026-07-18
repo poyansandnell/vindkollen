@@ -1453,17 +1453,13 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // Kamerans riktning styrs helt av enhetens sensorer (gir/pitch/roll),
       // så att verken förblir fast förankrade i verkligheten/horisonten
       // istället för att följa skärmen när telefonen tiltas.
-      // Slerp-interpolation (mjuk körning mot sensorkvaternionen): i stället
-      // för att snäppa direkt interpoleras kameran mjukt varje bildruta,
-      // vilket filtrerar bort residuellt sensorbrus (sub-graders skimmer
-      // vid stilla hållning) utan att påverka respons vid verkliga vridningar.
-      // tau=0.07s → 95% av vägen nått vid ~210ms, omärklig lagg i praktiken.
-      cameraTargetQuatRef.current.copy(quaternionRef.current);
-      {
-        const CAMERA_SLERP_TAU = 0.07;
-        const slerpFactor = dt > 0 ? 1 - Math.exp(-dt / CAMERA_SLERP_TAU) : 1;
-        state.camera.quaternion.slerp(cameraTargetQuatRef.current, slerpFactor);
-      }
+      // V18: Nollställ alltid roll (Z-axeln) — verken ska alltid stå rakt,
+      // oavsett hur telefonen lutar. Behåll yaw (gir, Y-axeln) så man kan
+      // vrida sig runt, och pitch (X-axeln) så man kan titta upp/ner.
+      // Ingen slerp-interpolation — direkt respons, verken följer direkt.
+      const sensorEuler = new THREE.Euler().setFromQuaternion(quaternionRef.current, "YXZ");
+      sensorEuler.z = 0; // nollställ roll
+      state.camera.quaternion.setFromEuler(sensorEuler);
       // Juli 2026-fix (TREDJE kritiska buggrapporten — trolig rotorsak):
       // `matrixWorldInverse` uppdateras normalt bara inuti
       // `WebGLRenderer.render()`, som körs i SLUTET av denna funktion. Utan

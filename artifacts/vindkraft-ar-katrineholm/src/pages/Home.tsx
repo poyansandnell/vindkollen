@@ -1496,7 +1496,11 @@ export default function Home() {
   }, [camera.nativePreview, activeProject]);
 
   return (
-    <div className={`fixed inset-0 overflow-hidden text-white ${camera.nativePreview ? "bg-transparent" : "bg-[#090909]"}`}>
+    <div className={`fixed inset-0 overflow-hidden text-white ${
+      positionOverride !== null ? "bg-black" :
+      camera.nativePreview ? "bg-transparent" :
+      "bg-[#090909]"
+    }`}>
       {!started && (
         <PermissionGate
           onStart={handleStart}
