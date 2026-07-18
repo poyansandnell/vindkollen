@@ -660,9 +660,10 @@ export default function PlaceTurbines() {
               setShowOnboarding(true);
             }}
             className="rounded-full bg-white/10 px-3 py-1.5 text-sm text-white/60 hover:bg-white/20"
-            aria-label="Visa hjälp"
+            aria-label="Starta om guide"
+            title="Starta om introduktionsguiden"
           >
-            ?
+            ↻
           </button>
         </div>
       </div>

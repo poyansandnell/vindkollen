@@ -217,6 +217,44 @@ const SWEDEN_CENTER: [number, number] = [15.5, 62.5];
 const SWEDEN_ZOOM = 4.5;
 const SOURCE_ID = 'projects';
 
+const MAP_VIEW_KEY = "vindkraft:nationalMapView";
+type SavedMapView = { centerLat: number; centerLng: number; zoom: number };
+
+function loadSavedMapView(): SavedMapView | null {
+  try {
+    const raw = localStorage.getItem(MAP_VIEW_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SavedMapView>;
+    if (
+      typeof parsed.centerLat === "number" &&
+      typeof parsed.centerLng === "number" &&
+      typeof parsed.zoom === "number" &&
+      Number.isFinite(parsed.centerLat) &&
+      Number.isFinite(parsed.centerLng) &&
+      Number.isFinite(parsed.zoom) &&
+      parsed.zoom >= 2 && parsed.zoom <= 20 &&
+      parsed.centerLat >= 50 && parsed.centerLat <= 75 &&
+      parsed.centerLng >= 5  && parsed.centerLng <= 35
+    ) {
+      return { centerLat: parsed.centerLat, centerLng: parsed.centerLng, zoom: parsed.zoom };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveMapView(m: maplibregl.Map) {
+  try {
+    const c = m.getCenter();
+    const view: SavedMapView = { centerLat: c.lat, centerLng: c.lng, zoom: m.getZoom() };
+    localStorage.setItem(MAP_VIEW_KEY, JSON.stringify(view));
+    console.log("[NationalMap] sparad vy", view);
+  } catch {
+    // localStorage kan saknas/överskridas — ignora tyst
+  }
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function NationalMapView({
@@ -514,13 +552,23 @@ export function NationalMapView({
       });
 
     // 2. Create map with primary (ESRI satellite) style
+    // Rensa ogiltig sparad vy om JSON är trasigt men nyckeln finns kvar
+    const savedView = loadSavedMapView();
+    if (savedView === null && localStorage.getItem(MAP_VIEW_KEY)) {
+      try { localStorage.removeItem(MAP_VIEW_KEY); } catch {}
+    }
+    const initialCenter: [number, number] = savedView
+      ? [savedView.centerLng, savedView.centerLat]
+      : SWEDEN_CENTER;
+    const initialZoom = savedView ? savedView.zoom : SWEDEN_ZOOM;
+
     let map!: maplibregl.Map;
     try {
       map = new maplibregl.Map({
         container,
         style: MAP_STYLE,
-        center: SWEDEN_CENTER,
-        zoom: SWEDEN_ZOOM,
+        center: initialCenter,
+        zoom: initialZoom,
         minZoom: 3,
         maxZoom: 14,
         attributionControl: false,
@@ -788,6 +836,12 @@ export function NationalMapView({
     map.resize();
     updateContainerDims();
 
+    // Spara kartposition vid varje pan/zoom — återställs vid nästa mount.
+    map.on('moveend', () => {
+      if (cancelled) return;
+      saveMapView(map);
+    });
+
     disposers.push(
       () => { ro.disconnect(); },
       () => { mapReadyRef.current = false; try { map.remove(); } catch {} mapRef.current = null; },
@@ -891,7 +945,10 @@ export function NationalMapView({
 
         {/* Återcentrera-knapp */}
         <button
-          onClick={() => mapRef.current?.flyTo({ center: SWEDEN_CENTER, zoom: SWEDEN_ZOOM })}
+          onClick={() => {
+            mapRef.current?.flyTo({ center: SWEDEN_CENTER, zoom: SWEDEN_ZOOM });
+            try { localStorage.removeItem(MAP_VIEW_KEY); } catch {}
+          }}
           className="absolute right-3 top-10 z-10 h-9 w-9 rounded-full bg-black/60 text-lg text-white shadow-lg backdrop-blur hover:bg-black/80"
           aria-label="Tillbaka till översikten"
           title="Tillbaka till översikten"
