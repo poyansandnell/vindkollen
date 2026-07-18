@@ -1,0 +1,83 @@
+Jag har 1 ändring (stor). Visa diff, vänta på OK.
+
+═══════════════════════════════════════════════════════════════════════════════
+BAKGRUND
+═══════════════════════════════════════════════════════════════════════════════
+
+V11 (name-check) döljer knappen för uppenbart icke-Katrineholm-projekt.
+MEN: även "Katrineholm Vind by Ericsberg" (id=32, från API) kraschar med
+"null is not an object (evaluating 'ut.current.latSpan')".
+
+Logg:
+  "Öppna projektet klickad {"id":32,"name":"Katrineholm Vind by Ericsberg"}"
+  "Verk hämtade {"projectId":"32","allFromApi":122,"byProjectAreaId":1,"filtered":1}"
+  TypeError: null is not an object (evaluating 'ut.current.latSpan')
+
+Root cause: `placeRef` pekar på BUNDLED_PROJECTS-data (id=10001). API:et
+returnerar id=32 för samma projekt. `find(p => p.id === 32)` ger undefined →
+`placeRef.current` är null → krasch.
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 1: src/pages/PlaceTurbines.tsx — Robust placeRef
+═══════════════════════════════════════════════════════════════════════════════
+
+VIKTIGT: Läs filen först. Hitta var placeRef definieras och hur det används.
+Lägg till loggning och fallback.
+
+───────────────────────────────────────────────────────────────────────────────
+1A: Hitta placeRef-deklarationen
+───────────────────────────────────────────────────────────────────────────────
+
+Sök efter "placeRef" eller "useRef" + "BUNDLED" eller liknande. Den ska vara
+någonstans i början av komponenten.
+
+Exempel:
+  const placeRef = useRef<ApiProjectArea | null>(...);
+
+Lägg till en console.log för att se vad den är:
+
+  console.info('[PlaceTurbines] placeRef initial:', placeRef.current);
+
+───────────────────────────────────────────────────────────────────────────────
+1B: Lägg till fallback
+───────────────────────────────────────────────────────────────────────────────
+
+När placeRef.current är null OCH vi har selectedProject, bygg en syntetisk
+placeRef från selectedProject-data.
+
+Hitta den rad där latSpan används (runt index-...:4181 i bygget). Troligen:
+
+  const latSpan = placeRef.current.latSpan ?? ...;
+
+Byt till:
+
+  const latSpan = placeRef.current?.latSpan
+    ?? ((placeRef.current?.centerLat ?? selectedProject?.centerLat ?? 0) * 0.01);
+
+(OBS: anpassa default-värdet efter vad placeRef.current.latSpan normalt är.
+Du kan behöva läsa 2-3 rader runt latSpan-användningen för att se kontext.)
+
+───────────────────────────────────────────────────────────────────────────────
+1C: Hitta ALLA .placeRef.current-användningar
+───────────────────────────────────────────────────────────────────────────────
+
+VIKTIGT: Hitta ALLA `placeRef.current.X`-användningar och wrap varje med
+optional chaining `?.`. Exempel:
+
+  const lngSpan = placeRef.current.lngSpan;
+  → const lngSpan = placeRef.current?.lngSpan;
+
+  if (placeRef.current.centerLat) { ... }
+  → if (placeRef.current?.centerLat) { ... }
+
+Använd sökning: grep "placeRef.current" i filen.
+
+═══════════════════════════════════════════════════════════════════════════════
+EFTER ÄNDRINGAR
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Visa diff
+2. Kör typecheck
+3. Rör inga andra filer
+4. Bygg INTE om
+5. Vänta på mitt OK

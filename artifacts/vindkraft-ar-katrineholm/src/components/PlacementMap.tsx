@@ -585,9 +585,12 @@ export function PlacementMap({
       const [a, b] = [e.touches[0], e.touches[1]];
       const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
       const scale = pinchRef.current.distance / Math.max(distance, 1);
+      // Fånga latSpan-värdet NU (innan rAF) — annars kan handleTouchEnd sätta
+      // pinchRef.current = null innan rAF-callbacken körs → crash "null.latSpan".
+      const startLatSpan = pinchRef.current.latSpan;
       scheduleViewUpdate((v) => ({
         ...v,
-        latSpan: Math.min(Math.max(pinchRef.current!.latSpan * scale, MIN_LAT_SPAN), MAX_LAT_SPAN),
+        latSpan: Math.min(Math.max(startLatSpan * scale, MIN_LAT_SPAN), MAX_LAT_SPAN),
       }));
     }
   }
