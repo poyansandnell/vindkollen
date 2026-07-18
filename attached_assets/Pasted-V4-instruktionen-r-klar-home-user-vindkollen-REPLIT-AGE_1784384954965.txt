@@ -1,0 +1,35 @@
+V4-instruktionen är klar: /home/user/vindkollen/REPLIT_AGENT_V4_IOS_NY_BUGGAR_LIVE_OCH_REDIGERA.md (713 rader, 26 KB).
+
+Sammanfattning av de 4 nya buggarna + lösning
+Bugg 9 — Live-data fungerar inte på iPhone
+
+Orsak: VITE_API_BASE_URL är inte satt → relativa URL:er fungerar inte i Capacitor WKWebView (capacitor://localhost ≠ din server).
+Fix: Sätt VITE_API_BASE_URL=https://<ditt>.replit.app i Replit Secrets + CORS-headers. Förbättrad fel-UI med loggning av latens.
+Bugg 10 — "Öppna projektet"-knappen gör inget
+
+Tre möjliga orsaker: (a) isBundledKatrineholm kollar id === 10001 men bundled id är katrineholm-framat; (b) selectedProject är null vid klick; (c) klick-eventet når inte knappen pga overlay.
+Fix: Loggning för att avgöra vilken, e.stopPropagation() på projektkortet, auto-scroll, rätt id-jämförelse.
+Bugg 11 — B4 "Visa närmaste verk direkt" → krasch/frysning
+
+Det är INTE en krasch. B4 öppnar Katrineholms editor (inte vita kartan som på webben), och "tillbaka till kartan"-knappen öppnar SFSafariViewController/404.
+Fix: Döp om till "🗺️ Öppna Sverigekartan – välj projekt" + ny flagga vindkollen:sverigekartanFocusNearest som auto-fokuserar närmaste projekt i NationalMapView baserat på GPS.
+Bugg 12 — Meny-knappen gömd längst ner
+
+6 sidor (MyProjects, About, Terms, Privacy, Contact, not-found) använder pb-[env(safe-area-inset-bottom)] UTAN max(...)-wrapper → returnerar 0px.
+Fix: Ny utility .safe-bottom-fallback med forcerad minimum-padding 24px (fallback) eller env(...) (riktig iOS).
+Två kärnfrågor om din arkitektur (sida 1)
+Du frågade om "redigerings- och kartsystemet kan vara i samma". Svaret: ja, det kan de, men inte i nuläget utan refactor. NationalMapView (satellit) och PlacementMap (lokal editor) är två separata React-komponenter med två helt olika kartbibliotek (MapLibre GL vs canvas-tiles). Att slå ihop dem till en enhetlig komponent skulle ge:
+
+Sömlös pan/zoom-övergång utan remount
+Verk-pinnar från sverigekartan blir klickbara → öppnar editor
+"Visa kartan" / "Stanna i editorn" behövs inte längre
+Uppskattad refactor: 1-2 veckor (blanda MapLibre + canvas-overlay; eller helt byta till MapLibre för editorn också)
+AR-hinder-detektering (designförslag i avsnitt 5)
+Mest realistiskt utan LiDAR: canvas-baserad estimateOcclusion() som samplar 64×64 px från kameran, beräknar ljushet/färgvariation/blå-andel → heuristik 0..1 för "inomhus-skymd". Implementera som P1 (1-2 dagar), eller vänta på WebXR Depth Module (sent 2026).
+
+Frågor att besvara innan du kör V4 (sida 7)
+Vilken URL har API-servern? (för VITE_API_BASE_URL)
+Har API:n redan CORS?
+B4-knappen: bara ny knapp eller båda?
+AR-hinder-detektering nu eller senare?
+V4 som en release (v21) eller flera mindre commits?

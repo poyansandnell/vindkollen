@@ -526,7 +526,8 @@ export default function PlaceTurbines() {
   // MÅSTE definieras före if(showWelcome)-returnstatementen (React hooks-regeln).
   const handleEnterEditorDirect = useCallback((project: ApiProjectArea) => {
     const boundary = apiPolygonToLatLon(project.polygon ?? null);
-    const isBundledKatrineholm = project.id === 10001;
+    // Bugg 10: jämför som sträng — live-API kan returnera sträng-id, bundled har numeriskt 10001
+    const isBundledKatrineholm = String(project.id) === "10001";
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';
     const nativeNoApi = isNative() && !apiBase;
     const preloadedTurbines = (() => {

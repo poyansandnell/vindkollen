@@ -255,6 +255,50 @@ export function NationalMapView({
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
+  // Bugg 11: Konsumera "sverigekartanFocusNearest"-flaggan som B4-knappen sätter.
+  // Flaggan innebär att NationalMapView ska auto-fokusera närmaste projekt baserat på GPS.
+  // Ref (ej state) — vi vill bara läsa flaggan en gång vid mount, inte trigga en re-render.
+  const focusNearestPendingRef = useRef<boolean>(
+    sessionStorage.getItem("vindkollen:sverigekartanFocusNearest") === "1"
+  );
+  // Konsumera flaggan direkt (mount-tid) så att nästa mount inte fokuserar igen
+  useEffect(() => {
+    if (focusNearestPendingRef.current) {
+      sessionStorage.removeItem("vindkollen:sverigekartanFocusNearest");
+    }
+  }, []);
+  // När projekt och GPS-position finns — välj närmaste och flyg dit
+  useEffect(() => {
+    if (!focusNearestPendingRef.current) return;
+    if (projects.length === 0) return;
+    const loc = userLocation;
+    if (!loc) return;
+
+    // Enkel euklidisk approximation är tillräcklig på dessa avstånd (Sverige ≈ 10°×15°)
+    let nearestProject: ApiProjectArea | null = null;
+    let nearestDist = Infinity;
+    for (const p of projects) {
+      if (typeof p.centerLat !== 'number' || typeof p.centerLng !== 'number') continue;
+      const dlat = p.centerLat - loc.lat;
+      const dlng = p.centerLng - loc.lng;
+      const dist = dlat * dlat + dlng * dlng;
+      if (dist < nearestDist) { nearestDist = dist; nearestProject = p; }
+    }
+    if (!nearestProject) return;
+
+    focusNearestPendingRef.current = false; // kör bara en gång
+    console.info('[NationalMap] Auto-fokuserar närmaste projekt', {
+      id: nearestProject.id, name: nearestProject.name,
+      lat: nearestProject.centerLat, lng: nearestProject.centerLng,
+    });
+    setSelectedProject(nearestProject);
+    mapRef.current?.flyTo({
+      center: [nearestProject.centerLng as number, nearestProject.centerLat as number],
+      zoom: 10,
+      duration: 1200,
+    });
+  }, [projects, userLocation]);
+
   // ── Räknaranimation — räknar snabbt upp verk under laddning ─────────────────
   const [animatedCount, setAnimatedCount] = useState(0);
 
@@ -302,9 +346,13 @@ export function NationalMapView({
     // 2. Hämta live-data
     console.info('[NationalMap] Hämtar projekt', { native, apiBase, url, buildId, bundledCount: bundled.length });
 
+    // Bugg 9: mät latens + timeout så att nätverkshäng inte blockerar UI i evighet
     let httpStatus: number | null = null;
-    fetch(url)
+    const t0 = performance.now();
+    fetch(url, { signal: AbortSignal.timeout(8000) })
       .then(r => {
+        const ms = (performance.now() - t0).toFixed(0);
+        console.info('[NationalMap] API fetch', { ms, status: r.status, url });
         httpStatus = r.status;
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         setApiDiag(prev => ({ ...prev, apiHttpStatus: r.status }));
@@ -329,6 +377,7 @@ export function NationalMapView({
 
         console.info('[NationalMap] Live-data hämtad', {
           url, rawCount, normalizedCount, validCoordsCount, native,
+          ms: (performance.now() - t0).toFixed(0),
         });
         setApiDiag(prev => ({
           ...prev,
@@ -352,20 +401,19 @@ export function NationalMapView({
       })
       .catch((error: unknown) => {
         if (cancelled) return;
+        const ms = (performance.now() - t0).toFixed(0);
         const msg = error instanceof Error ? error.message : String(error);
         console.error('[NationalMap] Projekt-API misslyckades', {
-          url,
-          error,
-          native,
-          httpStatus,
-          apiBase,
+          url, error, native, httpStatus, apiBase, ms,
         });
         setLoadState('live-error');
         setApiDiag(prev => ({
           ...prev,
           apiHttpStatus: httpStatus,
           apiSource: 'error',
-          lastApiError: msg,
+          lastApiError: native && !apiBase
+            ? 'VITE_API_BASE_URL är inte satt i native-bygget'
+            : msg,
         }));
       });
 
@@ -980,7 +1028,9 @@ export function NationalMapView({
       {/* Projektkort */}
       <div className="bg-[#090909] px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-4">
         {selectedProject ? (
-          <div className="rounded-2xl border border-white/10 bg-[#131313] p-4">
+          // Bugg 10: stopPropagation förhindrar att kart-klick utanför kortet
+          // av misstag stänger selectedProject MEDAN användaren trycker på knappen.
+          <div className="rounded-2xl border border-white/10 bg-[#131313] p-4" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-[#FFB347]">
@@ -1030,7 +1080,15 @@ export function NationalMapView({
               </button>
             </div>
             <button
-              onClick={() => onEnterEditorDirect(selectedProject)}
+              onClick={() => {
+                // Bugg 10: logga för att diagnostisera null-state vid klick
+                console.info('[NationalMap] Öppna projektet klickad', {
+                  id: selectedProject?.id,
+                  name: selectedProject?.name,
+                });
+                if (selectedProject) onEnterEditorDirect(selectedProject);
+                else console.warn('[NationalMap] selectedProject är null vid klick');
+              }}
               className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01]"
               style={{ touchAction: 'manipulation' }}
             >
@@ -1048,9 +1106,18 @@ export function NationalMapView({
             ) : (
               <>
                 {loadState === 'live-error' && (
-                  <p className="mb-1 text-[11px] text-yellow-400/90">
-                    ⚠️ Live-data kunde inte hämtas — pilotdataset visas
-                  </p>
+                  <div className="mb-2 rounded-lg border border-yellow-400/30 bg-yellow-500/10 px-3 py-2 text-left text-[11px] text-yellow-100">
+                    <p className="font-semibold">⚠️ Live-data kunde inte hämtas — pilotdataset visas</p>
+                    {apiDiag.lastApiError && (
+                      <p className="mt-1 text-yellow-200/70">Orsak: {apiDiag.lastApiError}</p>
+                    )}
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="mt-1.5 rounded-full bg-yellow-500/20 px-3 py-1 text-[10px] font-semibold text-yellow-100 hover:bg-yellow-500/30"
+                    >
+                      🔄 Försök igen
+                    </button>
+                  </div>
                 )}
                 <p className="text-sm text-white/50">Tryck på ett projekt på kartan</p>
                 <p className="mt-1 text-[10px] text-white/30">

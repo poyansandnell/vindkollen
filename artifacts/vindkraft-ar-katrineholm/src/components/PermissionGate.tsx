@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
-import { openPlaceraEditor, openSverigekartan } from "@/lib/capacitorBridge";
+import { openSverigekartan } from "@/lib/capacitorBridge";
 
 /** Ändra VERSION och BUILD_LABEL inför varje ny native-testbygge. Ta bort inför release. */
 const VERSION = "20";
@@ -136,16 +136,17 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
             >
               🗺️ Sverigekartan – Öppna kartverktyg
             </button>
-            {/* B4: Snabbväg till närmaste-verk-editorn (utan att gå via Sverigekartan) */}
+            {/* Bugg 11: B4 öppnar nu Sverigekartan med auto-fokus på närmaste projekt,
+                istället för att starta Katrineholms-editorn direkt. */}
             <button
               onClick={() => {
-                sessionStorage.setItem("vindkollen:placeraEditorDirect", "1");
-                openPlaceraEditor();
+                sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
+                void openSverigekartan();
               }}
               disabled={starting}
               className="w-full rounded-full border border-white/10 bg-white/[0.03] py-3 text-sm font-medium text-white/70 transition hover:bg-white/10 disabled:opacity-60"
             >
-              🎯 Visa närmaste verk direkt (utan karta)
+              🗺️ Öppna Sverigekartan – välj projekt
             </button>
             <p className="text-center text-[11px] text-white/40">
               Sverigekartan visar alla planerade vindkraftverk i Sverige. Klicka på ett projekt och välj Redigera eller Visa i AR — kräver ingen kamera, GPS eller kompass.
