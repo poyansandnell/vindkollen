@@ -255,30 +255,34 @@ export default function PlaceTurbines() {
       .then((data) => {
         if (cancelled) return;
         const numId = parseInt(projectId, 10);
+
+        // V15: BARA projectAreaId-specifika verk får ersätta preloaded.
+        // Om API:et inte har exakt det projektets verk (byId.length < 3),
+        // BEHÅLL preloaded rutnät/DEFAULT_TURBINES — annars förstör vi
+        // Ericsbergs exakta 8 verk med 33 slumpmässiga från bbox.
         const byId = data.filter(
           (t) => typeof t.lat === "number" && typeof t.lng === "number" && t.projectAreaId === numId,
         );
-        const useAll = byId.length < 3;
-        const source = useAll ? data : byId;
-        const filtered = source
-          .filter((t) => typeof t.lat === "number" && typeof t.lng === "number")
-          .slice(0, 50);
 
         console.log("[PlaceTurbines] Verk hämtade", {
-          projectId, allFromApi: data.length, byProjectAreaId: byId.length,
-          usingAllInBbox: useAll, filtered: filtered.length,
+          projectId,
+          allFromApi: data.length,
+          byProjectAreaId: byId.length,
+          willOverride: byId.length >= 3,
         });
 
-        if (filtered.length === 0) {
+        if (byId.length < 3) {
+          // Inte tillräckligt många projectAreaId-träffar — behåll preloaded
           setNationalTurbinesLoading(false);
-          return; // Behåll preloaded rutnät
+          return;
         }
 
-        const placed: PlacedTurbine[] = filtered.map((t) => ({
+        const placed: PlacedTurbine[] = byId.map((t) => ({
           id: `nt-${t.id}`,
           lat: t.lat as number,
           lon: t.lng as number,
         }));
+
         setTurbines(placed);
         setCommittedTurbines(placed);
         setNationalTurbinesLoading(false);

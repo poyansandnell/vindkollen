@@ -1102,21 +1102,18 @@ export function NationalMapView({
               }}
               disabled={
                 !selectedProject ||
-                !/katrineholm|ericsberg/i.test(selectedProject.name) ||
                 ((selectedProject.turbineCountPlannedMin ?? 0) +
                   (selectedProject.turbineCountPlannedMax ?? 0) === 0)
               }
-              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#FF8B01]"
+              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01] disabled:opacity-60"
               style={{ touchAction: 'manipulation' }}
             >
               {!selectedProject
                 ? '🚫 Inga verk att redigera'
-                : !/katrineholm|ericsberg/i.test(selectedProject.name)
-                  ? '🔒 Endast Katrineholm'
-                  : ((selectedProject.turbineCountPlannedMin ?? 0) +
-                      (selectedProject.turbineCountPlannedMax ?? 0) === 0)
-                    ? '🚫 Inga verk att redigera'
-                    : '📐 Öppna projektet'}
+                : ((selectedProject.turbineCountPlannedMin ?? 0) +
+                    (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+                  ? '🚫 Inga verk att redigera'
+                  : '📐 Öppna projektet'}
             </button>
           </div>
         ) : (
