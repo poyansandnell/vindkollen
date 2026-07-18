@@ -1,0 +1,75 @@
+Jag har 1 ändring. Visa diff, vänta på OK.
+
+═══════════════════════════════════════════════════════════════════════════════
+BAKGRUND
+═══════════════════════════════════════════════════════════════════════════════
+
+V10 (förra fixet) använder id-check `String(selectedProject.id) !== "10001"`.
+MEN: API:et returnerar Katrineholm Vind med id="32" (inte 10001 som bundled data).
+Resultat: Katrineholm Vind-knappen är grå istället för orange.
+
+Logg från din iPhone:
+  "B4 auto-fokus: markerar närmaste projekt {"id":32,"name":"Katrineholm Vind by Ericsberg"}"
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 1: src/components/NationalMapView.tsx — Använd name-check istället för id-check
+═══════════════════════════════════════════════════════════════════════════════
+
+VIKTIGT: Rör ALDRIG V5/V6/V7/V8/V9/V10-fixar. Bara byt ut id-check till name-check.
+
+───────────────────────────────────────────────────────────────────────────────
+1A: Uppdatera disabled-prop
+───────────────────────────────────────────────────────────────────────────────
+
+Hitta (runt rad 1100):
+
+    disabled={
+      !selectedProject ||
+      String(selectedProject.id) !== "10001" ||
+      ((selectedProject.turbineCountPlannedMin ?? 0) +
+        (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+    }
+
+Byt till (name-check istället):
+
+    disabled={
+      !selectedProject ||
+      !/katrineholm|ericsberg/i.test(selectedProject.name) ||
+      ((selectedProject.turbineCountPlannedMin ?? 0) +
+        (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+1B: Uppdatera knapptext
+───────────────────────────────────────────────────────────────────────────────
+
+Hitta (runt rad 1109):
+
+    {!selectedProject
+      ? '🚫 Inga verk att redigera'
+      : String(selectedProject.id) !== "10001"
+        ? '🔒 Endast Katrineholm'
+        : ((selectedProject.turbineCountPlannedMin ?? 0) +
+            (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+          ? '🚫 Inga verk att redigera'
+          : '📐 Öppna projektet'}
+
+Byt till:
+
+    {!selectedProject
+      ? '🚫 Inga verk att redigera'
+      : !/katrineholm|ericsberg/i.test(selectedProject.name)
+        ? '🔒 Endast Katrineholm'
+        : ((selectedProject.turbineCountPlannedMin ?? 0) +
+            (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+          ? '🚫 Inga verk att redigera'
+          : '📐 Öppna projektet'}
+
+═══════════════════════════════════════════════════════════════════════════════
+EFTER ÄNDRINGAR
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Visa diff
+2. Kör typecheck
+3. Rör inga andra filer
+4. Vänta på mitt OK

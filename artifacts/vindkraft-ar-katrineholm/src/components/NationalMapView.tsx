@@ -1096,7 +1096,7 @@ export function NationalMapView({
               }}
               disabled={
                 !selectedProject ||
-                String(selectedProject.id) !== "10001" ||
+                !/katrineholm|ericsberg/i.test(selectedProject.name) ||
                 ((selectedProject.turbineCountPlannedMin ?? 0) +
                   (selectedProject.turbineCountPlannedMax ?? 0) === 0)
               }
@@ -1105,7 +1105,7 @@ export function NationalMapView({
             >
               {!selectedProject
                 ? '🚫 Inga verk att redigera'
-                : String(selectedProject.id) !== "10001"
+                : !/katrineholm|ericsberg/i.test(selectedProject.name)
                   ? '🔒 Endast Katrineholm'
                   : ((selectedProject.turbineCountPlannedMin ?? 0) +
                       (selectedProject.turbineCountPlannedMax ?? 0) === 0)
