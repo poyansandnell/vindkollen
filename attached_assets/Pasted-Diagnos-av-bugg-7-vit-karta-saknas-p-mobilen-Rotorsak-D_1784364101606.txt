@@ -1,0 +1,23 @@
+Diagnos av bugg 7 (vit karta saknas på mobilen)
+Rotorsak: Den vita "vindkollen.com"-kartan finns inte som route i detta repo. Sök i src/App.tsx:
+
+/ (Home/AR), /placera (editor), /mina-projekt, /om, /integritetspolicy, /villkor, /kontakt — klart.
+/vindkraft-karta/ — saknas. Det är en separat Vite-deploy på vindkollen.com (en annan webbsajt).
+openSverigekartan() i src/lib/capacitorBridge.ts rad 21-46 gör på native:
+
+Sätter vindkollen:placeraFresh="1"
+Hashar till /placera → PlaceTurbines mountar med showWelcome=true → renderar <NationalMapView> (som är satellit-edit-kartan med orange pinnar, ESRI World Imagery tiles — bekräftat i src/components/NationalMapView.tsx rad 80).
+På webben: window.location.href = "/vindkraft-karta/" — går till den deployade webbsidan.
+
+Diagnos av bugg 8 (modal-knappar klippta)
+InfoPanel.tsx rad 4: p-6 (24px fast) istället för pb-[max(1.5rem,env(safe-area-inset-bottom))]. iPhone-hemindikatorn är 34px → knapparna hamnar 10px under.
+PhotoMontageModal.tsx rad 61: padding-bottom redan safe-aware, men image-wrapper saknar minHeight: 0 så flex-1 kan kollapsa action-bar vid små iPhones (SE, 12 mini).
+Home.tsx Meny-bottensheet (rad 2038): safe-aware redan, men kan bli för hög → bör ha maxHeight: 85dvh + overflowY: auto.
+Levererad fil
+/home/user/vindkollen/REPLIT_AGENT_V3_IOS_NY_BUGGAR_OCH_VIT_KARTA.md (378 rader, 18 KB) innehåller:
+
+Detaljerad rotorsaksanalys med flödesscheman och kod-citat
+Lösning A (rekommenderas): Öppna vindkollen.com/vindkraft-karta/ i Capacitor Browser (in-app WKWebView-sheet) på native. 100% samma UX som webben. Djuplänka tillbaka in i appen via vindkollen://placera?projectId=... när användaren klickar "Redigera".
+Lösning B: Bygg in en native SverigekartanOverview-komponent med maplibre ljusstil (1-2 dagars jobb).
+Exakta filändringar med kod-före/efter för InfoPanel, PhotoMontageModal, Home.tsx (Meny + rot + knapp-redirect), ny src/lib/sverigekartanNative.ts, Info.plist URL-scheme, deep-link-listener.
+Komplett verifierings- och testplan för både web och iOS TestFlight.

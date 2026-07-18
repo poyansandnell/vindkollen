@@ -21,21 +21,25 @@ export function isNative(): boolean {
  * Öppnar Sverigekartan.
  *
  * - Webb: navigerar direkt till /vindkraft-karta/ (path routing).
- * - Native + VITE_PUBLIC_APP_URL satt: öppnar externt i Safari/Chrome.
- * - Native utan URL: navigerar till /#/placera (inbyggt kartverktyg, ingen 404).
+ * - Native: öppnar vindkollen.com/vindkraft-karta/ i ett in-app
+ *   SFSafariViewController-ark via @capacitor/browser — samma UX som
+ *   webben, men utan att lämna appen. Användaren stänger arket med
+ *   "Klar"-knappen och befinner sig kvar i Vindkollen.
+ *   När vindkollen.com implementerar deep-links (vindkollen://placera?
+ *   projectId=...) kan användaren dessutom trycka "Redigera" på ett
+ *   projekt i webbvyn och hoppa direkt in i AR-vyn med rätt projekt.
  */
-export function openSverigekartan(): void {
-  const externalBase = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined) ?? "";
+export async function openSverigekartan(): Promise<void> {
   if (isNative()) {
-    if (externalBase) {
-      window.open(`${externalBase}/vindkraft-karta/`, "_system");
-    } else {
-      // Stoppa kameran explicit innan navigering: CSS-bakgrunden återställs
-      // omedelbart (synkront) inuti stopNativeCameraPreview, medan
-      // CameraPreview.stop() avslutas asynkront bakom kulisserna.
+    const url = "https://vindkollen.com/vindkraft-karta/";
+    try {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url, presentationStyle: "fullscreen" });
+    } catch (err) {
+      // Browser-plugin saknas eller misslyckas → fallback till hash-navigering
+      // med det inbyggda PlaceTurbines-kartverktyget (ESRI World Imagery).
+      console.warn("[Vindkollen] Browser.open misslyckades, faller tillbaka till /placera:", err);
       void stopNativeCameraPreview();
-      // Flagga att PlaceTurbines ska starta i välkomstläge (tom karta, ingen
-      // återställning av föregående session) och navigera dit via hash-routing.
       sessionStorage.setItem("vindkollen:placeraFresh", "1");
       window.location.hash = "/placera";
     }

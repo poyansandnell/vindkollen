@@ -59,7 +59,7 @@ export function PhotoMontageModal({ imageDataUrl, onRetake, onClose }: PhotoMont
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col bg-black">
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden" style={{ minHeight: 0 }}>
         <img src={imageDataUrl} alt="Fotomontage av vindkraftverk" className="h-full w-full object-contain" />
       </div>
 

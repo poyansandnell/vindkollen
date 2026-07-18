@@ -53,5 +53,20 @@
     </array>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <true/>
+    <!-- Bugg 7: vindkollen://-URL-schema för deep-links tillbaka från
+         vindkollen.com/vindkraft-karta/ (via @capacitor/browser).
+         Exempel: vindkollen://placera?projectId=abc123 öppnar PlaceTurbines
+         med det valda projektet förladderat i AR-editorn. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.vindkollen.app</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>vindkollen</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>

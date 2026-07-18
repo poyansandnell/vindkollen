@@ -2086,6 +2086,7 @@ export default function Home() {
             >
               <div
                 className="flex flex-col gap-3 rounded-t-3xl border-t border-white/10 bg-[#111]/95 px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl"
+                style={{ maxHeight: "85dvh", overflowY: "auto" }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between">
