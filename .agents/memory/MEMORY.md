@@ -1,4 +1,5 @@
 - [Capacitor SPM direct target linkage](capacitor-spm-direct-linkage.md) — `import Capacitor` needs XCRemoteSwiftPackageReference + product dep in project.pbxproj; Package.resolved alone can't fix it.
+- [Hash-navigate no-op kills mounted-component transitions](hash-navigate-noop-mounted.md) — setting window.location.hash to the SAME value fires no hashchange; use localStorage handoff + sessionStorage flag + hash bounce (via "/") to guarantee remount.
 - [PWA AR without WebXR](ar-without-webxr.md) — objects at fixed world positions from bearing/distance; camera rotates via device orientation, not objects; works broadly, no WebXR needed.
 - [Device orientation → camera quaternion](device-orientation-camera-quaternion.md) — rotate the AR camera from alpha/beta/gamma (yaw+pitch+roll), not just compass heading, or overlays feel stuck to the screen.
 - [iOS compass permission gesture](ios-compass-permission.md) — DeviceOrientationEvent.requestPermission() must be called synchronously from a user-gesture handler, not after an await chain.

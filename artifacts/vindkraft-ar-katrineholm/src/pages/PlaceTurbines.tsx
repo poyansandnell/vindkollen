@@ -594,15 +594,11 @@ export default function PlaceTurbines() {
           // boundary sätts från polygon om tillgänglig (summary-läge ger null →
           // editableBoundary-effekten ovan används inte; editor startar utan gräns).
           const boundary = apiPolygonToLatLon(project.polygon ?? null);
-          // Katrineholms bundlade projekt (id: 10001 = "Ericsbergs planer") har
-          // inga API-turbiner — förifyll med DEFAULT_TURBINES (de 29 planerade
-          // verken) så att editorn inte öppnas med en tom karta.
           const isBundledKatrineholm = project.id === 10001;
           const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';
           const nativeNoApi = isNative() && !apiBase;
           // På native utan API-åtkomst: centrera standard-turbinerna vid projektets
-          // koordinater istället för att lämna editorn helt tom. Används som
-          // visuellt utgångspunkt — användaren kan flytta/lägga till/ta bort verk.
+          // koordinater istället för att lämna editorn helt tom.
           const preloadedTurbines = (() => {
             if (isBundledKatrineholm) return DEFAULT_TURBINES;
             if (nativeNoApi && project.centerLat && project.centerLng) {
@@ -610,18 +606,52 @@ export default function PlaceTurbines() {
             }
             return [];
           })();
-          setEditHandoff({
-            projectId: String(project.id),
-            projectName: project.name,
-            municipality: project.kommun ?? undefined,
-            turbines: preloadedTurbines,
-            centerLat: project.centerLat ?? null,
-            centerLng: project.centerLng ?? null,
-            boundary,
-          });
-          setTurbines(preloadedTurbines);
-          setCommittedTurbines(preloadedTurbines);
-          setShowWelcome(false);
+
+          if (isNative()) {
+            // ── Native-path ────────────────────────────────────────────────────
+            // Problemet: vi är redan monterade vid #/placera (openSverigekartan()
+            // navigerade hit). Att sätta window.location.hash = "/placera" igen
+            // är en no-op — ingen hashchange, ingen omountering, inget nytt
+            // useState-initialiseringsanrop, setShowWelcome(false) fungerar inte
+            // alltid tillförlitligt i WKWebView under dessa förhållanden.
+            //
+            // Lösning: spara handoff till localStorage (precis som karta-appen
+            // gör via EDIT_HANDOFF_KEY), sätt direkteditor-flaggan, och bounca
+            // hash via "/" → "/placera" för att garantera en färsk mount där
+            // consumeEditHandoff() + consumeDirectEditorFlag() kan köras.
+            try {
+              localStorage.setItem(EDIT_HANDOFF_KEY, JSON.stringify({
+                projectId: String(project.id),
+                projectName: project.name,
+                municipality: project.kommun ?? undefined,
+                turbines: preloadedTurbines,
+                centerLat: project.centerLat ?? null,
+                centerLng: project.centerLng ?? null,
+                boundary: boundary ?? null,
+                savedAt: Date.now(),
+              }));
+            } catch { /* localStorage kan vara blockerat */ }
+            sessionStorage.setItem("vindkollen:placeraEditorDirect", "1");
+            // Bounce: #/ → #/placera garanterar hashchange och färsk mount
+            window.location.hash = "/";
+            setTimeout(() => { window.location.hash = "/placera"; }, 80);
+          } else {
+            // ── Webb-path ──────────────────────────────────────────────────────
+            // På webben fungerar setState-uppdatering pålitligt — ingen bounce
+            // behövs. Wouter path-routing hanterar /placera korrekt.
+            setEditHandoff({
+              projectId: String(project.id),
+              projectName: project.name,
+              municipality: project.kommun ?? undefined,
+              turbines: preloadedTurbines,
+              centerLat: project.centerLat ?? null,
+              centerLng: project.centerLng ?? null,
+              boundary,
+            });
+            setTurbines(preloadedTurbines);
+            setCommittedTurbines(preloadedTurbines);
+            setShowWelcome(false);
+          }
         }}
         onBack={() => navigate("/")}
       />
