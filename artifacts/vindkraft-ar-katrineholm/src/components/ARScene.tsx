@@ -108,6 +108,13 @@ interface ARSceneProps {
    */
   visible?: boolean;
   /**
+   * B2: Simulerat klockslag (hel timme 0–23) för solpositionsberäkning.
+   * null = använd aktuell systemtid (standard). Skickas in från
+   * VisualizationControls tid-scrubber så att användaren kan scrubba
+   * fram/tillbaka i tid och se hur skuggorna förflyttas under dygnet.
+   */
+  simTimeHour?: number | null;
+  /**
    * Juli 2026-fix (TREDJE kritiska buggrapporten: "Synliga verk: 0" trots
    * frisk GPS/kompass/world-update) — felsökningsläge som användaren själv
    * kan slå på/av från telefonen (se `SensorDebugPanel`), enligt
@@ -580,6 +587,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     hideAll,
     forceVisibleIds,
     visible = true,
+    simTimeHour = null,
     debugForceNearest = false,
     disableOcclusion = false,
     arStartedAtMs = null,
@@ -605,6 +613,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     visibility,
     nightMode,
     shadowFlicker,
+    simTimeHour: simTimeHour ?? null,
     showHiddenTurbines: showHiddenTurbines ?? false,
     globalVisibilityFactor: globalVisibilityFactor ?? 1,
     hideAll: hideAll ?? false,
@@ -743,6 +752,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     visibility,
     nightMode,
     shadowFlicker,
+    simTimeHour: simTimeHour ?? null,
     showHiddenTurbines: showHiddenTurbines ?? false,
     globalVisibilityFactor: globalVisibilityFactor ?? 1,
     hideAll: hideAll ?? false,
@@ -1938,7 +1948,16 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       }
       // "current" (och fallback för "none"/"evening" om anropad, ofarligt).
       const { lat, lon } = userRef.current;
-      return getCurrentSunPosition(new Date(), lat, lon);
+      // B2: Om simulerad tid anges, bygg ett Date med den timmen men dagens datum.
+      const simHour = modeRef.current.simTimeHour;
+      let sunDate: Date;
+      if (simHour != null) {
+        sunDate = new Date();
+        sunDate.setHours(simHour, 0, 0, 0);
+      } else {
+        sunDate = new Date();
+      }
+      return getCurrentSunPosition(sunDate, lat, lon);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turbines]);

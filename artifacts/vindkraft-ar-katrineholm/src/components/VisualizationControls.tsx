@@ -19,6 +19,10 @@ interface VisualizationControlsProps {
   onToggleNightMode: () => void;
   shadowFlicker: boolean;
   onToggleShadowFlicker: () => void;
+  /** B2: Simulerad tid (hel timme, 0–23) för skuggberäkning.
+   *  null = "aktuell klocka" (standard). */
+  simTimeHour: number | null;
+  onSimTimeHourChange: (hour: number | null) => void;
   showHiddenTurbines: boolean;
   onToggleShowHiddenTurbines: () => void;
   showSensorDebug: boolean;
@@ -78,6 +82,8 @@ export function VisualizationControls({
   onToggleNightMode,
   shadowFlicker,
   onToggleShadowFlicker,
+  simTimeHour,
+  onSimTimeHourChange,
   showHiddenTurbines,
   onToggleShowHiddenTurbines,
   showSensorDebug,
@@ -149,13 +155,52 @@ export function VisualizationControls({
             🚫 Skuggflimmer AV
           </SegButton>
         </div>
-        <p className="-mt-2 mb-4 text-[11px] leading-relaxed text-white/50">
+        <p className="-mt-2 mb-3 text-[11px] leading-relaxed text-white/50">
           {sunMode === "current" || sunMode === "low"
             ? flickerActive
               ? "Aktivt — visas när verket har en beräknad markskugga."
               : "Slå på för att visa flimrande rotorbladsskuggor."
             : "Kräver soläge \"Aktuell sol\" eller \"Låg sol\" för att aktiveras."}
         </p>
+
+        {/* B2: Tid-scrubber — simulera ett annat klockslag för skuggberäkning */}
+        {(sunMode === "current" || sunMode === "low") && (
+          <div className="mb-4 rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-medium text-white/80">
+                🕐 Simulerad tid
+              </span>
+              {simTimeHour !== null ? (
+                <button
+                  onClick={() => onSimTimeHourChange(null)}
+                  className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] text-white/60 hover:bg-white/20"
+                >
+                  Återställ till aktuell tid
+                </button>
+              ) : (
+                <span className="text-[10px] text-white/40">Aktuell tid används</span>
+              )}
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={23}
+              step={1}
+              value={simTimeHour ?? new Date().getHours()}
+              onChange={(e) => onSimTimeHourChange(Number(e.target.value))}
+              className="w-full accent-[#FF8B01]"
+            />
+            <div className="mt-1 flex justify-between text-[10px] text-white/40">
+              <span>00:00</span>
+              <span className="font-semibold text-[#FFB347]">
+                {simTimeHour !== null
+                  ? `${String(simTimeHour).padStart(2, "0")}:00`
+                  : `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")} (nu)`}
+              </span>
+              <span>23:00</span>
+            </div>
+          </div>
+        )}
 
         <div className="mb-4 grid grid-cols-2 gap-2">
           <SegButton active={realScale} onClick={() => onRealScaleChange(!realScale)}>

@@ -127,6 +127,23 @@ export default function MyProjects() {
       });
       if (!res.ok) throw new Error();
       const data = (await res.json()) as { shareUrl: string };
+
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: "Mitt vindkraftprojekt i Vindkollen",
+            text: "Kolla min placering av vindkraftverk:",
+            url: data.shareUrl,
+          });
+          setShareFlash(id);
+          setTimeout(() => setShareFlash(null), 2000);
+          return;
+        } catch (err) {
+          if ((err as Error).name === "AbortError") return;
+          // Annan fel → fall tillbaka till urklipp
+        }
+      }
+
       await navigator.clipboard.writeText(data.shareUrl);
       setShareFlash(id);
       setTimeout(() => setShareFlash(null), 2000);

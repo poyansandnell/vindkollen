@@ -22,6 +22,10 @@ interface WindNodes {
   rumbleGain: GainNode;
   directionLfo: OscillatorNode;
   directionGain: GainNode;
+  /** B1: Amplitudmodulations-LFO (0.5 Hz) som skapar den karakteristiska
+   *  infrasound-pulsen (wub-wub) från rotorpassager. */
+  amLfo: OscillatorNode;
+  amLfoGain: GainNode;
   masterGain: GainNode;
   makeupGain: GainNode;
   compressor: DynamicsCompressorNode;
@@ -205,6 +209,7 @@ export function useWindSound() {
         nodes?.rumbleOsc.stop();
         nodes?.rumbleOsc2.stop();
         nodes?.directionLfo.stop();
+        nodes?.amLfo.stop();
       } catch {
         // redan stoppad — ignorera.
       }
@@ -278,6 +283,7 @@ export function useWindSound() {
       nodes.rumbleOsc.stop();
       nodes.rumbleOsc2.stop();
       nodes.directionLfo.stop();
+      nodes.amLfo.stop();
     } catch {
       // ignorera om redan stoppad.
     }
@@ -414,6 +420,21 @@ export function useWindSound() {
     directionLfo.connect(directionGain);
     directionGain.connect(masterGain.gain);
     directionLfo.start();
+
+    // B1: Lågfrekvens-puls (LFO-AM) — simulerar infrasound-pulsen från
+    // rotorpassager (~0.5 Hz för ett modernt 3-bladigt verk vid ~15 m/s).
+    // Modulerar masterGain subtilt (15–25 % djup) så "wub-wub"-rytmen hörs
+    // tydligt utan att dominera den samlade ljudbilden.
+    // Slumpmässig variationsdjup per session → varje lyssning känns lite olika.
+    const amLfo = ctx.createOscillator();
+    amLfo.type = "sine";
+    amLfo.frequency.value = 0.5;
+    const amLfoGain = ctx.createGain();
+    const amDepth = 0.10 + Math.random() * 0.15;
+    amLfoGain.gain.value = amDepth;
+    amLfo.connect(amLfoGain);
+    amLfoGain.connect(masterGain.gain);
+    amLfo.start();
 
     // Vindljud — bredbandigt, kraftfullt brusigt ambientljud.
     const windSource = ctx.createBufferSource();
@@ -561,6 +582,8 @@ export function useWindSound() {
       rumbleGain,
       directionLfo,
       directionGain,
+      amLfo,
+      amLfoGain,
       masterGain,
       makeupGain,
       compressor,

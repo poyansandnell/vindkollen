@@ -1107,6 +1107,25 @@ export default function Home() {
     return new Set(nearestThreeTurbineIds);
   }, [calibrationFallbackActive, nearestThreeTurbineIds]);
 
+  // A3: Haptic feedback när man siktar mot närmaste verk (inom 5°)
+  useEffect(() => {
+    if (!nearestTurbineInfo || angleDiffToNearestDeg === null) return;
+    if (angleDiffToNearestDeg < 5) {
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      } else {
+        const haptics = (window as unknown as { Capacitor?: { Plugins?: { Haptics?: { impact: (o: { style: string }) => void } } } }).Capacitor;
+        haptics?.Plugins?.Haptics?.impact({ style: "MEDIUM" });
+      }
+    }
+  }, [angleDiffToNearestDeg, nearestTurbineInfo]);
+
+  // A4: Jämför-läge — visar användarens placering mot planerat projekt
+  const [compareMode, setCompareMode] = useState(false);
+
+  // B2: Simulerat klockslag för skuggberäkning (null = aktuell systemtid)
+  const [simTimeHour, setSimTimeHour] = useState<number | null>(null);
+
   // Juli 2026-fix (produktkrav 2): "Endast EN statusruta/toast ska visas åt
   // gången" — tidigare kunde felmeddelanden, målbekräftelsen, svag-signal-
   // varningen, "Vindljud aktivt"-taggen och kalibreringsbanderollerna alla
@@ -1554,6 +1573,7 @@ export default function Home() {
             visibility={visibility}
             nightMode={nightMode}
             shadowFlicker={shadowFlicker}
+            simTimeHour={simTimeHour}
             isPointSky={sky.isPointSky}
             getOcclusionGrid={sky.getOcclusionGrid}
             showHiddenTurbines={showHiddenTurbines}
@@ -1565,6 +1585,36 @@ export default function Home() {
             arStartedAtMs={arStartedAtMs}
             turbinesVisible={turbinesVisible}
           />
+          {/* A4: Jämför-läge — det "planerade" projektets ursprungliga verk
+              renderas som ett halvgenomskinligt spökskikt (30 % visibilitet)
+              bredvid användarens egna omplacering. Villkor: jämförläge på +
+              användaren har en anpassad placering + vi har turbindata att
+              jämföra med (det ursprungliga projektet som handoff kom från). */}
+          {compareMode && usingCustomPlacement && arSessionVisible && (
+            <ARScene
+              visible={arSessionVisible}
+              userLat={smoothedGeo.lat ?? geo.lat ?? KATRINEHOLM_CENTER.lat}
+              userLon={smoothedGeo.lon ?? geo.lon ?? KATRINEHOLM_CENTER.lon}
+              quaternionRef={orientation.quaternionRef}
+              headingDegRef={orientation.headingDegRef}
+              turbines={activeTurbines}
+              sunMode={sunMode}
+              realScale={realScale}
+              visibility={visibility}
+              nightMode={nightMode}
+              shadowFlicker={false}
+              isPointSky={sky.isPointSky}
+              getOcclusionGrid={sky.getOcclusionGrid}
+              showHiddenTurbines
+              globalVisibilityFactor={0.30}
+              hideAll={false}
+              forceVisibleIds={undefined}
+              debugForceNearest={false}
+              disableOcclusion
+              arStartedAtMs={arStartedAtMs}
+              turbinesVisible
+            />
+          )}
 
           {arSessionVisible && (
             <NearestTurbineArrow
@@ -2123,6 +2173,18 @@ export default function Home() {
                     ↩️ Närmaste verk (GPS-baserat projektval)
                   </button>
                 )}
+                {/* A4: Jämför-läge — bara synlig när användaren har en anpassad placering */}
+                {usingCustomPlacement && (
+                  <button
+                    onClick={() => {
+                      setCompareMode((v) => !v);
+                      setShowMenu(false);
+                    }}
+                    className="w-full rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white/80 hover:bg-white/10"
+                  >
+                    {compareMode ? "🔀 Dölj jämförelse" : "🔀 Jämför med planerat projekt"}
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setShowDebugStrip((v) => !v);
@@ -2167,6 +2229,8 @@ export default function Home() {
           onToggleNightMode={() => setNightMode((v) => !v)}
           shadowFlicker={shadowFlicker}
           onToggleShadowFlicker={() => setShadowFlicker((v) => !v)}
+          simTimeHour={simTimeHour}
+          onSimTimeHourChange={setSimTimeHour}
           showHiddenTurbines={showHiddenTurbines}
           onToggleShowHiddenTurbines={() => setShowHiddenTurbines((v) => !v)}
           showSensorDebug={showSensorDebug}

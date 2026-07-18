@@ -243,6 +243,18 @@ export function NationalMapView({
   const [diagExpanded, setDiagExpanded] = useState(false);
   const [apiDiag, setApiDiag] = useState<ApiDiagState>({ ...API_DIAG_INIT });
 
+  // A2: "Hitta mig"-knapp — spårar användarens GPS tyst
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 30000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
   // ── Räknaranimation — räknar snabbt upp verk under laddning ─────────────────
   const [animatedCount, setAnimatedCount] = useState(0);
 
@@ -836,6 +848,21 @@ export function NationalMapView({
           ⊙
         </button>
 
+        {/* A2: "Hitta mig"-knapp — visas när GPS-position är känd */}
+        {userLocation && (
+          <button
+            onClick={() => mapRef.current?.flyTo({
+              center: [userLocation.lng, userLocation.lat],
+              zoom: 12,
+            })}
+            className="absolute right-3 top-20 z-10 h-9 w-9 rounded-full bg-black/60 text-lg text-white shadow-lg backdrop-blur hover:bg-black/80"
+            aria-label="Centrera på min position"
+            title="Min position"
+          >
+            📍
+          </button>
+        )}
+
         {/* MapLibre runtime diagnostics — visas endast i dev-builds (import.meta.env.DEV) */}
         {import.meta.env.DEV && <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-50" style={{ maxHeight: diagExpanded ? '42dvh' : '24px', overflow: 'hidden' }}>
         <div className={`nm-diag text-[10px] font-mono text-white/90 ${diagExpanded ? 'pointer-events-auto' : 'pointer-events-none'}`}>
@@ -982,6 +1009,18 @@ export function NationalMapView({
                     {statusLabel(selectedProject.status)}
                   </span>
                 </p>
+                {/* B3: Beräknad elproduktion */}
+                {(selectedProject.turbineCountPlannedMin ?? 0) > 0 && (() => {
+                  const count = selectedProject.turbineCountPlannedMin!;
+                  const annualGWh = count * 8.5;
+                  const households = Math.round((annualGWh * 1_000_000) / 5000);
+                  const co2Tons = Math.round(annualGWh * 500);
+                  return (
+                    <p className="mt-0.5 text-[11px] text-white/45">
+                      ⚡ ~{annualGWh.toFixed(0)} GWh/år · {households.toLocaleString('sv-SE')} hushåll · −{co2Tons.toLocaleString('sv-SE')} ton CO₂/år
+                    </p>
+                  );
+                })()}
               </div>
               <button
                 onClick={() => setSelectedProject(null)}
