@@ -1,0 +1,72 @@
+Jag har 1 ändring. Visa diff, vänta på OK.
+
+═══════════════════════════════════════════════════════════════════════════════
+BAKGRUND
+═══════════════════════════════════════════════════════════════════════════════
+
+Användare klickar 📐-knappen på en icke-Katrineholm-pinne (t.ex. Uvberget,
+Haneberg). PlaceTurbines-editorn kraschar med "null is not an object
+(evaluating 'ut.current.latSpan')". Hela appen blir svart.
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 1: src/components/NationalMapView.tsx — Säkerhetscheck innan 📐-klick
+═══════════════════════════════════════════════════════════════════════════════
+
+VIKTIGT: Rör ALDRIG V5/V6/V7/V8/V9-fixar. Bara denna EN ändring.
+
+───────────────────────────────────────────────────────────────────────────────
+1A: Blockera redigering för icke-Katrineholm-projekt
+───────────────────────────────────────────────────────────────────────────────
+
+Hitta 📐 Öppna projektet-knappen i projektkortet (runt rad 1090-1115). Den har
+redan disabled-guard från V6.
+
+VIKTIGT: Hitta den kompletta disabled-rad i slutet av className (efter 
+disabled:hover:bg-[#FF8B01]):
+
+    disabled={
+      !selectedProject ||
+      ((selectedProject.turbineCountPlannedMin ?? 0) +
+        (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+    }
+
+Byt till (lägger till 10001-check):
+
+    disabled={
+      !selectedProject ||
+      String(selectedProject.id) !== "10001" ||
+      ((selectedProject.turbineCountPlannedMin ?? 0) +
+        (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+1B: Ändra knapptexten för icke-Katrineholm-projekt
+───────────────────────────────────────────────────────────────────────────────
+
+Hitta textvillkoret i knappen (runt rad 1108):
+
+    {!selectedProject ||
+    ((selectedProject.turbineCountPlannedMin ?? 0) +
+      (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+      ? '🚫 Inga verk att redigera'
+      : '📐 Öppna projektet'}
+
+Byt till:
+
+    {!selectedProject
+      ? '🚫 Inga verk att redigera'
+      : String(selectedProject.id) !== "10001"
+        ? '🔒 Endast Katrineholm'
+        : ((selectedProject.turbineCountPlannedMin ?? 0) +
+            (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+          ? '🚫 Inga verk att redigera'
+          : '📐 Öppna projektet'}
+
+═══════════════════════════════════════════════════════════════════════════════
+EFTER ÄNDRINGAR
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Visa diff
+2. Kör typecheck
+3. Rör inga andra filer
+4. Vänta på mitt OK
