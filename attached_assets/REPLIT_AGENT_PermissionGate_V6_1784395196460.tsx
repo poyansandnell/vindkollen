@@ -83,7 +83,8 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
         )}
       </div>
 
-      <div className={`mx-auto mt-auto w-full max-w-md space-y-4 ${inApp ? "pt-4" : "pt-8"}`}>
+      {/* V6: pb-[max(1.5rem,env(safe-area-inset-bottom))] så knappar inte klipps av hemindikatorn */}
+      <div className={`mx-auto mt-auto w-full max-w-md space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] ${inApp ? "pt-4" : "pt-8"}`}>
         {!inApp && (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
             <p className="mb-2 font-medium text-white">Appen behöver tillgång till:</p>
@@ -129,15 +130,10 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
             >
               {starting ? "Startar…" : "📷 Starta AR"}
             </button>
-            <button
-              onClick={openSverigekartan}
-              disabled={starting}
-              className="w-full rounded-full border border-white/20 bg-white/5 py-3.5 text-sm font-medium text-white transition hover:bg-white/10 disabled:opacity-60"
-            >
-              🗺️ Sverigekartan – Öppna kartverktyg
-            </button>
-            {/* Bugg 11: B4 öppnar nu Sverigekartan med auto-fokus på närmaste projekt,
-                istället för att starta Katrineholms-editorn direkt. */}
+            {/* V6: B4 öppnar Sverigekartan med auto-fokus på närmaste projekt.
+                V4 ändrade text+flagga men onClick anropade fortfarande openPlaceraEditor()
+                vilket gjorde att editorn mountades med showWelcome=false och ingen karta syntes.
+                V6: korrekt onClick som öppnar Sverigekartan. */}
             <button
               onClick={() => {
                 sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");

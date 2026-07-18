@@ -217,7 +217,7 @@ const SWEDEN_CENTER: [number, number] = [15.5, 62.5];
 const SWEDEN_ZOOM = 4.5;
 const SOURCE_ID = 'projects';
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function NationalMapView({
   onEnterEditorDirect,
@@ -255,27 +255,27 @@ export function NationalMapView({
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // Bugg 11 / V6-FIX: Konsumera "sverigekartanFocusNearest"-flaggan som B4-knappen sätter.
-  // V5 zoomade in med flyTo → "tom karta"-upplevelse. V6 behåller hela Sverigeöversikten
-  // och visar i stället en "📍 Närmast dig"-badge i projektkortet för närmaste projekt.
+  // Bugg 11: Konsumera "sverigekartanFocusNearest"-flaggan som B4-knappen sätter.
+  // V5-FIX: istället för att zooma till ett enskilt projekt (vilket V4 gjorde
+  // och användaren upplevde som "tom karta"), använder vi setFocusNearestId
+  // för att VISA HELA SVERIGE-ÖVERSIKTEN och markerar närmaste projekt med
+  // en tillfällig "📍 Närmast dig"-badge. Användaren kan sedan klicka på
+  // vilken pin som helst som vanligt.
   const focusNearestPendingRef = useRef<boolean>(
     sessionStorage.getItem("vindkollen:sverigekartanFocusNearest") === "1"
   );
   const [focusNearestId, setFocusNearestId] = useState<string | null>(null);
-  // Konsumera flaggan direkt (mount-tid) så att nästa mount inte fokuserar igen
   useEffect(() => {
     if (focusNearestPendingRef.current) {
       sessionStorage.removeItem("vindkollen:sverigekartanFocusNearest");
     }
   }, []);
-  // När projekt och GPS-position finns — markera närmaste projekt (ej flyTo)
   useEffect(() => {
     if (!focusNearestPendingRef.current) return;
     if (projects.length === 0) return;
     const loc = userLocation;
     if (!loc) return;
 
-    // Enkel euklidisk approximation är tillräcklig på dessa avstånd (Sverige ≈ 10°×15°)
     let nearestProject: ApiProjectArea | null = null;
     let nearestDist = Infinity;
     for (const p of projects) {
@@ -287,13 +287,12 @@ export function NationalMapView({
     }
     if (!nearestProject) return;
 
-    focusNearestPendingRef.current = false; // kör bara en gång
+    focusNearestPendingRef.current = false;
     console.info('[NationalMap] B4 auto-fokus: markerar närmaste projekt', {
       id: nearestProject.id, name: nearestProject.name,
     });
     setFocusNearestId(String(nearestProject.id));
     setSelectedProject(nearestProject);
-    // Ingen flyTo — behåller hela Sverigeöversikten så användaren ser kartans kontext
   }, [projects, userLocation]);
 
   // ── Räknaranimation — räknar snabbt upp verk under laddning ─────────────────
@@ -307,11 +306,8 @@ export function NationalMapView({
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? '';
     const buildId = (import.meta.env.VITE_BUILD_ID as string | undefined) ?? 'dev';
     const apiPath = '/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25';
-    // Native-appen körs från capacitor://localhost — relativa URL:er fungerar inte.
-    // apiUrl() sätter absolut bas om VITE_API_BASE_URL är definierad, annars relativ.
     const url = apiUrl(apiPath);
 
-    // 1. Visa bundlad data omedelbart
     const bundled = BUNDLED_PROJECTS.filter(
       p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number'
     );
@@ -333,17 +329,13 @@ export function NationalMapView({
     });
 
     if (native && !apiBase) {
-      // Relativa URL:er fungerar inte i Capacitor — logga tydligt men försök ändå,
-      // så att felet syns i diagnostikpanelen på iPhone.
       const warn = 'VITE_API_BASE_URL saknas i native-bygget — relativ URL fungerar inte i Capacitor';
       console.warn('[NationalMap]', warn, { url, native });
       setApiDiag(prev => ({ ...prev, lastApiError: warn }));
     }
 
-    // 2. Hämta live-data
     console.info('[NationalMap] Hämtar projekt', { native, apiBase, url, buildId, bundledCount: bundled.length });
 
-    // Bugg 9: mät latens + timeout så att nätverkshäng inte blockerar UI i evighet
     let httpStatus: number | null = null;
     const t0 = performance.now();
     fetch(url, { signal: AbortSignal.timeout(8000) })
@@ -358,15 +350,12 @@ export function NationalMapView({
       .then(data => {
         if (cancelled) return;
 
-        // ── Pipeline med explicita räknare för diagnostik ──────────────────
         const raw = Array.isArray(data) ? data : [];
         const rawCount = raw.length;
 
-        // Normalisera Vindbrukskollens svenska statusvärden → engelska interna
         const normalized = raw.map(p => ({ ...p, status: normalizeStatus(p.status) }));
         const normalizedCount = normalized.length;
 
-        // Filtrera bort poster utan giltiga koordinater
         const ok = normalized.filter(
           p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number'
         );
@@ -417,7 +406,6 @@ export function NationalMapView({
     return () => { cancelled = true; };
   }, []);
 
-  // Keep ref in sync with state
   useEffect(() => { projectsRef.current = projects; }, [projects]);
 
   // ── Filtered projects ───────────────────────────────────────────────────────
@@ -428,17 +416,15 @@ export function NationalMapView({
 
   useEffect(() => { filteredProjectsRef.current = filteredProjects; }, [filteredProjects]);
 
-  // ── Turbine count total for display ────────────────────────────────────────
   const turbineTotal = useMemo(
     () => filteredProjects.reduce((s, p) => s + (p.turbineCountPlannedMin ?? 0), 0),
     [filteredProjects]
   );
 
-  // ── Räknaranimation — räknar snabbt upp verk när data laddats ───────────────
   useEffect(() => {
     if (turbineTotal === 0) { setAnimatedCount(0); return; }
     setAnimatedCount(0);
-    const duration = 1200; // ms
+    const duration = 1200;
     const steps = Math.min(turbineTotal, 80);
     const interval = duration / steps;
     let current = 0;
@@ -467,7 +453,6 @@ export function NationalMapView({
       }));
     };
 
-    // 1. WebGL support check — maplibregl.supported() removed in v5; use canvas probe
     const webGLSupported = (() => {
       try {
         const c = document.createElement('canvas');
@@ -482,10 +467,6 @@ export function NationalMapView({
       return;
     }
 
-    // Defer map initialization until the container has a positive height.
-    // On iOS Capacitor, WKWebView flex layout may not resolve at mount time,
-    // causing getBoundingClientRect() to return height=0 and MapLibre to create
-    // an invisible 0-height canvas that cannot be properly resized afterwards.
     let cancelled = false;
     let rafId: number | null = null;
     const disposers: Array<() => void> = [];
@@ -497,7 +478,6 @@ export function NationalMapView({
 
       const rect = container.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) {
-        // Not laid out yet — update diagnostics and retry next animation frame
         setDiag(prev => ({
           ...prev,
           webGLSupported: true,
@@ -513,281 +493,262 @@ export function NationalMapView({
         containerH: rect.height,
       });
 
-    // 2. Create map with primary (ESRI satellite) style
-    let map!: maplibregl.Map;
-    try {
-      map = new maplibregl.Map({
-        container,
-        style: MAP_STYLE,
-        center: SWEDEN_CENTER,
-        zoom: SWEDEN_ZOOM,
-        minZoom: 3,
-        maxZoom: 14,
-        attributionControl: false,
-        pitchWithRotate: false,
-        dragRotate: false,
-      });
-    } catch (err) {
-      addLog(`Map() threw: ${String(err)}`, { lastError: String(err), mapCreated: false });
-      return;
-    }
-    mapRef.current = map;
-    addLog('Map() created · style=ESRI satellite', { mapCreated: true });
-
-    map.on('error', (ev) => {
-      console.error('[NationalMap] EDITOR MAP ERROR', (ev as { error?: Error }).error ?? ev);
-    });
-
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
-
-    // ── Helper: add project GeoJSON source + layers + click handlers ──────────
-    // Called once after initial load AND again if we switch to the fallback style.
-    let layersAdded = false;
-    function addProjectLayers() {
-      if (layersAdded) return;
-      layersAdded = true;
-
-      // Use bundled projects as eager fallback — filteredProjectsRef may still be []
-      // when the load event fires because React state updates haven't yet propagated
-      // through a re-render (the projects effect and ref-sync effect run after paint).
-      const initData = filteredProjectsRef.current.length > 0
-        ? filteredProjectsRef.current
-        : BUNDLED_PROJECTS.filter(p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number');
-      const geoJson = buildGeoJSON(initData);
-      console.info('[NationalMap] GeoJSON features:', geoJson.features.length, '(', initData.length, 'proj)');
-      map.addSource(SOURCE_ID, {
-        type: 'geojson',
-        data: geoJson,
-        cluster: true,
-        clusterMaxZoom: 8,
-        clusterRadius: 12,
-      });
-      addLog(`Source "${SOURCE_ID}" added (${geoJson.features.length} features)`, { sourceAdded: true });
-
-      map.addLayer({
-        id: 'clusters',
-        type: 'circle',
-        source: SOURCE_ID,
-        filter: ['has', 'point_count'],
-        paint: {
-          'circle-color': ['step', ['get', 'point_count'], '#FF8B01', 10, '#FFB347', 30, '#FF6B00'],
-          'circle-radius': ['step', ['get', 'point_count'], 9, 25, 11, 100, 13, 500, 15, 1000, 17],
-          'circle-opacity': 0.9,
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#090909',
-        },
-      });
-      map.addLayer({
-        id: 'cluster-count',
-        type: 'symbol',
-        source: SOURCE_ID,
-        filter: ['has', 'point_count'],
-        layout: {
-          'text-field': ['get', 'point_count_abbreviated'],
-          'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
-          'text-size': 11,
-        },
-        paint: { 'text-color': '#090909' },
-      });
-      map.addLayer({
-        id: 'unclustered-point',
-        type: 'circle',
-        source: SOURCE_ID,
-        filter: ['!', ['has', 'point_count']],
-        paint: {
-          'circle-color': ['match', ['get', 'status'],
-            'operational', '#22c55e',
-            'cancelled', '#94a3b8',
-            'permitted', '#FF8B01',
-            'under_construction', '#FF8B01',
-            'planned', '#3B82F6',
-            'proposed', '#3B82F6',
-            'consultation', '#3B82F6',
-            '#94a3b8',
-          ],
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.5, 7, 4, 10, 6],
-          'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#090909',
-          'circle-opacity': 0.95,
-        },
-      });
-      map.addLayer({
-        id: 'project-label',
-        type: 'symbol',
-        source: SOURCE_ID,
-        filter: ['!', ['has', 'point_count']],
-        minzoom: 7,
-        layout: {
-          'text-field': ['get', 'name'],
-          'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
-          'text-size': 11,
-          'text-offset': [0, 1.2],
-          'text-anchor': 'top',
-          'text-max-width': 8,
-        },
-        paint: {
-          'text-color': ['match', ['get', 'status'],
-            'operational', '#22c55e',
-            'cancelled', '#94a3b8',
-            'permitted', '#eab308',
-            'under_construction', '#eab308',
-            '#FF8B01',
-          ],
-          'text-halo-color': '#090909',
-          'text-halo-width': 1.5,
-        },
-      });
-      addLog('Layers added (clusters · points · labels)', { layerAdded: true });
-
-      // fitBounds to Sweden after layers are ready — more reliable than center+zoom
-      // in the Map() constructor on iOS where the canvas may not have its final size yet.
-      map.fitBounds(
-        [[10.5, 55.2], [24.2, 69.1]] as [[number, number], [number, number]],
-        { padding: 20, maxZoom: 6, duration: 0, animate: false },
-      );
-
-      mapReadyRef.current = true;
-
-      map.on('click', 'clusters', e => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-        if (!features.length) return;
-        const clusterId = features[0].properties.cluster_id as number;
-        const geom = features[0].geometry as { type: 'Point'; coordinates: [number, number] };
-        (map.getSource(SOURCE_ID) as GeoJSONSource)
-          .getClusterExpansionZoom(clusterId)
-          .then(zoom => { map.easeTo({ center: geom.coordinates, zoom: zoom + 0.5 }); })
-          .catch(() => {});
-      });
-      map.on('click', 'unclustered-point', e => {
-        const feature = e.features?.[0];
-        if (!feature?.properties) return;
-        const projectId = String(feature.properties.id as string);
-        const p = projectsRef.current.find(x => String(x.id) === projectId) ?? null;
-        setSelectedProject(prev => (prev && String(prev.id) === projectId ? null : p));
-      });
-      map.on('click', e => {
-        const hits = map.queryRenderedFeatures(e.point, { layers: ['clusters', 'unclustered-point'] });
-        if (!hits.length) setSelectedProject(null);
-      });
-      map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
-      map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
-      map.on('mouseenter', 'unclustered-point', () => { map.getCanvas().style.cursor = 'pointer'; });
-      map.on('mouseleave', 'unclustered-point', () => { map.getCanvas().style.cursor = ''; });
-    }
-
-    // 3. Event listeners — log everything to the diagnostic panel
-    let styleLoadCount = 0;
-    map.on('style.load', () => {
-      styleLoadCount++;
-      const canvas = map.getCanvas();
-      addLog(
-        `style.load #${styleLoadCount} · canvas ${canvas.width}×${canvas.height}`,
-        { styleLoaded: true, canvasW: canvas.width, canvasH: canvas.height },
-      );
-      // style.load #2+ = we just switched to the fallback style — re-add layers
-      if (styleLoadCount > 1) {
-        layersAdded = false;
-        mapReadyRef.current = false;
-        addProjectLayers();
-        map.resize();
-      }
-    });
-
-    map.on('load', () => {
-      const canvas = map.getCanvas();
-      addLog(`load event · canvas ${canvas.width}×${canvas.height}`, {
-        canvasW: canvas.width,
-        canvasH: canvas.height,
-      });
-      addProjectLayers();
-      map.resize();
-    });
-
-    map.on('sourcedata', e => {
-      const src = (e as unknown as { sourceId?: string; isSourceLoaded?: boolean });
-      addLog(`sourcedata: ${src.sourceId ?? '?'} loaded=${String(src.isSourceLoaded ?? '?')}`);
-    });
-
-    map.on('data', e => {
-      const d = (e as unknown as { dataType?: string; sourceId?: string });
-      if (d.dataType && d.dataType !== 'other') {
-        addLog(`data: type=${d.dataType}${d.sourceId ? ` src=${d.sourceId}` : ''}`);
-      }
-    });
-
-    // Only switch to fallback on STYLE-LEVEL errors, not individual tile failures.
-    // Tile errors (ev.sourceId is set) are common on iOS/Capacitor due to ATS/CORS
-    // restrictions on arcgisonline.com — logging them is enough, switching style
-    // would destroy the project layers unnecessarily.
-    let fallbackSwitched = false;
-    map.on('error', e => {
-      const ev = e as unknown as { sourceId?: string; error?: { message?: string } | unknown };
-      const msg = (ev.error as { message?: string } | undefined)?.message ?? String(ev.error ?? 'unknown');
-      if (ev.sourceId) {
-        // Tile / source-data error — normal on iOS, keep current style
-        addLog(`Tile error (${ev.sourceId}): ${msg.slice(0, 80)}`);
+      let map!: maplibregl.Map;
+      try {
+        map = new maplibregl.Map({
+          container,
+          style: MAP_STYLE,
+          center: SWEDEN_CENTER,
+          zoom: SWEDEN_ZOOM,
+          minZoom: 3,
+          maxZoom: 14,
+          attributionControl: false,
+          pitchWithRotate: false,
+          dragRotate: false,
+        });
+      } catch (err) {
+        addLog(`Map() threw: ${String(err)}`, { lastError: String(err), mapCreated: false });
         return;
       }
-      addLog(`STYLE ERROR: ${msg}`, { lastError: msg });
-      if (!fallbackSwitched) {
-        fallbackSwitched = true;
-        addLog('→ switching to OSM fallback style', { usingFallback: true });
-        try { map.setStyle(FALLBACK_STYLE); } catch (err2) {
-          addLog(`setStyle(fallback) threw: ${String(err2)}`);
-        }
-      }
-    });
+      mapRef.current = map;
+      addLog('Map() created · style=ESRI satellite', { mapCreated: true });
 
-    map.on('webglcontextlost', () => {
-      addLog('webglcontextlost!', { webGLContextLost: true });
-    });
-    map.on('webglcontextrestored', () => {
-      addLog('webglcontextrestored', { webGLContextLost: false });
-    });
-
-    // 4. Resize cascade — iOS WKWebView often has container size=0 at Map() time
-    const updateCanvasSize = () => {
-      const r = container.getBoundingClientRect();
-      const c = map.getCanvas();
-      setDiag(prev => ({
-        ...prev,
-        containerW: r.width,
-        containerH: r.height,
-        canvasW: c.width,
-        canvasH: c.height,
-      }));
-    };
-
-    const updateContainerDims = () => {
-      const r = container.getBoundingClientRect();
-      setDiag(prev => ({ ...prev, containerW: r.width, containerH: r.height }));
-    };
-
-    // Debounsa ResizeObserver med ett rAF-pass för att förhindra feedback-loopar
-    // där map.resize() i sin tur triggar en ny ResizeObserver-callback.
-    let resizeScheduled = false;
-    const ro = new ResizeObserver(() => {
-      if (cancelled || resizeScheduled) return;
-      resizeScheduled = true;
-      requestAnimationFrame(() => {
-        resizeScheduled = false;
-        if (cancelled) return;
-        map.resize();
-        updateCanvasSize();
-        updateContainerDims();
+      map.on('error', (ev) => {
+        console.error('[NationalMap] EDITOR MAP ERROR', (ev as { error?: Error }).error ?? ev);
       });
-    });
-    ro.observe(container);
 
-    // Initiell resize direkt vid mount (inga upprepad timeout-kedja behövs).
-    map.resize();
-    updateContainerDims();
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
 
-    disposers.push(
-      () => { ro.disconnect(); },
-      () => { mapReadyRef.current = false; try { map.remove(); } catch {} mapRef.current = null; },
-    );
-    }; // end doInit
+      let layersAdded = false;
+      function addProjectLayers() {
+        if (layersAdded) return;
+        layersAdded = true;
+
+        const initData = filteredProjectsRef.current.length > 0
+          ? filteredProjectsRef.current
+          : BUNDLED_PROJECTS.filter(p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number');
+        const geoJson = buildGeoJSON(initData);
+        console.info('[NationalMap] GeoJSON features:', geoJson.features.length, '(', initData.length, 'proj)');
+        map.addSource(SOURCE_ID, {
+          type: 'geojson',
+          data: geoJson,
+          cluster: true,
+          clusterMaxZoom: 8,
+          clusterRadius: 12,
+        });
+        addLog(`Source "${SOURCE_ID}" added (${geoJson.features.length} features)`, { sourceAdded: true });
+
+        map.addLayer({
+          id: 'clusters',
+          type: 'circle',
+          source: SOURCE_ID,
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': ['step', ['get', 'point_count'], '#FF8B01', 10, '#FFB347', 30, '#FF6B00'],
+            'circle-radius': ['step', ['get', 'point_count'], 9, 25, 11, 100, 13, 500, 15, 1000, 17],
+            'circle-opacity': 0.9,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#090909',
+          },
+        });
+        map.addLayer({
+          id: 'cluster-count',
+          type: 'symbol',
+          source: SOURCE_ID,
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': ['get', 'point_count_abbreviated'],
+            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+            'text-size': 11,
+          },
+          paint: { 'text-color': '#090909' },
+        });
+        map.addLayer({
+          id: 'unclustered-point',
+          type: 'circle',
+          source: SOURCE_ID,
+          filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-color': ['match', ['get', 'status'],
+              'operational', '#22c55e',
+              'cancelled', '#94a3b8',
+              'permitted', '#FF8B01',
+              'under_construction', '#FF8B01',
+              'planned', '#3B82F6',
+              'proposed', '#3B82F6',
+              'consultation', '#3B82F6',
+              '#94a3b8',
+            ],
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.5, 7, 4, 10, 6],
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': '#090909',
+            'circle-opacity': 0.95,
+          },
+        });
+        map.addLayer({
+          id: 'project-label',
+          type: 'symbol',
+          source: SOURCE_ID,
+          filter: ['!', ['has', 'point_count']],
+          minzoom: 7,
+          layout: {
+            'text-field': ['get', 'name'],
+            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+            'text-size': 11,
+            'text-offset': [0, 1.2],
+            'text-anchor': 'top',
+            'text-max-width': 8,
+          },
+          paint: {
+            'text-color': ['match', ['get', 'status'],
+              'operational', '#22c55e',
+              'cancelled', '#94a3b8',
+              'permitted', '#eab308',
+              'under_construction', '#eab308',
+              '#FF8B01',
+            ],
+            'text-halo-color': '#090909',
+            'text-halo-width': 1.5,
+          },
+        });
+        addLog('Layers added (clusters · points · labels)', { layerAdded: true });
+
+        map.fitBounds(
+          [[10.5, 55.2], [24.2, 69.1]] as [[number, number], [number, number]],
+          { padding: 20, maxZoom: 6, duration: 0, animate: false },
+        );
+
+        mapReadyRef.current = true;
+
+        map.on('click', 'clusters', e => {
+          const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+          if (!features.length) return;
+          const clusterId = features[0].properties.cluster_id as number;
+          const geom = features[0].geometry as { type: 'Point'; coordinates: [number, number] };
+          (map.getSource(SOURCE_ID) as GeoJSONSource)
+            .getClusterExpansionZoom(clusterId)
+            .then(zoom => { map.easeTo({ center: geom.coordinates, zoom: zoom + 0.5 }); })
+            .catch(() => {});
+        });
+        map.on('click', 'unclustered-point', e => {
+          const feature = e.features?.[0];
+          if (!feature?.properties) return;
+          const projectId = String(feature.properties.id as string);
+          const p = projectsRef.current.find(x => String(x.id) === projectId) ?? null;
+          setSelectedProject(prev => (prev && String(prev.id) === projectId ? null : p));
+        });
+        map.on('click', e => {
+          const hits = map.queryRenderedFeatures(e.point, { layers: ['clusters', 'unclustered-point'] });
+          if (!hits.length) setSelectedProject(null);
+        });
+        map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
+        map.on('mouseenter', 'unclustered-point', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'unclustered-point', () => { map.getCanvas().style.cursor = ''; });
+      }
+
+      let styleLoadCount = 0;
+      map.on('style.load', () => {
+        styleLoadCount++;
+        const canvas = map.getCanvas();
+        addLog(
+          `style.load #${styleLoadCount} · canvas ${canvas.width}×${canvas.height}`,
+          { styleLoaded: true, canvasW: canvas.width, canvasH: canvas.height },
+        );
+        if (styleLoadCount > 1) {
+          layersAdded = false;
+          mapReadyRef.current = false;
+          addProjectLayers();
+          map.resize();
+        }
+      });
+
+      map.on('load', () => {
+        const canvas = map.getCanvas();
+        addLog(`load event · canvas ${canvas.width}×${canvas.height}`, {
+          canvasW: canvas.width,
+          canvasH: canvas.height,
+        });
+        addProjectLayers();
+        map.resize();
+      });
+
+      map.on('sourcedata', e => {
+        const src = (e as unknown as { sourceId?: string; isSourceLoaded?: boolean });
+        addLog(`sourcedata: ${src.sourceId ?? '?'} loaded=${String(src.isSourceLoaded ?? '?')}`);
+      });
+
+      map.on('data', e => {
+        const d = (e as unknown as { dataType?: string; sourceId?: string });
+        if (d.dataType && d.dataType !== 'other') {
+          addLog(`data: type=${d.dataType}${d.sourceId ? ` src=${d.sourceId}` : ''}`);
+        }
+      });
+
+      let fallbackSwitched = false;
+      map.on('error', e => {
+        const ev = e as unknown as { sourceId?: string; error?: { message?: string } | unknown };
+        const msg = (ev.error as { message?: string } | undefined)?.message ?? String(ev.error ?? 'unknown');
+        if (ev.sourceId) {
+          addLog(`Tile error (${ev.sourceId}): ${msg.slice(0, 80)}`);
+          return;
+        }
+        addLog(`STYLE ERROR: ${msg}`, { lastError: msg });
+        if (!fallbackSwitched) {
+          fallbackSwitched = true;
+          addLog('→ switching to OSM fallback style', { usingFallback: true });
+          try { map.setStyle(FALLBACK_STYLE); } catch (err2) {
+            addLog(`setStyle(fallback) threw: ${String(err2)}`);
+          }
+        }
+      });
+
+      map.on('webglcontextlost', () => {
+        addLog('webglcontextlost!', { webGLContextLost: true });
+      });
+      map.on('webglcontextrestored', () => {
+        addLog('webglcontextrestored', { webGLContextLost: false });
+      });
+
+      const updateCanvasSize = () => {
+        const r = container.getBoundingClientRect();
+        const c = map.getCanvas();
+        setDiag(prev => ({
+          ...prev,
+          containerW: r.width,
+          containerH: r.height,
+          canvasW: c.width,
+          canvasH: c.height,
+        }));
+      };
+
+      const updateContainerDims = () => {
+        const r = container.getBoundingClientRect();
+        setDiag(prev => ({ ...prev, containerW: r.width, containerH: r.height }));
+      };
+
+      let resizeScheduled = false;
+      const ro = new ResizeObserver(() => {
+        if (cancelled || resizeScheduled) return;
+        resizeScheduled = true;
+        requestAnimationFrame(() => {
+          resizeScheduled = false;
+          if (cancelled) return;
+          map.resize();
+          updateCanvasSize();
+          updateContainerDims();
+        });
+      });
+      ro.observe(container);
+
+      map.resize();
+      updateContainerDims();
+
+      disposers.push(
+        () => { ro.disconnect(); },
+        () => { mapReadyRef.current = false; try { map.remove(); } catch {} mapRef.current = null; },
+      );
+    };
 
     rafId = requestAnimationFrame(doInit);
 
@@ -796,9 +757,8 @@ export function NationalMapView({
       if (rafId !== null) cancelAnimationFrame(rafId);
       disposers.forEach(fn => fn());
     };
-  }, []); // mount-only
+  }, []);
 
-  // ── Update source data when filtered projects change ──────────────────────
   useEffect(() => {
     filteredProjectsRef.current = filteredProjects;
     const map = mapRef.current;
@@ -810,19 +770,15 @@ export function NationalMapView({
     } catch { /* map may be mid-init */ }
   }, [filteredProjects]);
 
-  // ── Sync selectedProject when projects list refreshes ────────────────────
   useEffect(() => {
     if (!selectedProject) return;
     const updated = projects.find(p => String(p.id) === String(selectedProject.id));
     if (!updated) setSelectedProject(null);
     else if (updated !== selectedProject) setSelectedProject(updated);
-  }, [projects]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ─────────────────────────────────────────────────────────────────────────
+  }, [projects]);
 
   return (
     <div className="nm-page">
-      {/* Sidhuvud */}
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 pt-[max(env(safe-area-inset-top),12px)]">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-[#FFB347]">
@@ -838,7 +794,6 @@ export function NationalMapView({
                 ? `${filteredProjects.length} projekt · hämtar live…`
                 : `${filteredProjects.length} projekt${turbineTotal > 0 ? ` · ${turbineTotal} verk` : ''}`}
           </h1>
-          {/* Räknaranimation — visas under laddning och strax efter */}
           {animatedCount > 0 && animatedCount < turbineTotal && (
             <div className="mt-0.5 flex items-center gap-1.5">
               <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
@@ -861,7 +816,6 @@ export function NationalMapView({
         </button>
       </div>
 
-      {/* Statusfilter-pills */}
       <div className="flex gap-2 overflow-x-auto border-b border-white/10 px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {(['aktuella', 'planerade', 'pågående', 'befintliga', 'alla'] as FilterMode[]).map(mode => (
           <button
@@ -878,22 +832,22 @@ export function NationalMapView({
         ))}
       </div>
 
-      {/* MapLibre GL-karta */}
       <div className="nm-viewport">
-        {/* Kartbehållare — MapLibre monteras här */}
         <div ref={containerRef} className="nm-canvas" />
 
-        {/* Återcentrera-knapp */}
+        {/* Återcentrera-knapp (V6: rensar focusNearestId + selectedProject) */}
         <button
-          onClick={() => mapRef.current?.flyTo({ center: SWEDEN_CENTER, zoom: SWEDEN_ZOOM })}
-          className="absolute right-3 top-10 z-10 h-9 w-9 rounded-full bg-black/60 text-lg text-white shadow-lg backdrop-blur hover:bg-black/80"
-          aria-label="Centrera Sverige"
-          title="Centrera Sverige"
+          onClick={() => {
+            setFocusNearestId(null);
+            setSelectedProject(null);
+            mapRef.current?.flyTo({ center: SWEDEN_CENTER, zoom: SWEDEN_ZOOM });
+          }}
+          aria-label="Tillbaka till översikten"
+          title="Tillbaka till översikten"
         >
           ⊙
         </button>
 
-        {/* A2: "Hitta mig"-knapp — visas när GPS-position är känd */}
         {userLocation && (
           <button
             onClick={() => mapRef.current?.flyTo({
@@ -908,10 +862,8 @@ export function NationalMapView({
           </button>
         )}
 
-        {/* MapLibre runtime diagnostics — visas endast i dev-builds (import.meta.env.DEV) */}
         {import.meta.env.DEV && <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-50" style={{ maxHeight: diagExpanded ? '42dvh' : '24px', overflow: 'hidden' }}>
         <div className={`nm-diag text-[10px] font-mono text-white/90 ${diagExpanded ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-          {/* Header row */}
           <div className="flex items-center justify-between border-b border-white/20 px-2 py-1">
             <span className="font-bold text-[#FFB347]">MapLibre diagnostik</span>
             <button
@@ -922,7 +874,6 @@ export function NationalMapView({
             </button>
           </div>
 
-          {/* API / data-source diagnostics */}
           <div className="border-b border-white/10 px-2 py-1">
             <div className="mb-0.5 text-[8px] font-bold uppercase text-[#FFB347]/80">API & Datakälla</div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px]">
@@ -966,7 +917,6 @@ export function NationalMapView({
             )}
           </div>
 
-          {/* MapLibre status grid */}
           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 px-2 py-1 text-[9px]">
             <span className={diag.webGLSupported ? 'text-green-400' : 'text-red-400'}>
               WebGL: {diag.webGLSupported ? '✓' : '✗ NOT SUPPORTED'}
@@ -997,7 +947,6 @@ export function NationalMapView({
             )}
           </div>
 
-          {/* Map error */}
           {diag.lastError && (
             <div className="border-t border-red-500/30 bg-red-900/40 px-2 py-1">
               <span className="font-bold text-red-400">FEL: </span>
@@ -1005,7 +954,6 @@ export function NationalMapView({
             </div>
           )}
 
-          {/* Event log */}
           {diagExpanded && diag.log.length > 0 && (
             <div className="border-t border-white/10 px-2 py-1">
               {diag.log.map((entry, i) => (
@@ -1019,14 +967,11 @@ export function NationalMapView({
             </div>
           )}
         </div>
-        </div>}{/* /nm-diag + DEV-gate */}
+        </div>}
       </div>
 
-      {/* Projektkort */}
       <div className="bg-[#090909] px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-4">
         {selectedProject ? (
-          // Bugg 10: stopPropagation förhindrar att kart-klick utanför kortet
-          // av misstag stänger selectedProject MEDAN användaren trycker på knappen.
           <div className="rounded-2xl border border-white/10 bg-[#131313] p-4" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -1036,12 +981,6 @@ export function NationalMapView({
                 <h2 className="mt-0.5 text-base font-bold leading-tight text-white">
                   {selectedProject.name}
                 </h2>
-                {/* V6: "📍 Närmast dig"-badge visas när B4 auto-fokuserade detta projekt */}
-                {focusNearestId === String(selectedProject.id) && (
-                  <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-semibold text-blue-300">
-                    📍 Närmast dig
-                  </span>
-                )}
                 <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-white/60">
                   {selectedProject.turbineCountPlannedMin != null && (
                     <span>
@@ -1062,7 +1001,6 @@ export function NationalMapView({
                     {statusLabel(selectedProject.status)}
                   </span>
                 </p>
-                {/* B3: Beräknad elproduktion */}
                 {(selectedProject.turbineCountPlannedMin ?? 0) > 0 && (() => {
                   const count = selectedProject.turbineCountPlannedMin!;
                   const annualGWh = count * 8.5;
@@ -1084,19 +1022,35 @@ export function NationalMapView({
             </div>
             <button
               onClick={() => {
-                // Bugg 10: logga för att diagnostisera null-state vid klick
+                if (!selectedProject) return;
+                const min = selectedProject.turbineCountPlannedMin ?? 0;
+                const max = selectedProject.turbineCountPlannedMax ?? min;
+                if (min + max === 0) return;
                 console.info('[NationalMap] Öppna projektet klickad', {
-                  id: selectedProject?.id,
-                  name: selectedProject?.name,
+                  id: selectedProject.id,
+                  name: selectedProject.name,
                 });
-                if (selectedProject) onEnterEditorDirect(selectedProject);
-                else console.warn('[NationalMap] selectedProject är null vid klick');
+                onEnterEditorDirect(selectedProject);
               }}
-              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01]"
+              disabled={
+                !selectedProject ||
+                ((selectedProject.turbineCountPlannedMin ?? 0) +
+                  (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+              }
+              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#FF8B01]"
               style={{ touchAction: 'manipulation' }}
             >
-              📐 Öppna projektet
+              {!selectedProject ||
+              ((selectedProject.turbineCountPlannedMin ?? 0) +
+                (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+                ? '🚫 Inga verk att redigera'
+                : '📐 Öppna projektet'}
             </button>
+            {focusNearestId === String(selectedProject?.id) && (
+              <p className="mt-2 text-center text-[10px] font-semibold uppercase tracking-wider text-[#FF8B01]">
+                📍 Närmast dig
+              </p>
+            )}
           </div>
         ) : (
           <div className="rounded-2xl border border-white/10 bg-[#131313] px-4 py-3 text-center">
