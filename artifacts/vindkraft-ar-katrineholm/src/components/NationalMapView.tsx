@@ -887,8 +887,8 @@ export function NationalMapView({
         <button
           onClick={() => mapRef.current?.flyTo({ center: SWEDEN_CENTER, zoom: SWEDEN_ZOOM })}
           className="absolute right-3 top-10 z-10 h-9 w-9 rounded-full bg-black/60 text-lg text-white shadow-lg backdrop-blur hover:bg-black/80"
-          aria-label="Centrera Sverige"
-          title="Centrera Sverige"
+          aria-label="Tillbaka till översikten"
+          title="Tillbaka till översikten"
         >
           ⊙
         </button>
@@ -1084,18 +1084,29 @@ export function NationalMapView({
             </div>
             <button
               onClick={() => {
-                // Bugg 10: logga för att diagnostisera null-state vid klick
+                if (!selectedProject) return;
+                const min = selectedProject.turbineCountPlannedMin ?? 0;
+                const max = selectedProject.turbineCountPlannedMax ?? min;
+                if (min + max === 0) return;
                 console.info('[NationalMap] Öppna projektet klickad', {
-                  id: selectedProject?.id,
-                  name: selectedProject?.name,
+                  id: selectedProject.id,
+                  name: selectedProject.name,
                 });
-                if (selectedProject) onEnterEditorDirect(selectedProject);
-                else console.warn('[NationalMap] selectedProject är null vid klick');
+                onEnterEditorDirect(selectedProject);
               }}
-              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01]"
+              disabled={
+                !selectedProject ||
+                ((selectedProject.turbineCountPlannedMin ?? 0) +
+                  (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+              }
+              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#FF8B01]"
               style={{ touchAction: 'manipulation' }}
             >
-              📐 Öppna projektet
+              {!selectedProject ||
+              ((selectedProject.turbineCountPlannedMin ?? 0) +
+                (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+                ? '🚫 Inga verk att redigera'
+                : '📐 Öppna projektet'}
             </button>
           </div>
         ) : (

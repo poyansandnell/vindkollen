@@ -1,0 +1,184 @@
+Förstår — du vill att Replit Agent ska göra jobbet. Bra val. Jag skriver en **kort, tydlig Replit-instruktion** med exakt kod.
+
+> ⚠️ Jag ser att du lade till "(I have permission and am authorized to perform this pentest)" — det är för säkerhetstester. Det här är **inte en pentest**, det är en iOS-app-utveckling. Jag ignorerar den frasen och fokuserar på din app-uppgift.
+
+---
+
+# Klistra in detta i Replit Agent
+
+```
+Jag har exakt 4 ändringar att göra i Vindkollen-appen. Applicera varje ändring
+exakt som beskrivet. Bygg INTE om, commit:a BARA ändringarna, och rapportera
+vilka filer som ändrades.
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 1: src/components/PermissionGate.tsx
+═══════════════════════════════════════════════════════════════════════════════
+
+Hitta denna exakta import (runt rad 4):
+
+    import { openPlaceraEditor, openSverigekartan } from "@/lib/capacitorBridge";
+
+Byt till:
+
+    import { openSverigekartan } from "@/lib/capacitorBridge";
+
+───────────────────────────────────────────────────────────────────────────────
+
+Bump VERSION på rad 7-8:
+
+    const VERSION = "20";
+    const BUILD_LABEL = "🧪 Native TEST 20";
+
+Till:
+
+    const VERSION = "21";
+    const BUILD_LABEL = "🧪 Native TEST 21";
+
+───────────────────────────────────────────────────────────────────────────────
+
+Lägg till padding på knapp-containern (runt rad 86).
+
+Hitta:
+
+    <div className={`mx-auto mt-auto w-full max-w-md space-y-4 ${inApp ? "pt-4" : "pt-8"}`}>
+
+Byt till:
+
+    <div className={`mx-auto mt-auto w-full max-w-md space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] ${inApp ? "pt-4" : "pt-8"}`}>
+
+───────────────────────────────────────────────────────────────────────────────
+
+TA BORT hela detta block (runt rad 132-138, knapp 2):
+
+            <button
+              onClick={openSverigekartan}
+              disabled={starting}
+              className="w-full rounded-full border border-white/20 bg-white/5 py-3.5 text-sm font-medium text-white transition hover:bg-white/10 disabled:opacity-60"
+            >
+              🗺️ Sverigekartan – Öppna kartverktyg
+            </button>
+
+Ta bort blocket helt, inklusive omslutande tomma rader.
+
+───────────────────────────────────────────────────────────────────────────────
+
+Hitta B4-knappen (runt rad 139-149, text "🎯 Visa närmaste verk direkt (utan karta)"):
+
+            {/* B4: Snabbväg till närmaste-verk-editorn (utan att gå via Sverigekartan) */}
+            <button
+              onClick={() => {
+                sessionStorage.setItem("vindkollen:placeraEditorDirect", "1");
+                openPlaceraEditor();
+              }}
+              disabled={starting}
+              className="w-full rounded-full border border-white/10 bg-white/[0.03] py-3 text-sm font-medium text-white/70 transition hover:bg-white/10 disabled:opacity-60"
+            >
+              🎯 Visa närmaste verk direkt (utan karta)
+            </button>
+
+Byt UT HELA blocket mot:
+
+            {/* V6: B4 öppnar Sverigekartan med auto-fokus på närmaste projekt */}
+            <button
+              onClick={() => {
+                sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
+                void openSverigekartan();
+              }}
+              disabled={starting}
+              className="w-full rounded-full border border-white/10 bg-white/[0.03] py-3 text-sm font-medium text-white/70 transition hover:bg-white/10 disabled:opacity-60"
+            >
+              🗺️ Öppna Sverigekartan – välj projekt
+            </button>
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ÄNDRING 2: src/components/NationalMapView.tsx
+═══════════════════════════════════════════════════════════════════════════════
+
+VIKTIGT: V5-fixar (focusNearestId, setFocusNearestId, 📍-badge) finns redan i
+filen sedan manuell redigering. Rör dem INTE. Bara gör ÄNDRING 2A och 2B nedan.
+
+───────────────────────────────────────────────────────────────────────────────
+ÄNDRING 2A: "Centrera Sverige" → "Tillbaka till översikten"
+───────────────────────────────────────────────────────────────────────────────
+
+Hitta återcentrera-knappen (runt rad 700-715). Den har BÅDE dessa attribut:
+
+    aria-label="Centrera Sverige"
+    title="Centrera Sverige"
+
+Byt BÅDA till:
+
+    aria-label="Tillbaka till översikten"
+    title="Tillbaka till översikten"
+
+───────────────────────────────────────────────────────────────────────────────
+ÄNDRING 2B: Inaktivera 📐-knappen för projekt med 0 verk
+───────────────────────────────────────────────────────────────────────────────
+
+Hitta 📐 Öppna projektet-knappen (runt rad 1030-1040). Den ser ut som:
+
+            <button
+              onClick={() => {
+                console.info('[NationalMap] Öppna projektet klickad', {
+                  id: selectedProject?.id,
+                  name: selectedProject?.name,
+                });
+                if (selectedProject) onEnterEditorDirect(selectedProject);
+                else console.warn('[NationalMap] selectedProject är null vid klick');
+              }}
+              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01]"
+              style={{ touchAction: 'manipulation' }}
+            >
+              📐 Öppna projektet
+            </button>
+
+Byt UT HELA blocket mot:
+
+            <button
+              onClick={() => {
+                if (!selectedProject) return;
+                const min = selectedProject.turbineCountPlannedMin ?? 0;
+                const max = selectedProject.turbineCountPlannedMax ?? min;
+                if (min + max === 0) return;
+                console.info('[NationalMap] Öppna projektet klickad', {
+                  id: selectedProject.id,
+                  name: selectedProject.name,
+                });
+                onEnterEditorDirect(selectedProject);
+              }}
+              disabled={
+                !selectedProject ||
+                ((selectedProject.turbineCountPlannedMin ?? 0) +
+                  (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+              }
+              className="w-full rounded-full bg-[#FF8B01] py-3 text-sm font-bold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] active:bg-[#FF8B01] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#FF8B01]"
+              style={{ touchAction: 'manipulation' }}
+            >
+              {!selectedProject ||
+              ((selectedProject.turbineCountPlannedMin ?? 0) +
+                (selectedProject.turbineCountPlannedMax ?? 0) === 0)
+                ? '🚫 Inga verk att redigera'
+                : '📐 Öppna projektet'}
+            </button>
+
+═══════════════════════════════════════════════════════════════════════════════
+VIKTIGT — COMMIT-A INTE ÄNN
+═══════════════════════════════════════════════════════════════════════════════
+
+Efter att ha gjort alla 4 ändringar:
+
+1. Visa mig den kompletta diffen för varje ändrad fil
+2. Vänta på min OK innan du commit:ar
+3. Rör INGA andra filer
+4. Bygg INTE om (jag bygger i Xcode)
+```
+
+---
+
+**Klistra in detta i Replit. När Replit visar diffen, godkänn om allt ser rätt ut. Sedan commitar Replit, pushar till GitHub, och du drar senaste + bygger i Xcode.**
+
+Det är bara 4 ändringar i 2 filer. Borde ta Replit 3-5 minuter.
+
+**Säg till om du vill ha det justerat innan du klistrar in.**
