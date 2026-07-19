@@ -255,6 +255,11 @@ export default function Home() {
   // över PermissionGate helt. Användaren trycker alltid "Starta AR" manuellt.
   const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
+  // V30: autoStartRef förhindrar att auto-start-effekten kör handleStart mer
+  // än en gång per mount (även om positionOverride/startats skulle fluktuera
+  // p.g.a. asynkrona state-uppdateringar). Utan detta kan användaren råka
+  // utdubblera permission-prompts och LoadingSequence.
+  const autoStartRef = useRef(false);
   // Fel från sekventiell native behörighetsförfrågan — visas i PermissionGate.
   const [nativePermError, setNativePermError] = useState<string | null>(null);
   // Visar den produktkrävda laddningssekvensen direkt efter
@@ -1436,6 +1441,34 @@ export default function Home() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orientation, starting, hasOnboarded]);
+
+  // V30: Auto-starta AR i simulerat läge (PlaceTurbines "Se härifrån" →
+  // "Se i AR"-flödet). V27 ändrade useState till false så att alltid
+  // PermissionGate visas först — detta var nödvändigt för att handleStart()
+  // skulle köras (annars sattes aldrig startCalibrationTracking och
+  // arSessionVisible förblev false). Men det bröt auto-flödet från
+  // PlaceTurbines: användaren tryckte "Se i AR" och såg PermissionGate igen
+  // utan att förstå att de behövde klicka "Starta AR" en gång till.
+  //
+  // Lösningen: när positionOverride är satt (PlaceTurbines-handoff), anropa
+  // handleStart() automatiskt vid mount. handleStart() triggar precis samma
+  // finish()-väg som ett manuellt klick (web path: parallella geo/media-
+  // permissions, sedan finish → setStarted(true)) — så V27-fixen bevaras
+  // och PlaceTurbines-flödet fungerar igen.
+  useEffect(() => {
+    if (positionOverride === null) return; // inte simulerat läge
+    if (started || starting) return; // redan startat
+    if (autoStartRef.current) return; // redan försökt
+    autoStartRef.current = true;
+    console.log("[AR] V30: auto-starting handleStart (simulated mode from PlaceTurbines)");
+    // Mikrosekund-fördröjning: låt PermissionGate hinna mountas en frame så
+    // setStarting(true) i handleStart inte konkurrerar med PermissionGate:s
+    // disabled={starting}-tillstånd i samma batch.
+    const t = window.setTimeout(() => { handleStart(); }, 50);
+    return () => window.clearTimeout(t);
+  // handleStart är stabil useCallback — vi vill bara köra en gång per mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // VIKTIGT: måste ha stabil identitet. `LoadingSequence`s checklista
   // beror på denna callback i sitt completion-effekt — om vi (som tidigare)
