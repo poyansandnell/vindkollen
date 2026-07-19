@@ -388,9 +388,8 @@ const INDOOR_TINT_BLEND = 0.6;
 // Meter -> scenens enheter. Vald så att den visuella storleken/avstånden
 // matchar kamerans FOV/klippplan (samma skala som tidigare, enklare modell).
 const METERS_TO_UNITS = 0.9;
-// V37: flygsäkerhetsbelysningen ska sitta på navcellens/generatorns tak,
-// inte vid navets mitt. Halva navcellshöjden (~2.2 m) ovanför navhöjden.
-const NACELLE_LIGHT_OFFSET_M = 2.2;
+// V39: lampan på verkets allra högsta punkt (totalhöjd / bladspets).
+const LIGHT_TOP_OFFSET_M = 0;
 
 // Antagen ögonhöjd (m) för användaren.
 const EYE_HEIGHT_M = 1.6;
@@ -1288,8 +1287,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         obj.distanceLabel.sprite.position.set(x, y + labelHeight + 22 * scaleDamp, z);
         obj.distanceLabel.sprite.scale.set(24 * scaleDamp, 6 * scaleDamp, 1);
 
-        // V37: placera lampan på navcellens tak (hub + halva navcellshöjden).
-        const lightY = y + (hubHeightUnits + NACELLE_LIGHT_OFFSET_M * METERS_TO_UNITS) * scaleDamp;
+        // V39: placera hinderljuset på verkets allra högsta punkt (bladspets).
+        const lightY = y + (totalHeightUnits + LIGHT_TOP_OFFSET_M * METERS_TO_UNITS) * scaleDamp;
         obj.light.position.set(x, lightY, z);
         // Minsta synliga storlek för flygsäkerhetsbelysning oavsett avstånd —
         // annars försvinner de vid >2 km som enkla pixels. `Math.max` säker-
@@ -1903,13 +1902,12 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
           // Återställ till originalskalan om forceVisible precis stängts av.
           obj.group.scale.setScalar(obj.scaleDamp);
         }
-        // V38: lås lampan på navcellstaket med gruppens AKTUELLA skala/pos
-        // (skalboost + fall-in Y-offset). Utan detta stannar lampan på
-        // bas-hubhöjd medan tornet växer — dvs. mid-tower-felet i nattvy.
+        // V39: lås lampan på verkets totalhöjd (bladspets) så den följer
+        // gruppens aktuella skala/pos (forceVisible-boost + fall-in).
         {
           const s = obj.group.scale.x;
           const lightLocalY =
-            (obj.turbine.hubHeightMeters + NACELLE_LIGHT_OFFSET_M) * METERS_TO_UNITS;
+            (obj.turbine.heightMeters + LIGHT_TOP_OFFSET_M) * METERS_TO_UNITS;
           const lightY = obj.group.position.y + lightLocalY * s;
           obj.light.position.set(obj.group.position.x, lightY, obj.group.position.z);
           obj.glow.position.set(obj.group.position.x, lightY, obj.group.position.z);
