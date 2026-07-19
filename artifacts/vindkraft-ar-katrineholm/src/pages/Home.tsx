@@ -215,6 +215,7 @@ export default function Home() {
   const handleClearCustomPlacement = useCallback(() => {
     localStorage.removeItem(AR_HANDOFF_KEY);
     setPositionOverride(null);
+    window.dispatchEvent(new CustomEvent("vindkollen:overrideCleared"));
     // Återgå till GPS-baserat projektval. Om GPS redan finns körs
     // findNearestProject direkt i effekten nedan; annars väntar vi.
     setProjectState({ status: "loading" });
@@ -265,6 +266,16 @@ export default function Home() {
   // I simulerat läge startar vi utan laddningssekvens — showLoadingSequence
   // förblir false och sätts aldrig till true (handleStart anropas inte).
   const [showLoadingSequence, setShowLoadingSequence] = useState(false);
+  // V24: Kom ihåg om användaren redan gått igenom kalibreringen en gång.
+  // Andra och efterföljande starter hoppar direkt till AR (skipEntireSequence).
+  const [hasOnboarded, setHasOnboarded] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem("vindkollen:hasOnboarded") === "1"; } catch { return false; }
+  });
+  const markOnboarded = useCallback(() => {
+    try { localStorage.setItem("vindkollen:hasOnboarded", "1"); } catch {}
+    setHasOnboarded(true);
+  }, []);
   const [showPetition, setShowPetition] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   // Juli 2026-fix ("AR-vyn känns rörig, knappar överlappar"): "Visa karta",
@@ -1431,7 +1442,10 @@ export default function Home() {
     // laddningsskärmen och är redan slut när användaren ser AR-vyn första
     // gången.
     setArStartedAtMs(Date.now());
-  }, []);
+    // V24: Markera att användaren genomfört kalibreringen — nästa start
+    // skippar hela LoadingSequence-overlayen (skipEntireSequence=true).
+    markOnboarded();
+  }, [markOnboarded]);
 
   const handleCalibrate = useCallback(() => {
     orientation.calibrateHorizon();
@@ -1573,7 +1587,8 @@ export default function Home() {
               onComplete={handleLoadingSequenceComplete}
               calibrationPhase={orientation.calibrationPhase}
               calibrationProgress={orientation.calibrationProgress}
-              skipCalibration={!orientation.supported || Boolean(orientation.error)}
+              skipCalibration={hasOnboarded || !orientation.supported || Boolean(orientation.error)}
+              skipEntireSequence={hasOnboarded}
             />
           )}
 
@@ -2091,13 +2106,12 @@ export default function Home() {
               Juli 2026-fix: precis som topp-baren, gated bakom
               `arSessionVisible` för att inte blöda igenom bakom
               `LoadingSequence`. */}
-          {/* V23: Bottencontainern delad i två lager — Meny alltid fast längst
-              ner, övriga widgets i en scrollbar kolumn ovanför.
-              flex-col-reverse placerar Meny-knappen sist i DOM men visuellt
-              längst ner (under widgets), oavsett hur många widgets visas. */}
-          {arSessionVisible && (
+          {/* V24: Yttre gate är `started` (inte `arSessionVisible`) så Meny-
+              knappen alltid syns även när ready fluktuerar vid app-resume.
+              Widgets inuti gatas separat på `arSessionVisible`. */}
+          {started && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[45] flex flex-col-reverse">
-            {/* === MENY-KNAPP — fast vid safe-area, alltid synlig === */}
+            {/* === MENY-KNAPP — alltid synlig när started=true === */}
             <div className="pointer-events-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <button
                 onClick={() => setShowMenu(true)}
@@ -2107,7 +2121,8 @@ export default function Home() {
               </button>
             </div>
 
-            {/* === ÖVRIGA WIDGETS — scrollbara ovanför Meny === */}
+            {/* === ÖVRIGA WIDGETS — bara när AR-sessionen är synlig === */}
+            {arSessionVisible && (
             <div className="pointer-events-auto flex max-h-[55vh] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-8">
               {positionOverride && (
                 <div className="flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-900/50 px-3 py-1.5 text-xs text-blue-200">
@@ -2115,7 +2130,7 @@ export default function Home() {
                     👤 Simulerad position · {positionOverride.lat.toFixed(4)}°N {positionOverride.lon.toFixed(4)}°E
                   </span>
                   <button
-                    onClick={() => setPositionOverride(null)}
+                    onClick={() => { setPositionOverride(null); window.dispatchEvent(new CustomEvent("vindkollen:overrideCleared")); }}
                     className="shrink-0 font-semibold text-blue-300 hover:text-white"
                   >
                     ✕ Rensa
@@ -2154,6 +2169,7 @@ export default function Home() {
                 </button>
               )}
             </div>
+            )}
           </div>
           )}
 
@@ -2239,6 +2255,7 @@ export default function Home() {
                   onClick={() => {
                     localStorage.removeItem(AR_HANDOFF_KEY);
                     setPositionOverride(null);
+                    window.dispatchEvent(new CustomEvent("vindkollen:overrideCleared"));
                     setProjectState({ status: "loading" });
                     setStarted(false);
                     setShowMenu(false);
@@ -2278,6 +2295,7 @@ export default function Home() {
                   <button
                     onClick={() => {
                       setPositionOverride(null);
+                      window.dispatchEvent(new CustomEvent("vindkollen:overrideCleared"));
                       setShowMenu(false);
                     }}
                     className="w-full rounded-full border border-blue-400/30 bg-blue-900/30 py-2.5 text-xs font-medium text-blue-200 hover:bg-blue-900/50"
@@ -2306,6 +2324,20 @@ export default function Home() {
                     className="w-full rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white/80 hover:bg-white/10"
                   >
                     {compareMode ? "🔀 Dölj jämförelse" : "🔀 Jämför med planerat projekt"}
+                  </button>
+                )}
+                {/* V24: Kör kalibrering igen — nollställer hasOnboarded så
+                    nästa start visar hela LoadingSequence-kalibreringen igen. */}
+                {hasOnboarded && (
+                  <button
+                    onClick={() => {
+                      try { localStorage.removeItem("vindkollen:hasOnboarded"); } catch {}
+                      setHasOnboarded(false);
+                      setShowMenu(false);
+                    }}
+                    className="w-full rounded-full border border-white/10 bg-white/[0.03] py-2 text-[11px] font-medium text-white/40 hover:bg-white/10 hover:text-white/60"
+                  >
+                    🧭 Kör kalibrering igen
                   </button>
                 )}
                 <button

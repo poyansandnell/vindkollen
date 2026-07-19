@@ -1457,6 +1457,11 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       const state = sceneStateRef.current;
       if (!state) return;
 
+      // V24: Skippa rendering tills första orientation-event kommit in.
+      // heading=null = ingen sensor-data ännu → alla verk placeras mot
+      // norr i första frame och "fastnar" synligt tills gyro-fix ger riktig heading.
+      if (headingDegRef.current === null) return;
+
       const dt = lastTimestamp === null ? 0 : Math.min((timestamp - lastTimestamp) / 1000, 0.25);
       lastTimestamp = timestamp;
 

@@ -16,6 +16,8 @@ interface LoadingSequenceProps {
    * `Home.tsx`s befintliga felhantering efter att den här sekvensen stängts.
    */
   skipCalibration: boolean;
+  /** V24: Hoppa över HELA sekvensen (kalibr + checklist) och anropa onComplete direkt. */
+  skipEntireSequence?: boolean;
 }
 
 // Om en enskild kalibreringsdelfas (liggande/stående) tar ovanligt lång tid
@@ -112,6 +114,7 @@ export function LoadingSequence({
   calibrationPhase,
   calibrationProgress,
   skipCalibration,
+  skipEntireSequence = false,
 }: LoadingSequenceProps) {
   const [uiPhase, setUiPhase] = useState<"calibration" | "countdown" | "checklist">(
     skipCalibration ? "countdown" : "calibration",
@@ -120,6 +123,14 @@ export function LoadingSequence({
   const [checkedCount, setCheckedCount] = useState(0);
   const [showCalibrationHint, setShowCalibrationHint] = useState(false);
   const calibrationPhaseEnteredAtRef = useRef(Date.now());
+
+  // V24: Hoppa över hela sekvensen omedelbart om skipEntireSequence=true.
+  // Används vid återbesök (hasOnboarded=true i Home.tsx) så att laddnings-
+  // overlayen aldrig visas igen. onComplete() triggar handleLoadingSequenceComplete
+  // som sätter arStartedAtMs (force-visible-timern) precis som vanligt.
+  useEffect(() => {
+    if (skipEntireSequence) onComplete();
+  }, [skipEntireSequence, onComplete]);
 
   // Nollställ hjälptexten och tidsstämpeln varje gång kalibreringen går in
   // i ett nytt delsteg (liggande -> stående), så maxväntetiden räknas per

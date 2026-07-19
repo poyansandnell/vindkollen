@@ -64,6 +64,15 @@ export function useGeolocation(enabled: boolean): GeoState {
     };
   }, []);
 
+  // V24: GPS-refresh när positionOverride rensas — tvingar omedelbart nytt
+  // GPS-fix så AR aldrig fastnar på den senast kända (simulerade) positionen.
+  useEffect(() => {
+    if (!enabled) return;
+    const handler = () => setRetryToken((t) => t + 1);
+    window.addEventListener("vindkollen:overrideCleared", handler);
+    return () => window.removeEventListener("vindkollen:overrideCleared", handler);
+  }, [enabled]);
+
   useEffect(() => {
     if (!enabled) return;
 
