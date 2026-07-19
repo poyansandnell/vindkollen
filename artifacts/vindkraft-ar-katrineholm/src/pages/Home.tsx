@@ -997,28 +997,28 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started]);
 
-  // V31 (produktfeedback: "nedräkning när man går in i AR men ser inga verk"):
-  // V32: Live-sekundräknare som visar hur länge användaren stirrat på en
-  // tom AR-vy (inga verk i siktfältet). Nollställs och stoppas så fort
-  // minst ett verk ligger inom kamerans FOV (`inFrontOfCameraCount > 0`)
-  // — inte material-opaciteten (trueVisibleTurbineCount), som kan vara >0
-  // även när man tittar åt ett helt annat håll (safety/forceVisible).
-  const [searchElapsedSec, setSearchElapsedSec] = useState(0);
+  // V33: 30-sekunders nedräkning för sökhint. Räknar ner från 30 → 0 s
+  // från det ögonblick inga verk finns i FOV. Återställs direkt när ett
+  // verk hamnar i kamerans siktfält igen.
+  const SEARCH_HINT_TIMEOUT_SEC = 30;
+  const [searchRemainingSec, setSearchRemainingSec] = useState(SEARCH_HINT_TIMEOUT_SEC);
+  const searchEmptySinceRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!arSessionVisible || arStartedAtMs === null) {
-      setSearchElapsedSec(0);
+    if (!arSessionVisible || arStartedAtMs === null || inFrontOfCameraCount > 0) {
+      searchEmptySinceRef.current = null;
+      setSearchRemainingSec(SEARCH_HINT_TIMEOUT_SEC);
       return;
     }
-    // V32: gate på FOV-räkning, inte opacitet.
-    if (inFrontOfCameraCount > 0) {
-      setSearchElapsedSec(0);
-      return;
+    if (searchEmptySinceRef.current === null) {
+      searchEmptySinceRef.current = Date.now();
     }
     const tick = () => {
-      setSearchElapsedSec(Math.floor((Date.now() - arStartedAtMs) / 1000));
+      const elapsedMs = Date.now() - searchEmptySinceRef.current!;
+      const remaining = Math.max(0, SEARCH_HINT_TIMEOUT_SEC - Math.floor(elapsedMs / 1000));
+      setSearchRemainingSec(remaining);
     };
     tick();
-    const id = window.setInterval(tick, 1000);
+    const id = window.setInterval(tick, 250);
     return () => window.clearInterval(id);
   }, [arSessionVisible, arStartedAtMs, inFrontOfCameraCount]);
 
@@ -1662,20 +1662,8 @@ export default function Home() {
             />
           )}
 
-          {/* V25: Riktningsbadge — visas BARA om inget verk syns i FOV just nu
-              (nearestOnTarget=false). När pilen nere till höger aktiveras är
-              badget redundant och döljs för att inte överlappa status-badges. */}
-          {!nearestOnTarget && nearestFarTurbine && arSessionVisible && (
-            <div className="pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 rounded-full border border-[#FF8B01]/30 bg-black/60 px-3 py-1.5 text-xs text-white/85 shadow-md" style={{ top: "calc(env(safe-area-inset-top, 8px) + 72px)" }}>
-              <span className="flex items-center gap-1.5">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-[#FF8B01]" style={{ transform: `rotate(${nearestFarTurbine.bearing}deg)` }}>
-                  <path d="M12 2 L8 14 L12 10 L16 14 Z" />
-                </svg>
-                <strong className="font-semibold text-white">{(nearestFarTurbine.distanceM / 1000).toFixed(1)} km</strong>
-                <span className="text-white/60">— vrid {Math.round(nearestFarTurbine.bearing)}°</span>
-              </span>
-            </div>
-          )}
+          {/* V33: gamla "X km — vrid Y°"-riktningsbadge borttagen —
+              NearestTurbineArrow är enda avståndskälla. */}
 
           {/* Kamerabakgrund — döljs i simulerat läge.
               I simulerat läge visas mörk bakgrund istället för kamera:
@@ -1694,7 +1682,7 @@ export default function Home() {
               {/* Simulerat-badge — centrerat under safe-area-inset */}
               <div
                 className="absolute left-1/2 -translate-x-1/2 rounded-full bg-[#FF8B01] px-3 py-0.5 text-[10px] font-bold text-black shadow-lg"
-                style={{ top: "calc(env(safe-area-inset-top, 4px) + 4px)" }}
+                style={{ top: "max(2px, env(safe-area-inset-top, 4px))" }}
               >
                 📍 SIMULERAT LÄGE
               </div>
@@ -1846,26 +1834,30 @@ export default function Home() {
             <div className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-b from-[#0a1030]/55 via-[#0a1030]/35 to-[#0a1030]/60" />
           )}
 
-          {/* V32: sökhint visas så länge INGET verk ligger inom kamerans FOV
-              (`inFrontOfCameraCount === 0`), oavsett om något material
-              fortfarande har opacitet >0.02 när man tittar åt sidan
-              (safety/forceVisible). pointer-events-none — knappar och pil
-              förblir klickbara. z-30: under topp-baren (z-45) och pilen (z-50)
-              men ovanför kameran. */}
+          {/* V33: sökhint med 30s nedräkning + progress-stapel. Placerad ovanför
+              NearestTurbineArrow (z-[55]) men pointer-events-none.
+              top: max(120px, 22vh) ser till att rutan inte flyter bakom pilen. */}
           {arSessionVisible &&
             arStartedAtMs !== null &&
             inFrontOfCameraCount === 0 && (
               <div
-                className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
+                className="pointer-events-none absolute inset-x-0 z-[55] flex justify-center px-6"
                 aria-live="polite"
+                style={{ top: "max(120px, 22vh)" }}
               >
-                <div className="rounded-2xl border border-white/20 bg-black/55 px-5 py-3 text-center shadow-2xl backdrop-blur-md">
+                <div className="max-w-xs rounded-2xl border border-white/20 bg-black/55 px-5 py-3 text-center shadow-2xl backdrop-blur-md">
                   <p className="text-sm font-semibold text-white">
                     🔍 Hittar vindkraftverken…
                   </p>
                   <p className="mt-0.5 text-xs text-white/70">
-                    {searchElapsedSec}s — inga verk i siktfältet, peka kameran runt
+                    {searchRemainingSec}s kvar — peka kameran runt
                   </p>
+                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/20">
+                    <div
+                      className="h-full bg-[#FF8B01] transition-all duration-300 ease-linear"
+                      style={{ width: `${(searchRemainingSec / SEARCH_HINT_TIMEOUT_SEC) * 100}%` }}
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -2210,7 +2202,7 @@ export default function Home() {
 
             {/* === ÖVRIGA WIDGETS — bara när AR-sessionen är synlig === */}
             {arSessionVisible && (
-            <div className="pointer-events-auto flex max-h-[55vh] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-8">
+            <div className="pointer-events-auto flex max-h-[55vh] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(4.5rem,calc(env(safe-area-inset-bottom)+1.25rem))] pt-8">
               {/* V31 (produktfeedback: "gula fältet skulle vara ovanför den blå
                   rutan"): statusBanner (säkerhetskritisk varning: svag GPS/
                   kompass) visas NU FÖRST — positionOverride-pill (sekundär
@@ -2295,7 +2287,7 @@ export default function Home() {
               onClick={() => setShowMenu(false)}
             >
               <div
-                className="flex flex-col gap-3 rounded-t-3xl border-t border-white/10 bg-[#111]/95 px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl"
+                className="flex flex-col gap-3 rounded-t-3xl border-t border-white/10 bg-[#111]/95 px-4 pb-[max(3.5rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl"
                 style={{ maxHeight: "85dvh", overflowY: "auto" }}
                 onClick={(e) => e.stopPropagation()}
               >
