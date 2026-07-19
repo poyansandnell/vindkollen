@@ -629,7 +629,7 @@ export default function PlaceTurbines() {
   }
 
   return (
-    <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
+    <div className="relative flex h-[100svh] w-full flex-col overflow-hidden bg-[#090909] text-white">
 
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <div>

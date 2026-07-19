@@ -1490,6 +1490,23 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         onTurbineLandedRef.current?.(state.objects.length, state.objects.length);
       }
 
+      // V22: Distansfilter — dölj/visa verk baserat på VISIBLE_RADIUS_M.
+      // Körs efter layoutObjects() + fall-animation varje bildruta.
+      // group.visible=false döljer 3D-mesh; label/light/glow hanteras explicit
+      // eftersom de lever som fristående objekt utanför obj.group.
+      const VISIBLE_RADIUS_M = 3000;
+      for (const obj of state.objects) {
+        const tooFar = obj.renderDistM > VISIBLE_RADIUS_M;
+        obj.group.visible = !tooFar;
+        obj.label.sprite.visible = !tooFar;
+        obj.distanceLabel.sprite.visible = !tooFar;
+        obj.shadow.visible = !tooFar && obj.shadow.visible;
+        if (tooFar) {
+          (obj.light.material as THREE.SpriteMaterial).opacity = 0;
+          (obj.glow.material as THREE.SpriteMaterial).opacity = 0;
+        }
+      }
+
       // Kamerans riktning styrs helt av enhetens sensorer (gir/pitch/roll),
       // så att verken förblir fast förankrade i verkligheten/horisonten
       // istället för att följa skärmen när telefonen tiltas.

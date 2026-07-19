@@ -841,6 +841,26 @@ export default function Home() {
     return turbineDistancesM.filter((d) => d <= MAX_RENDER_DISTANCE_M).length;
   }, [turbineDistancesM, globalVisibilityFactor, indoorsOrNoSight]);
 
+  // V22: Närmaste verk UTANFÖR synlig radie — för riktningsbadgen
+  const VISIBLE_RADIUS_M = 3000;
+  const nearestFarTurbine = useMemo(() => {
+    if (!turbineDistancesM || stableGeo.lat === null || stableGeo.lon === null) return null;
+    let nearestIdx = -1;
+    let nearestDist = Infinity;
+    for (let i = 0; i < activeTurbines.length; i++) {
+      const d = turbineDistancesM[i];
+      if (d > VISIBLE_RADIUS_M && d < nearestDist) {
+        nearestIdx = i;
+        nearestDist = d;
+      }
+    }
+    if (nearestIdx < 0) return null;
+    const t = activeTurbines[nearestIdx];
+    const { lat, lon } = swerefToWgs84(t.easting, t.northing);
+    const bearing = bearingDegrees(stableGeo.lat as number, stableGeo.lon as number, lat, lon);
+    return { bearing, distanceM: nearestDist, name: t.name };
+  }, [turbineDistancesM, activeTurbines, stableGeo.lat, stableGeo.lon]);
+
   // Bäring (grader från norr) till samtliga verk — delar `stableGeo` med
   // `turbineDistancesM` ovan, så de två alltid syftar på exakt samma
   // (stabiliserade) position/index-ordning.
@@ -1555,6 +1575,20 @@ export default function Home() {
               calibrationProgress={orientation.calibrationProgress}
               skipCalibration={!orientation.supported || Boolean(orientation.error)}
             />
+          )}
+
+          {/* V22: Riktningsbadge — visas när närmaste verk är >3km bort */}
+          {nearestFarTurbine && arSessionVisible && (
+            <div className="pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 rounded-full border border-[#FF8B01]/40 bg-black/80 px-4 py-2 text-sm text-white shadow-lg" style={{ top: "calc(env(safe-area-inset-top, 8px) + 72px)" }}>
+              <div className="flex items-center gap-2">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-[#FF8B01]" style={{ transform: `rotate(${nearestFarTurbine.bearing}deg)` }}>
+                  <path d="M12 2 L8 14 L12 10 L16 14 Z" />
+                </svg>
+                <span className="text-xs">
+                  <strong>{(nearestFarTurbine.distanceM / 1000).toFixed(1)} km</strong> till närmaste verk — vrid dig {Math.round(nearestFarTurbine.bearing)}°
+                </span>
+              </div>
+            </div>
           )}
 
           {/* Kamerabakgrund — döljs i simulerat läge.
