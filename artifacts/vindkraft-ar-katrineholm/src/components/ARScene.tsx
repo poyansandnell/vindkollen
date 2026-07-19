@@ -1556,7 +1556,22 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         : sensorEuler.y;
       sensorEuler.y = effectiveYawRad;
       sensorEuler.z = 0; // nollställ roll
-      state.camera.quaternion.setFromEuler(sensorEuler);
+      // V27: Belt-and-suspenders NaN-guard — applicera INTE quaternion om
+      // någon euler-axel är NaN/Infinity (kan hända vid sensorhardwarefel).
+      // Om vi sätter en NaN-quaternion korrumperas Three.js-scenen permanent
+      // (verken renderas 241 km bort). Behåll förra framens quaternion istället.
+      const isValidNumber = (v: unknown): v is number =>
+        typeof v === "number" && Number.isFinite(v);
+      if (
+        isValidNumber(sensorEuler.x) &&
+        isValidNumber(sensorEuler.y) &&
+        isValidNumber(sensorEuler.z)
+      ) {
+        state.camera.quaternion.setFromEuler(sensorEuler);
+      } else if (typeof window !== "undefined" && !(window as unknown as Record<string, unknown>)["__nanGuardLogged"]) {
+        console.warn("[ARScene] sensorEuler innehåller NaN/Infinity — hoppar över quaternion-set denna frame");
+        (window as unknown as Record<string, unknown>)["__nanGuardLogged"] = true;
+      }
       // Juli 2026-fix (TREDJE kritiska buggrapporten — trolig rotorsak):
       // `matrixWorldInverse` uppdateras normalt bara inuti
       // `WebGLRenderer.render()`, som körs i SLUTET av denna funktion. Utan

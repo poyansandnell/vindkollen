@@ -124,12 +124,17 @@ export function LoadingSequence({
   const [showCalibrationHint, setShowCalibrationHint] = useState(false);
   const calibrationPhaseEnteredAtRef = useRef(Date.now());
 
-  // V24: Hoppa över hela sekvensen omedelbart om skipEntireSequence=true.
+  // V24+V27: Hoppa över hela sekvensen omedelbart om skipEntireSequence=true.
   // Används vid återbesök (hasOnboarded=true i Home.tsx) så att laddnings-
   // overlayen aldrig visas igen. onComplete() triggar handleLoadingSequenceComplete
   // som sätter arStartedAtMs (force-visible-timern) precis som vanligt.
+  // V27: 50ms timeout (istället för synkront anrop) ger React tid att rendera
+  // null-returnen nedan INNAN onComplete triggar ytterligare state-ändringar.
   useEffect(() => {
-    if (skipEntireSequence) onComplete();
+    if (!skipEntireSequence) return undefined;
+    console.log("[LoadingSequence] skipEntireSequence=true — hoppar till onComplete direkt");
+    const id = window.setTimeout(onComplete, 50);
+    return () => window.clearTimeout(id);
   }, [skipEntireSequence, onComplete]);
 
   // Nollställ hjälptexten och tidsstämpeln varje gång kalibreringen går in
@@ -190,6 +195,11 @@ export function LoadingSequence({
   }, [uiPhase, checkedCount, onComplete]);
 
   const countdownStage = COUNTDOWN_STAGES[Math.min(countdownIndex, COUNTDOWN_STAGES.length - 1)];
+
+  // V27: returnera null när vi hoppar hela sekvensen — förhindrar att den
+  // svarta overlayen blinkar till en frame och täcker AR-scenen.
+  // useEffect ovan anropar onComplete() efter 50ms oavsett.
+  if (skipEntireSequence) return null;
 
   return (
     // Juli 2026-fix (regressionsrapport: "renderingen väntar på

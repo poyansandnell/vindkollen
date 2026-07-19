@@ -1346,7 +1346,16 @@ export default function Home() {
 
     setStarting(true);
     setNativePermError(null);
-    setShowLoadingSequence(true);
+    // V27: Visa LoadingSequence (kalibrering + checklista) bara första gången.
+    // Vid återbesök (hasOnboarded=true) hoppar vi direkt till AR — ingen
+    // svart overlay, ingen kalibrering. arStartedAtMs sätts direkt här
+    // istället för via handleLoadingSequenceComplete.
+    if (hasOnboarded) {
+      console.log("[AR] hasOnboarded=true — hoppar över LoadingSequence");
+      setArStartedAtMs(Date.now());
+    } else {
+      setShowLoadingSequence(true);
+    }
 
     // Ljud på som standard: startas direkt från samma knapptryckning (giltigt
     // användargest för iOS Safaris ljuduppspelningsregler), innan ev. await
@@ -1426,7 +1435,7 @@ export default function Home() {
       finish();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orientation, starting]);
+  }, [orientation, starting, hasOnboarded]);
 
   // VIKTIGT: måste ha stabil identitet. `LoadingSequence`s checklista
   // beror på denna callback i sitt completion-effekt — om vi (som tidigare)
