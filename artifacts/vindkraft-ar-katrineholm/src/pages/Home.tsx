@@ -998,17 +998,19 @@ export default function Home() {
   }, [started]);
 
   // V31 (produktfeedback: "nedräkning när man går in i AR men ser inga verk"):
-  // Live-sekundräknare som visar hur länge användaren stirrat på en tom
-  // AR-vy. Nollställs och stoppas så fort ett verk blivit synligt — eller
-  // om AR-sessionen avslutas. Placerad EFTER arDebugStats-deklarationen
-  // (beroende på trueVisibleTurbineCount).
+  // V32: Live-sekundräknare som visar hur länge användaren stirrat på en
+  // tom AR-vy (inga verk i siktfältet). Nollställs och stoppas så fort
+  // minst ett verk ligger inom kamerans FOV (`inFrontOfCameraCount > 0`)
+  // — inte material-opaciteten (trueVisibleTurbineCount), som kan vara >0
+  // även när man tittar åt ett helt annat håll (safety/forceVisible).
   const [searchElapsedSec, setSearchElapsedSec] = useState(0);
   useEffect(() => {
     if (!arSessionVisible || arStartedAtMs === null) {
       setSearchElapsedSec(0);
       return;
     }
-    if (arDebugStats.trueVisibleTurbineCount > 0) {
+    // V32: gate på FOV-räkning, inte opacitet.
+    if (inFrontOfCameraCount > 0) {
       setSearchElapsedSec(0);
       return;
     }
@@ -1018,7 +1020,7 @@ export default function Home() {
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [arSessionVisible, arStartedAtMs, arDebugStats.trueVisibleTurbineCount]);
+  }, [arSessionVisible, arStartedAtMs, inFrontOfCameraCount]);
 
   // Juli 2026-fix (produktkrav 6, ny omgång): "Heading age (ms)" i
   // felsökningsraden — tid sedan senaste `deviceorientation`-händelsen,
@@ -1844,16 +1846,14 @@ export default function Home() {
             <div className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-b from-[#0a1030]/55 via-[#0a1030]/35 to-[#0a1030]/60" />
           )}
 
-          {/* V31 (produktfeedback: "nedräkning när man går in i AR men ser inga
-              verk"): centrerat sökhint-överlägg visas SÅ LÄNGE ingen turbin är
-              synlig. Tickar varje sekund tills trueVisibleTurbineCount > 0 →
-              searchElapsedSec sätts till 0 → alla villkor false → overlay
-              försvinner automatiskt. pointer-events-none så att NearestTurbin-
-              Arrow och knappar förblir klickbara. z-30: under topp-baren (z-45)
-              och pilen (z-50) men ovanför kameran. */}
+          {/* V32: sökhint visas så länge INGET verk ligger inom kamerans FOV
+              (`inFrontOfCameraCount === 0`), oavsett om något material
+              fortfarande har opacitet >0.02 när man tittar åt sidan
+              (safety/forceVisible). pointer-events-none — knappar och pil
+              förblir klickbara. z-30: under topp-baren (z-45) och pilen (z-50)
+              men ovanför kameran. */}
           {arSessionVisible &&
             arStartedAtMs !== null &&
-            arDebugStats.trueVisibleTurbineCount === 0 &&
             inFrontOfCameraCount === 0 && (
               <div
                 className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
@@ -1864,7 +1864,7 @@ export default function Home() {
                     🔍 Hittar vindkraftverken…
                   </p>
                   <p className="mt-0.5 text-xs text-white/70">
-                    {searchElapsedSec}s — peka kameran runt så fixar jag positionen
+                    {searchElapsedSec}s — inga verk i siktfältet, peka kameran runt
                   </p>
                 </div>
               </div>

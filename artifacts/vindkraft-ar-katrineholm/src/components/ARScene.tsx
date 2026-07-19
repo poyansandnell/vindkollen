@@ -1430,18 +1430,10 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     // undviker att allokera nya `THREE.Vector3` varje verk, varje bildruta.
     const camSpaceVec = new THREE.Vector3();
     const ndcVec = new THREE.Vector3();
-    // Juli 2026-fix (FJÄRDE kritiska buggrapporten, punkt 4: efterfrågad
-    // felsökningslogg med exakt fälten "Camera yaw" och "Relative angle").
-    // `cameraYawEuler` extraherar girvinkeln (Y-axeln, samma "YXZ"-ordning
-    // som `computeDeviceQuaternion` bygger kvaternionen i) direkt från
-    // kamerans FAKTISKA, redan applicerade rotation (`state.camera.quaternion`,
-    // satt från `quaternionRef.current` högre upp i denna loop) — INTE från
-    // rå sensordata. Detta är avsiktligt ett separat tal från "Heading"
-    // (`Riktning`/`headingDegRef` i `useDeviceOrientation`/`LiveDebugStrip`):
-    // om de två någonsin divergerar bevisar det direkt att kamerarotationen
-    // inte längre följer den utjämnade riktningen (exakt den typen av bugg
-    // som rapporten beskriver).
-    const cameraYawEuler = new THREE.Euler();
+    // V32: cameraYawEuler (Euler-YXZ ur full camera-quat) borttagen — gav
+    // systematiskt ~90–180° offset vs Heading eftersom Q1-rotationen (−90° X
+    // för skärmplan) ingår i camera.quaternion. Optisk yaw beräknas nu från
+    // (0,0,-1) transformerad med camera quaternion (se nedan).
 
     // Juli 2026-fix (kritisk buggrapport punkt 4: "logga avstånd/bäring/
     // cameraForward/isVisible/frustumVisible per verk för att kontrollera
@@ -1757,13 +1749,18 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         relativeAngle_deg: number | null;
       }> = [];
 
-      // Juli 2026-fix (FJÄRDE kritiska buggrapporten, punkt 4): "Camera yaw"
-      // — girvinkeln som kameran FAKTISKT applicerade den här bildrutan
-      // (kopierad från `quaternionRef.current` längre upp), omvandlad till
-      // samma 0-360°-konvention som kompassriktningen (`Riktning`) för att
-      // vara direkt jämförbar i loggen.
-      cameraYawEuler.setFromQuaternion(state.camera.quaternion, "YXZ");
-      const cameraYawDeg = ((-cameraYawEuler.y * 180) / Math.PI + 360) % 360;
+      // V32: "Camera yaw" = optisk axel i världen. Euler-Y ur full
+      // camera-quat (Q1 −90° X + skärm) gav ofta ~90–180° fel vs Heading
+      // trots att AR-scenen följde sensorn. Optisk yaw från (0,0,-1)
+      // applyQuaternion är samma konvention som cameraForward/synlighetslogik.
+      const cameraForwardForYaw = new THREE.Vector3(0, 0, -1).applyQuaternion(
+        state.camera.quaternion,
+      );
+      const cameraYawDeg =
+        ((Math.atan2(cameraForwardForYaw.x, -cameraForwardForYaw.z) * 180) /
+          Math.PI +
+          360) %
+        360;
 
       for (const obj of state.objects) {
         obj.bladesGroup.rotation.z += obj.bladeRadPerSec * dt;
