@@ -250,7 +250,10 @@ export default function Home() {
   // OBS: startades=true vid mount aktiverar geo/orientation/camera-hookarna
   // direkt, men det är avsiktligt — kameran behövs fortfarande för AR-bakgrund
   // och kompassen för att kunna titta runt i AR-scenen.
-  const [started, setStarted] = useState(() => positionOverride !== null || loadStoredProject() !== null);
+  // V26: Alltid false vid mount — förhindrar att PlaceTurbines-handoff
+  // (positionOverride satt i sessionStorage) auto-startar AR och hoppar
+  // över PermissionGate helt. Användaren trycker alltid "Starta AR" manuellt.
+  const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
   // Fel från sekventiell native behörighetsförfrågan — visas i PermissionGate.
   const [nativePermError, setNativePermError] = useState<string | null>(null);

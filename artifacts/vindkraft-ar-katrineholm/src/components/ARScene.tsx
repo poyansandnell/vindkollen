@@ -1526,20 +1526,35 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // V25: Yaw-komponenten smoothas med EMA (ALPHA=0.35) för att dämpa
       // diskreta CoreMotion-hopp vid snabb rotation. Pitch/roll lämnas råa
       // (de är redan stabila och smoothing där orsakar horizon-drift).
+      // V26: NaN-säker heading-smoothing (V25 hade NaN-bugg på första frame
+      // eftersom smoothedYawDegRef.current=null → delta=NaN → permanent NaN).
       const HEADING_SMOOTHING_ALPHA = 0.35;
       const sensorEuler = new THREE.Euler().setFromQuaternion(quaternionRef.current, "YXZ");
-      // Råa yaw-grader i [0, 360)
       const rawYawDeg = ((sensorEuler.y * (180 / Math.PI)) % 360 + 360) % 360;
-      if (smoothedYawDegRef.current === null) {
-        smoothedYawDegRef.current = rawYawDeg;
-      } else {
-        // Hantera wrap-around (359° → 1° ska gå via 0°, inte via 358°)
-        let delta = rawYawDeg - smoothedYawDegRef.current;
-        if (delta > 180) delta -= 360;
-        if (delta < -180) delta += 360;
-        smoothedYawDegRef.current = ((smoothedYawDegRef.current + delta * HEADING_SMOOTHING_ALPHA) % 360 + 360) % 360;
+      // Helper: giltigt ändlikt tal i [0, 360)
+      const isValidYaw = (v: unknown): v is number =>
+        typeof v === "number" && Number.isFinite(v);
+      if (isValidYaw(rawYawDeg)) {
+        if (!isValidYaw(smoothedYawDegRef.current)) {
+          // Första giltiga frame (eller recovery efter NaN) — initiera direkt
+          smoothedYawDegRef.current = rawYawDeg;
+        } else {
+          // EMA med wrap-around-hantering (359° → 1° via 0°, inte via 358°)
+          let delta = rawYawDeg - smoothedYawDegRef.current;
+          if (delta > 180) delta -= 360;
+          if (delta < -180) delta += 360;
+          smoothedYawDegRef.current = ((smoothedYawDegRef.current + delta * HEADING_SMOOTHING_ALPHA) % 360 + 360) % 360;
+          // Sanity-check: om smoothing producerade NaN, återgå till rå heading
+          if (!isValidYaw(smoothedYawDegRef.current)) {
+            smoothedYawDegRef.current = rawYawDeg;
+          }
+        }
       }
-      sensorEuler.y = smoothedYawDegRef.current * (Math.PI / 180);
+      // Använd smoothad heading om giltig, annars sensorns råa yaw som fallback
+      const effectiveYawRad = isValidYaw(smoothedYawDegRef.current)
+        ? (smoothedYawDegRef.current * Math.PI) / 180
+        : sensorEuler.y;
+      sensorEuler.y = effectiveYawRad;
       sensorEuler.z = 0; // nollställ roll
       state.camera.quaternion.setFromEuler(sensorEuler);
       // Juli 2026-fix (TREDJE kritiska buggrapporten — trolig rotorsak):
