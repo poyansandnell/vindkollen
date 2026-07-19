@@ -249,7 +249,7 @@ export default function Home() {
   // OBS: startades=true vid mount aktiverar geo/orientation/camera-hookarna
   // direkt, men det är avsiktligt — kameran behövs fortfarande för AR-bakgrund
   // och kompassen för att kunna titta runt i AR-scenen.
-  const [started, setStarted] = useState(() => positionOverride !== null);
+  const [started, setStarted] = useState(() => positionOverride !== null || loadStoredProject() !== null);
   const [starting, setStarting] = useState(false);
   // Fel från sekventiell native behörighetsförfrågan — visas i PermissionGate.
   const [nativePermError, setNativePermError] = useState<string | null>(null);
@@ -352,6 +352,8 @@ export default function Home() {
   // Uppstartsnedräkning — visas tills första verket syns i kameran
   const [arStartupSeconds, setArStartupSeconds] = useState(0);
   const [showStartupCounter, setShowStartupCounter] = useState(false);
+  // V20: fall-animation räknare — "X / N verk på plats"
+  const [turbineLandedCount, setTurbineLandedCount] = useState<{ landed: number; total: number } | null>(null);
 
   const [inApp] = useState(() => (typeof navigator !== "undefined" ? isInAppBrowser() : false));
   const [appName] = useState(() => (typeof navigator !== "undefined" ? inAppBrowserName() : ""));
@@ -1535,7 +1537,7 @@ export default function Home() {
       camera.nativePreview ? "bg-transparent" :
       "bg-[#090909]"
     }`}>
-      {!started && (
+      {!started && positionOverride === null && (
         <PermissionGate
           onStart={handleStart}
           starting={starting}
@@ -1616,11 +1618,12 @@ export default function Home() {
             showHiddenTurbines={showHiddenTurbines}
             globalVisibilityFactor={positionOverride !== null ? 1 : globalVisibilityFactor}
             hideAll={positionOverride !== null ? false : indoorsOrNoSight}
-            forceVisibleIds={forceVisibleIds}
+            forceVisibleIds={positionOverride !== null ? new Set(activeTurbines.map(t => t.id)) : forceVisibleIds}
             debugForceNearest={debugForceNearest}
             disableOcclusion={debugDisableOcclusion}
             arStartedAtMs={arStartedAtMs}
             turbinesVisible={turbinesVisible}
+            onTurbineLanded={(landed, total) => setTurbineLandedCount({ landed, total })}
           />
           {/* A4: Jämför-läge — det "planerade" projektets ursprungliga verk
               renderas som ett halvgenomskinligt spökskikt (30 % visibilitet)
@@ -2119,8 +2122,19 @@ export default function Home() {
           </div>
           )}
 
-          {/* Uppstartsnedräkning: visas tills det första verket syns i kameran */}
-          {showStartupCounter && (
+          {/* V20: fall-animation räknare — visas under de 1.5 s verken faller in */}
+          {turbineLandedCount !== null && turbineLandedCount.landed < turbineLandedCount.total && (
+            <div className="pointer-events-none absolute left-1/2 top-1/3 z-[52] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-black/80 px-6 py-4 text-center text-white shadow-2xl">
+              <div className="text-4xl">🌬️</div>
+              <div className="mt-2 text-lg font-semibold">
+                {turbineLandedCount.landed} / {turbineLandedCount.total} verk på plats
+              </div>
+              <div className="mt-1 text-xs text-white/40">Peka kameran runt</div>
+            </div>
+          )}
+
+          {/* Uppstartsnedräkning: visas tills det första verket syns i kameran (om fall-räknaren inte är aktiv) */}
+          {showStartupCounter && (turbineLandedCount === null || turbineLandedCount.landed >= turbineLandedCount.total) && (
             <div className="pointer-events-none absolute left-1/2 top-1/3 z-[52] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-black/80 px-6 py-4 text-center text-white shadow-2xl">
               <div className="text-4xl">🌬️</div>
               <div className="mt-2 text-lg font-semibold">Hittar vindkraftverken…</div>

@@ -629,7 +629,7 @@ export default function PlaceTurbines() {
   }
 
   return (
-    <div className="relative flex h-[100svh] w-full flex-col overflow-hidden bg-[#090909] text-white">
+    <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#090909] text-white">
 
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <div>
@@ -857,9 +857,6 @@ export default function PlaceTurbines() {
                       <span className="font-semibold text-white/90">{td.id}</span>
                       <span className="text-white/90">{Math.round(td.totalScore)} p</span>
                     </div>
-                    {!td.insideBoundary && (
-                      <p className="mb-1 text-[10px] font-medium text-red-300">⚠ Utanför markerat markområde</p>
-                    )}
                     <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-white/60">
                       <span>
                         Hushåll: {td.nearestHouseholdName ?? "—"}

@@ -146,6 +146,12 @@ interface ARSceneProps {
    * omedelbart hopp. Default `true` (bakåtkompatibelt).
    */
   turbinesVisible?: boolean;
+  /**
+   * V20: Anropas varje gång antalet "landade" verk ändras under
+   * ingångs-animationen (fall-in, 1.5 s). Används för "X / N på plats"-
+   * räknaren i Home.tsx. Kallas inte alls om animationen redan slutförts.
+   */
+  onTurbineLanded?: (landed: number, total: number) => void;
 }
 
 const DEFAULT_IS_POINT_SKY = () => true;
@@ -592,6 +598,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     disableOcclusion = false,
     arStartedAtMs = null,
     turbinesVisible = true,
+    onTurbineLanded,
   },
   forwardedRef,
 ) {
@@ -627,6 +634,9 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
     getOcclusionGrid: getOcclusionGrid ?? DEFAULT_GET_OCCLUSION_GRID,
   });
+  // V20: callback-ref för fall-animation (anropas från animate-loopen, ej från React)
+  const onTurbineLandedRef = useRef(onTurbineLanded);
+  useEffect(() => { onTurbineLandedRef.current = onTurbineLanded; }, [onTurbineLanded]);
   // Väntande Fotomontage-förfrågan — löses in synkront direkt efter nästa
   // renderade bildruta i animationsloopen (se `animate`), istället för att
   // sätta `preserveDrawingBuffer: true` på renderaren. Att läsa canvasen i
@@ -1425,6 +1435,13 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     let raf = 0;
     let lastTimestamp: number | null = null;
 
+    // V20: fall-in animation — verken startar 180 Three.js-enheter (~200m) ovanför
+    // slutpositionen och dal in med ease-out-cubic på 1.5 s.
+    const FALL_DURATION_MS = 1500;
+    const FALL_HEIGHT_UNITS = 180;
+    const fallStartMs = performance.now();
+    let landedReported = -1; // senast rapporterat antal, -1 = inget ännu
+
     function animate(timestamp: number) {
       raf = requestAnimationFrame(animate);
       lastFrameAtRef.current = Date.now();
@@ -1449,6 +1466,29 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // produktbegäran — trigonometrin för 29 verk är för billig för att
       // motivera riskkant caching här; se `layoutObjects` för kostnaden.
       layoutObjects();
+
+      // V20: fall-in animation — lägg till Y-offset som minskar från FALL_HEIGHT
+      // till 0 under FALL_DURATION_MS. Körs EFTER layoutObjects() så den riktiga
+      // världspositionen redan är satt och vi bara justerar uppåt tillfälligt.
+      const fallElapsed = performance.now() - fallStartMs;
+      if (fallElapsed < FALL_DURATION_MS) {
+        const t = fallElapsed / FALL_DURATION_MS;
+        const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+        const fallOffsetY = FALL_HEIGHT_UNITS * (1 - eased);
+        const total = state.objects.length;
+        for (const obj of state.objects) {
+          obj.group.position.y += fallOffsetY;
+        }
+        const landedNow = Math.min(Math.floor(total * eased), total);
+        if (landedNow !== landedReported) {
+          landedReported = landedNow;
+          onTurbineLandedRef.current?.(landedNow, total);
+        }
+      } else if (landedReported < state.objects.length) {
+        // Animationen klar — rapportera att alla är på plats EN gång
+        landedReported = state.objects.length;
+        onTurbineLandedRef.current?.(state.objects.length, state.objects.length);
+      }
 
       // Kamerans riktning styrs helt av enhetens sensorer (gir/pitch/roll),
       // så att verken förblir fast förankrade i verkligheten/horisonten
