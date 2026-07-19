@@ -1504,21 +1504,16 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         onTurbineLandedRef.current?.(state.objects.length, state.objects.length);
       }
 
-      // V22: Distansfilter — dölj/visa verk baserat på VISIBLE_RADIUS_M.
-      // Körs efter layoutObjects() + fall-animation varje bildruta.
-      // group.visible=false döljer 3D-mesh; label/light/glow hanteras explicit
-      // eftersom de lever som fristående objekt utanför obj.group.
-      const VISIBLE_RADIUS_M = 3000;
+      // V28: VISIBLE_RADIUS_M-filtret (3 km, satt i V22) borttaget —
+      // rotorsak för "inga verk i vanlig AR". `renderDistM` är det VERKLIGA
+      // GPS-avståndet (inte det komprimerade `planeDist`), och Länsterbergets
+      // verk ligger 15–20 km från Katrineholm → alltid tooFar → group.visible=false.
+      // Opaciteten (applyFinalOpacities / applyVisibility) och det komprimerade
+      // planDist-systemet hanterar synlighet och storlek för avlägsna verk.
       for (const obj of state.objects) {
-        const tooFar = obj.renderDistM > VISIBLE_RADIUS_M;
-        obj.group.visible = !tooFar;
-        obj.label.sprite.visible = !tooFar;
-        obj.distanceLabel.sprite.visible = !tooFar;
-        obj.shadow.visible = !tooFar && obj.shadow.visible;
-        if (tooFar) {
-          (obj.light.material as THREE.SpriteMaterial).opacity = 0;
-          (obj.glow.material as THREE.SpriteMaterial).opacity = 0;
-        }
+        obj.group.visible = true;
+        obj.label.sprite.visible = true;
+        obj.distanceLabel.sprite.visible = true;
       }
 
       // Kamerans riktning styrs av enhetens sensorer (gir/pitch/roll).
