@@ -284,6 +284,8 @@ export default function Home() {
     try { localStorage.setItem("vindkollen:hasOnboarded", "1"); } catch {}
     setHasOnboarded(true);
   }, []);
+  // V34/C3: Kort "Startar AR…"-toast när hasOnboarded-skip används.
+  const [showArStartToast, setShowArStartToast] = useState(false);
   const [showPetition, setShowPetition] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   // Juli 2026-fix ("AR-vyn känns rörig, knappar överlappar"): "Visa karta",
@@ -977,6 +979,7 @@ export default function Home() {
     screenLocked: false,
     renderMode: "direct" as "direct" | "stabilizing" | "world-locked",
     trueVisibleTurbineCount: 0,
+    cameraForwardY: 0,
   });
   useEffect(() => {
     if (!started) return;
@@ -990,6 +993,7 @@ export default function Home() {
           screenLocked: false,
           renderMode: "direct",
           trueVisibleTurbineCount: 0,
+          cameraForwardY: 0,
         },
       );
     }, 250);
@@ -1252,6 +1256,11 @@ export default function Home() {
     if (orientation.orientationStalled) {
       return { message: "⚠️ Rörelsesensorn svarar inte – försöker återansluta", tone: "red" };
     }
+    // V34/B2 (prioritet 3): kompassnoggrannhet > 35° — ersätter den
+    // flytande orangeboxen (borttagen nedan) med en kompakt statusrad.
+    if (compassAccuracyDeg !== null && compassAccuracyDeg > 35) {
+      return { message: `🧭 Kalibrera kompassen (±${Math.round(compassAccuracyDeg)}°) — vinkla telefonen i ∞-mönster`, tone: "yellow" };
+    }
     if (orientation.headingFallbackActive) {
       return { message: "⚠️ Kompass svag – använder rörelsedata", tone: "yellow" };
     }
@@ -1270,16 +1279,8 @@ export default function Home() {
       };
     }
     // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 4): explicit
-    // fallback-text när INGET verk just nu räknas synligt (arDebugStats.
-    // trueVisibleTurbineCount — den faktiska, opacitetsbaserade räkningen
-    // från ARScene, se dess jsdoc) — så användaren aldrig bara möter en tom
-    // skärm utan förklaring/vägledning, oavsett ORSAKEN (utanför FOV,
-    // "Visa/dölj verk" avstängd, etc). Lägre prioriterad än
-    // indoorsOrNoSight-bannern ovan, som redan förklarar det specifika
-    // inomhus-/skymd-fallet.
-    if (turbinesVisible && arDebugStats.trueVisibleTurbineCount === 0) {
-      return { message: "Verken ligger åt pilens riktning – vrid mobilen", tone: "yellow" };
-    }
+    // V34/B2: "Verken ligger åt pilens riktning"-raden BORTTAGEN — V33-sökhinten
+    // (z-[55], top 22vh, nedräkning) täcker FOV-tomma-fallet ensam.
     // Juli 2026-fix (produktfeedback, ny omgång): visa "Vindljud aktivt"
     // bara EN gång per sammanhängande uppspelning (se
     // `windNoticeShownForThisPlaybackRef` ovan), annars blinkar samma info
@@ -1309,9 +1310,8 @@ export default function Home() {
     orientation.orientationStalled,
     orientation.headingFallbackActive,
     arTracking.weakSignalMessage,
+    compassAccuracyDeg,
     indoorsOrNoSight,
-    turbinesVisible,
-    arDebugStats.trueVisibleTurbineCount,
     wind.playing,
     calibrated,
     stillCalibrating,
@@ -1383,6 +1383,9 @@ export default function Home() {
     if (hasOnboarded) {
       console.log("[AR] hasOnboarded=true — hoppar över LoadingSequence");
       setArStartedAtMs(Date.now());
+      // V34/C3: Visa "Startar AR…"-toast i 1,5 s.
+      setShowArStartToast(true);
+      setTimeout(() => setShowArStartToast(false), 1500);
     } else {
       setShowLoadingSequence(true);
     }
@@ -1775,23 +1778,20 @@ export default function Home() {
             />
           )}
 
-          {/* Kompasskalibreringsbanner: visas i AR-sessionen när iOS rapporterar
-              dålig magnetometermätning (webkitCompassAccuracy > 20°). Z-index
-              45 = ovanför inomhus-overlay (z-40) men under pilpekaren (z-50). */}
-          {arSessionVisible && compassAccuracyDeg !== null && compassAccuracyDeg > 20 && (
+          {/* V34/C3: "Startar AR…"-toast — visas i 1,5 s vid hasOnboarded-skip. */}
+          {showArStartToast && (
             <div
-              className="pointer-events-none absolute inset-x-4 z-[45] rounded-xl bg-orange-950/90 px-4 py-3 shadow-xl backdrop-blur-sm"
-              style={{ top: `${topBarHeight + debugStripHeight + 10}px` }}
+              className="pointer-events-none absolute inset-x-0 z-[60] flex justify-center"
+              style={{ top: "calc(max(1rem, env(safe-area-inset-top)) + 60px)" }}
             >
-              <p className="text-sm font-semibold text-orange-200">🧭 Kalibrera kompassen</p>
-              <p className="mt-0.5 text-xs text-white/80">
-                Vinkla telefonen i ett ∞-mönster för bättre noggrannhet
-              </p>
-              <p className="mt-0.5 text-[10px] text-orange-400">
-                Osäkerhet: ±{Math.round(compassAccuracyDeg)}°
-              </p>
+              <div className="animate-pulse rounded-full bg-[#FF8B01]/90 px-5 py-2 text-sm font-semibold text-black shadow-xl">
+                Startar AR…
+              </div>
             </div>
           )}
+
+          {/* V34/B2: Kompasskalibreringsbanner BORTTAGEN — viks in i statusBanner
+              som priority-3 pill (compassAccuracyDeg > 35°). */}
 
           {/* Juli 2026-fix (produktfeedback, ny omgång): föregående fix gated
               raden helt bakom `showSensorDebug` efter klagomål på "text i
@@ -1850,7 +1850,9 @@ export default function Home() {
                     🔍 Hittar vindkraftverken…
                   </p>
                   <p className="mt-0.5 text-xs text-white/70">
-                    {searchRemainingSec}s kvar — peka kameran runt
+                    {arDebugStats.cameraForwardY < -0.35
+                      ? "Peka mer mot horisonten — verken är långt bort i marknivå"
+                      : `${searchRemainingSec}s kvar — peka kameran runt`}
                   </p>
                   <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/20">
                     <div
@@ -2104,7 +2106,7 @@ export default function Home() {
                 flex-wrap garanterar att de passar oavsett skärmbredd.
                 showStatusDetails styr nu om hela raden visas (dölj/visa). */}
             {showStatusDetails && (
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-nowrap items-center gap-1 overflow-x-auto text-[10px]">
                 <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
                 <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
                 <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />
@@ -2256,30 +2258,24 @@ export default function Home() {
           </div>
           )}
 
-          {/* V20: fall-animation räknare — visas under de 1.5 s verken faller in */}
+          {/* V20: fall-animation räknare — visas under de 1.5 s verken faller in.
+              V34/B1: "Peka kameran runt"-texten borttagen (V33-sökhinten täcker det). */}
           {turbineLandedCount !== null && turbineLandedCount.landed < turbineLandedCount.total && (
             <div className="pointer-events-none absolute left-1/2 top-1/3 z-[52] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-black/80 px-6 py-4 text-center text-white shadow-2xl">
               <div className="text-4xl">🌬️</div>
               <div className="mt-2 text-lg font-semibold">
                 {turbineLandedCount.landed} / {turbineLandedCount.total} verk på plats
               </div>
-              <div className="mt-1 text-xs text-white/40">Peka kameran runt</div>
             </div>
           )}
 
-          {/* Uppstartsnedräkning: visas tills det första verket syns i kameran (om fall-räknaren inte är aktiv) */}
-          {showStartupCounter && (turbineLandedCount === null || turbineLandedCount.landed >= turbineLandedCount.total) && (
-            <div className="pointer-events-none absolute left-1/2 top-1/3 z-[52] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-black/80 px-6 py-4 text-center text-white shadow-2xl">
-              <div className="text-4xl">🌬️</div>
-              <div className="mt-2 text-lg font-semibold">Hittar vindkraftverken…</div>
-              <div className="mt-1 text-sm text-white/60">{arStartupSeconds}s</div>
-              <div className="mt-2 text-xs text-white/40">Peka kameran runt</div>
-            </div>
-          )}
+          {/* V34/B1: Gamla uppstartsnedräknaren ("Hittar vindkraftverken… Xs") BORTTAGEN —
+              V33-sökhinten med 30s nedräkning och progress-stapel täcker samma syfte. */}
 
           {/* AR-startbanner: visas i 3 sekunder när AR-vyn (turbinerna) blir
-              synlig för första gången — guidar användaren att röra kameran. */}
-          <ArStartBanner visible={arSessionVisible} />
+              synlig för första gången — men BARA om minst ett verk finns i FOV,
+              annars visas V33-sökhinten ensam (V34/B1). */}
+          <ArStartBanner visible={arSessionVisible && inFrontOfCameraCount > 0} />
 
           {arSessionVisible && showMenu && (
             <div

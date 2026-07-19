@@ -249,6 +249,8 @@ export interface ARSceneHandle {
      * antal"-felsökningsfält ska visa.
      */
     trueVisibleTurbineCount: number;
+    /** V34/C2b: kamerans framåt-y efter applyQuaternion — negativt värde = telefonen pekar neråt. */
+    cameraForwardY: number;
   };
 }
 
@@ -682,6 +684,9 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   // tal som redan styr `forceVisible`/"rakt fram"-garantin (se nedan)
   // garanteras att båda mekanismerna alltid är överens.
   const inFrontOfCameraCountRef = useRef(0);
+  // V34/C2b: kamerans framåt-y — lagras varje bildruta för pitch-detektion
+  // i Home.tsx (cameraForward.y < -0.35 → telefonen pekar nedåt).
+  const cameraForwardYRef = useRef(0);
   // Juli 2026-fix (regressionsrapport punkt 8: persistent felsökningstext
   // ska visa FPS och bildrutenummer) — uppdateras i `animate` nedan och
   // läses av `Home.tsx` via `getDebugStats()`, samma mönster som
@@ -812,6 +817,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       renderMode:
         worldLockBlendRef.current <= 0 ? "direct" : worldLockBlendRef.current >= 1 ? "world-locked" : "stabilizing",
       trueVisibleTurbineCount: trueVisibleTurbineCountRef.current,
+      // V34/C2b: kamerans framåt-y för pitch-detektion i Home.tsx.
+      cameraForwardY: cameraForwardYRef.current,
     }),
   }));
 
@@ -1720,6 +1727,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // `applyFinalOpacities`), så loggningen kan aldrig i sig påverka vad
       // som faktiskt renderas.
       cameraForward.set(0, 0, -1).applyQuaternion(state.camera.quaternion);
+      cameraForwardYRef.current = cameraForward.y;
       frustumMatrix.multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
       frustum.setFromProjectionMatrix(frustumMatrix);
 
@@ -1747,6 +1755,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         screenX: number | null;
         screenY: number | null;
         relativeAngle_deg: number | null;
+        forceVisible: boolean;
       }> = [];
 
       // V32: "Camera yaw" = optisk axel i världen. Euler-Y ur full
@@ -1810,6 +1819,16 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         // material, frustumCulled styrs av renderaren — de är oberoende).
         for (const mesh of obj.cachedMeshes) {
           mesh.frustumCulled = !obj.forceVisible;
+        }
+        // V34/C2a: Skalboost för force-visible verk långt bort — säkerställer
+        // att de syns som mer än enstaka pixlar trots 3–14 km avstånd.
+        // Boost: 1× vid <2 km, linjärt upp till 3× vid ≥6 km.
+        if (obj.forceVisible && obj.renderDistM > 2000) {
+          const boost = Math.min(3, obj.renderDistM / 2000);
+          obj.group.scale.setScalar(obj.scaleDamp * boost);
+        } else if (!obj.forceVisible) {
+          // Återställ till originalskalan om forceVisible precis stängts av.
+          obj.group.scale.setScalar(obj.scaleDamp);
         }
         if (
           angleFromOpticalAxisDeg !== null &&
@@ -1886,6 +1905,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
           screenX,
           screenY,
           relativeAngle_deg: angleFromOpticalAxisDeg !== null ? Math.round(angleFromOpticalAxisDeg * 10) / 10 : null,
+          forceVisible: obj.forceVisible,
         });
 
         const phase = (now + obj.blinkOffsetMs) % obj.blinkPeriodMs;
@@ -1932,6 +1952,19 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
           `[AR][diagnostik] ${visibleCountThisFrame}/${state.objects.length} verk synliga denna bildruta. Heading=${headingForLog === null ? "–" : headingForLog.toFixed(1) + "°"} Camera yaw=${cameraYawDeg.toFixed(1)}° cameraForward=(${cameraForward.x.toFixed(2)}, ${cameraForward.y.toFixed(2)}, ${cameraForward.z.toFixed(2)})`,
         );
         console.table(diagnosticRows);
+        // V34/C2b: Enstaka rad för närmaste verk — direkt läsbar i iPhone-logg.
+        if (diagnosticRows.length > 0) {
+          const nr = diagnosticRows.reduce((a, b) => (a.avstånd_m <= b.avstånd_m ? a : b));
+          console.info(
+            `[AR][v34] nearest=${nr.namn} dist=${nr.avstånd_m}m` +
+            ` ang=${nr.relativeAngle_deg ?? "?"}°` +
+            ` scr=(${nr.screenX ?? "?"},${nr.screenY ?? "?"})` +
+            ` force=${nr.forceVisible ? 1 : 0}` +
+            ` frust=${nr.inFrustum ? 1 : 0}` +
+            ` vis=${nr.isVisible ? 1 : 0}` +
+            ` camFwdY=${cameraForwardYRef.current.toFixed(2)}`,
+          );
+        }
       }
 
       // FPS mäts över ett rullande ~500ms-fönster (inte ett enskilt dt) för

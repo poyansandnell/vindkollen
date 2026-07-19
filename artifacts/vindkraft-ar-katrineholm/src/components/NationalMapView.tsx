@@ -338,6 +338,9 @@ export function NationalMapView({
   // ── Räknaranimation — räknar snabbt upp verk under laddning ─────────────────
   const [animatedCount, setAnimatedCount] = useState(0);
 
+  // V34/A2: reloadKey ökar vid "Försök igen" → useEffect kör om fetch.
+  const [reloadKey, setReloadKey] = useState(0);
+
   // ── Load projects ───────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -438,23 +441,33 @@ export function NationalMapView({
       .catch((error: unknown) => {
         if (cancelled) return;
         const ms = (performance.now() - t0).toFixed(0);
-        const msg = error instanceof Error ? error.message : String(error);
+        // V34/A2: Extrahera mänskligt läsbar felorsaksbeskrivning.
+        const errName = error instanceof Error ? error.name : '';
+        const errMsg = error instanceof Error ? error.message : String(error);
+        const errCause = error instanceof Error && error.cause ? String(error.cause) : '';
         console.error('[NationalMap] Projekt-API misslyckades', {
-          url, error, native, httpStatus, apiBase, ms,
+          url, error, errName, errMsg, errCause, native, httpStatus, apiBase, ms,
         });
+        const humanMsg = native && !apiBase
+          ? 'VITE_API_BASE_URL är inte satt i native-bygget'
+          : httpStatus !== null
+            ? `HTTP ${httpStatus}`
+            : errMsg.includes('aborted') || errMsg.includes('abort')
+              ? 'Tidsgräns överskreds (8 s)'
+              : errMsg || 'Nätverksfel (ingen HTTP-status)';
         setLoadState('live-error');
         setApiDiag(prev => ({
           ...prev,
           apiHttpStatus: httpStatus,
           apiSource: 'error',
-          lastApiError: native && !apiBase
-            ? 'VITE_API_BASE_URL är inte satt i native-bygget'
-            : msg,
+          lastApiError: humanMsg,
         }));
       });
 
     return () => { cancelled = true; };
-  }, []);
+  // V34/A2: reloadKey i deps — ökar när "Försök igen" trycks → kör om fetch.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
 
   // Keep ref in sync with state
   useEffect(() => { projectsRef.current = projects; }, [projects]);
@@ -1216,7 +1229,7 @@ export function NationalMapView({
                       <p className="mt-1 text-yellow-200/70">Orsak: {apiDiag.lastApiError}</p>
                     )}
                     <button
-                      onClick={() => window.location.reload()}
+                      onClick={() => setReloadKey(k => k + 1)}
                       className="mt-1.5 rounded-full bg-yellow-500/20 px-3 py-1 text-[10px] font-semibold text-yellow-100 hover:bg-yellow-500/30"
                     >
                       🔄 Försök igen
