@@ -1903,6 +1903,19 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
           // Återställ till originalskalan om forceVisible precis stängts av.
           obj.group.scale.setScalar(obj.scaleDamp);
         }
+        // V38: lås lampan på navcellstaket med gruppens AKTUELLA skala/pos
+        // (skalboost + fall-in Y-offset). Utan detta stannar lampan på
+        // bas-hubhöjd medan tornet växer — dvs. mid-tower-felet i nattvy.
+        {
+          const s = obj.group.scale.x;
+          const lightLocalY =
+            (obj.turbine.hubHeightMeters + NACELLE_LIGHT_OFFSET_M) * METERS_TO_UNITS;
+          const lightY = obj.group.position.y + lightLocalY * s;
+          obj.light.position.set(obj.group.position.x, lightY, obj.group.position.z);
+          obj.glow.position.set(obj.group.position.x, lightY, obj.group.position.z);
+          obj.light.scale.setScalar(Math.max(6 * s, 16));
+          obj.glow.scale.setScalar(Math.max(26 * s, 70));
+        }
         if (
           angleFromOpticalAxisDeg !== null &&
           angleFromOpticalAxisDeg <= IN_VIEW_HALF_ANGLE_DEG &&

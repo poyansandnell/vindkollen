@@ -66,7 +66,14 @@ const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
 // Visas i 3 sekunder direkt när AR-vyn (turbinerna) blir synlig för första
 // gången — hjälper användaren förstå att verken nu syns och guida kameran.
 // ---------------------------------------------------------------------------
-function ArStartBanner({ visible }: { visible: boolean }) {
+function ArStartBanner({
+  visible,
+  topOffsetPx,
+}: {
+  visible: boolean;
+  /** V38: måste lägga sig UNDER topp-barens GPS/Kompass-badges, inte ovanpå. */
+  topOffsetPx: number;
+}) {
   const [show, setShow] = useState(false);
   const shownRef = useRef(false);
 
@@ -82,8 +89,8 @@ function ArStartBanner({ visible }: { visible: boolean }) {
 
   return (
     <div
-      className="pointer-events-none absolute inset-x-4 z-[60] flex items-center justify-center"
-      style={{ top: "calc(max(1rem, env(safe-area-inset-top)) + 80px)" }}
+      className="pointer-events-none absolute inset-x-4 z-[48] flex items-center justify-center"
+      style={{ top: `${Math.max(topOffsetPx, 8) + 10}px` }}
     >
       <div className="animate-pulse rounded-2xl border border-[#FF8B01]/50 bg-[#FF8B01]/20 px-5 py-3 text-center shadow-xl backdrop-blur-sm">
         <p className="text-sm font-bold text-[#FFB347]">🌀 Vindkraftverken syns nu!</p>
@@ -2286,7 +2293,10 @@ export default function Home() {
           {/* AR-startbanner: visas i 3 sekunder när AR-vyn (turbinerna) blir
               synlig för första gången — men BARA om minst ett verk finns i FOV,
               annars visas V33-sökhinten ensam (V34/B1). */}
-          <ArStartBanner visible={arSessionVisible && inFrontOfCameraCount > 0} />
+          <ArStartBanner
+            visible={arSessionVisible && inFrontOfCameraCount > 0}
+            topOffsetPx={topBarHeight + debugStripHeight}
+          />
 
           {arSessionVisible && showMenu && (
             <div
