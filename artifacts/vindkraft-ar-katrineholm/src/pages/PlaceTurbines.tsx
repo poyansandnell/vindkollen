@@ -22,6 +22,7 @@ import {
 import { type ApiProjectArea } from "@/lib/bundledProjects";
 import { generateProjectGrid, translateDefaultTurbines } from "@/lib/projectGridLayout";
 import { NationalMapView } from "@/components/NationalMapView";
+import { generatePlacementPdf } from "@/lib/projectPdfExport";
 
 const SAVED_KEY = "vindkraft-ar-katrineholm:savedPlacements";
 const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
@@ -418,6 +419,17 @@ export default function PlaceTurbines() {
     if (commitTimerRef.current) window.clearTimeout(commitTimerRef.current);
   }
 
+  function handleDownloadPdf() {
+    const t = turbines.length > 0 ? turbines : DEFAULT_TURBINES;
+    if (t.length === 0) return;
+    const name = editHandoff?.projectName ?? "Vindkraftsplacering";
+    const doc = generatePlacementPdf(name, t);
+    // iOS PWA: blob-URL + target="_blank" — <a download> no-opar tyst i Safari
+    const url = URL.createObjectURL(doc.output("blob"));
+    window.open(url, "_blank");
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
   async function handleSave() {
     const name = editHandoff?.projectName ?? `Placering ${saved.length + 1}`;
     const entry: SavedPlacement = {
@@ -664,6 +676,14 @@ export default function PlaceTurbines() {
             title="Starta om introduktionsguiden"
           >
             ↻
+          </button>
+          <button
+            onClick={handleDownloadPdf}
+            className="rounded-full bg-white/10 px-3 py-1.5 text-sm text-white/60 hover:bg-white/20"
+            aria-label="Ladda ner PDF"
+            title="Ladda ner projektsammanfattning som PDF"
+          >
+            📄
           </button>
         </div>
       </div>

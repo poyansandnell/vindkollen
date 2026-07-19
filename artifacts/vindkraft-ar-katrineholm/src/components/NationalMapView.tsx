@@ -275,6 +275,7 @@ export function NationalMapView({
   const [projects, setProjects] = useState<ApiProjectArea[]>([]);
   const [loadState, setLoadState] = useState<'loading' | 'bundled-loading-live' | 'live' | 'live-error'>('loading');
   const [dataSource, setDataSource] = useState<'bundled' | 'api'>('bundled');
+  const [loadProgress, setLoadProgress] = useState(0);
   const [selectedProject, setSelectedProject] = useState<ApiProjectArea | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>('alla');
   const [diag, setDiag] = useState<DiagState>({ ...DIAG_INIT });
@@ -457,6 +458,21 @@ export function NationalMapView({
 
   // Keep ref in sync with state
   useEffect(() => { projectsRef.current = projects; }, [projects]);
+
+  // Progress-bar: driven av loadState-transitioner (0 = dold, 1-99 = synlig)
+  useEffect(() => {
+    if (loadState === 'bundled-loading-live') {
+      setLoadProgress(35);
+      const id = window.setTimeout(() => setLoadProgress(65), 1500);
+      return () => window.clearTimeout(id);
+    }
+    if (loadState === 'live' || loadState === 'live-error') {
+      setLoadProgress(100);
+      const id = window.setTimeout(() => setLoadProgress(0), 600);
+      return () => window.clearTimeout(id);
+    }
+    return undefined;
+  }, [loadState]);
 
   // ── Filtered projects ───────────────────────────────────────────────────────
   const filteredProjects = useMemo(() => {
@@ -920,6 +936,16 @@ export function NationalMapView({
           ← Tillbaka
         </button>
       </div>
+
+      {/* Progress-bar: synlig medan live-API-hämtning pågår */}
+      {loadProgress > 0 && loadProgress < 100 && (
+        <div className="h-1 overflow-hidden bg-[#FF8B01]/20">
+          <div
+            className="h-full bg-[#FF8B01] transition-all duration-300"
+            style={{ width: `${loadProgress}%` }}
+          />
+        </div>
+      )}
 
       {/* Statusfilter-pills */}
       <div className="flex gap-2 overflow-x-auto border-b border-white/10 px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

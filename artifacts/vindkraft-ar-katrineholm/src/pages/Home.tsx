@@ -4,7 +4,7 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useCameraStream } from "@/hooks/useCameraStream";
 import { useWindSound } from "@/hooks/useWindSound";
-import { useSkyDetection } from "@/hooks/useSkyDetection";
+import { useSkyDetection, GRID_COLS, GRID_ROWS } from "@/hooks/useSkyDetection";
 import { useOutdoorConfidenceIndex } from "@/hooks/useOutdoorConfidenceIndex";
 import { useStableGeoPosition } from "@/hooks/useStableGeoPosition";
 import { useSmoothedGeoPosition } from "@/hooks/useSmoothedGeoPosition";
@@ -349,6 +349,9 @@ export default function Home() {
   const [debugDisableOcclusion, setDebugDisableOcclusion] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  // Uppstartsnedräkning — visas tills första verket syns i kameran
+  const [arStartupSeconds, setArStartupSeconds] = useState(0);
+  const [showStartupCounter, setShowStartupCounter] = useState(false);
 
   const [inApp] = useState(() => (typeof navigator !== "undefined" ? isInAppBrowser() : false));
   const [appName] = useState(() => (typeof navigator !== "undefined" ? inAppBrowserName() : ""));
@@ -538,6 +541,7 @@ export default function Home() {
   // Triggas aldrig om projektet redan valts via handoff (handoff/editor-källan
   // har högre prioritet och sätter status="project" synkront vid init).
   useEffect(() => {
+    if (activeProject?.source === "editor") return; // handoff vinner alltid
     if (projectState.status !== "loading") return;
     if (geo.lat === null || geo.lon === null) return;
     const nearest = findNearestProject(geo.lat, geo.lon);
@@ -579,6 +583,17 @@ export default function Home() {
   // ljudet stängs av (t.ex. inomhus) så nästa distinkta uppspelning fortfarande
   // får sin egen enda avisering.
   const windNoticeShownForThisPlaybackRef = useRef(false);
+  // Simulerat läge: slå PÅ vindljudet automatiskt första gången.
+  const simSoundAutoRef = useRef(false);
+  useEffect(() => {
+    if (!started || positionOverride === null || simSoundAutoRef.current) return;
+    simSoundAutoRef.current = true;
+    const id = window.setTimeout(() => {
+      if (!wind.playing) void wind.toggle();
+    }, 600);
+    return () => window.clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [started, positionOverride]);
   useEffect(() => {
     if (!wind.playing) {
       windNoticeShownForThisPlaybackRef.current = false;
@@ -889,6 +904,25 @@ export default function Home() {
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started]);
+
+  // Uppstartsnedräkning: startar när AR-sessionen börjar, stängs av när
+  // det första verket syns i kameran.
+  useEffect(() => {
+    if (!started) {
+      setShowStartupCounter(false);
+      setArStartupSeconds(0);
+      return;
+    }
+    setArStartupSeconds(0);
+    setShowStartupCounter(true);
+    const id = window.setInterval(() => {
+      setArStartupSeconds((s) => s + 1);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [started]);
+  useEffect(() => {
+    if (inFrontOfCameraCount > 0) setShowStartupCounter(false);
+  }, [inFrontOfCameraCount]);
 
   // Juli 2026-fix (regressionsrapport punkt 8: persistent felsökningstext
   // med FPS/bildrutenummer) — pollas oftare (250ms) än de flesta andra
@@ -1577,11 +1611,11 @@ export default function Home() {
             nightMode={nightMode}
             shadowFlicker={shadowFlicker}
             simTimeHour={simTimeHour}
-            isPointSky={sky.isPointSky}
-            getOcclusionGrid={sky.getOcclusionGrid}
+            isPointSky={positionOverride !== null ? () => true : sky.isPointSky}
+            getOcclusionGrid={positionOverride !== null ? () => new Float32Array(GRID_COLS * GRID_ROWS).fill(1) : sky.getOcclusionGrid}
             showHiddenTurbines={showHiddenTurbines}
-            globalVisibilityFactor={globalVisibilityFactor}
-            hideAll={indoorsOrNoSight}
+            globalVisibilityFactor={positionOverride !== null ? 1 : globalVisibilityFactor}
+            hideAll={positionOverride !== null ? false : indoorsOrNoSight}
             forceVisibleIds={forceVisibleIds}
             debugForceNearest={debugForceNearest}
             disableOcclusion={debugDisableOcclusion}
@@ -2085,6 +2119,16 @@ export default function Home() {
           </div>
           )}
 
+          {/* Uppstartsnedräkning: visas tills det första verket syns i kameran */}
+          {showStartupCounter && (
+            <div className="pointer-events-none absolute left-1/2 top-1/3 z-[52] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-black/80 px-6 py-4 text-center text-white shadow-2xl">
+              <div className="text-4xl">🌬️</div>
+              <div className="mt-2 text-lg font-semibold">Hittar vindkraftverken…</div>
+              <div className="mt-1 text-sm text-white/60">{arStartupSeconds}s</div>
+              <div className="mt-2 text-xs text-white/40">Peka kameran runt</div>
+            </div>
+          )}
+
           {/* AR-startbanner: visas i 3 sekunder när AR-vyn (turbinerna) blir
               synlig för första gången — guidar användaren att röra kameran. */}
           <ArStartBanner visible={arSessionVisible} />
@@ -2141,6 +2185,18 @@ export default function Home() {
                   className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
                 >
                   🗺️ Sverigekartan – Öppna kartverktyg
+                </button>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem(AR_HANDOFF_KEY);
+                    setPositionOverride(null);
+                    setProjectState({ status: "loading" });
+                    setStarted(false);
+                    setShowMenu(false);
+                  }}
+                  className="w-full rounded-full border border-white/20 bg-white/5 py-2.5 text-xs font-medium text-white/80 hover:bg-white/10"
+                >
+                  🏠 Tillbaka till startskärmen
                 </button>
                 {/* Juli 2026-fix (produktfeedback, ny omgång: "gör det
                     smartare, tar för mycket plats"): flyttade hit från
