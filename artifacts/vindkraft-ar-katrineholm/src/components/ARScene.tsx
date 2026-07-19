@@ -297,6 +297,12 @@ interface TurbineObject {
    */
   forceVisible: boolean;
   /**
+   * V35/Fix1: 0..1-närvaro baserad på vinkel mot kamerans optiska axel —
+   * 1 i FOV-kärnan, mjuk fade mot 0 vid `FORCE_FADE_OUT_DEG`. Styr opacity
+   * längs force-visible-banan i `applyFinalOpacities` och skugg-logiken.
+   */
+  viewPresence: number;
+  /**
    * Juli 2026-fix (kritisk buggrapport punkt 1/4: exakta, engångsloggade
    * steg-för-steg-loggar + per-verk synlighetsdiagnostik) — säkerställer att
    * "[AR] Modell placerad"/"[AR] Modell synlig" bara loggas EN gång per verk
@@ -344,6 +350,10 @@ const NEAR_CENTER_FORCE_DEG = 25;
 // mellan de två platserna som annars skulle behöva komma överens om samma
 // tal på egen hand).
 const IN_VIEW_HALF_ANGLE_DEG = FOV_DEGREES / 2;
+// V35/Fix1: Vinkel vid vilken force-visible verk fader ut helt — mjuk
+// övergång från IN_VIEW_HALF_ANGLE_DEG (synlig) till FORCE_FADE_OUT_DEG
+// (osynlig) så verken inte "sitter fast" när kameran vrids bort.
+const FORCE_FADE_OUT_DEG = IN_VIEW_HALF_ANGLE_DEG + 18; // ~50.5°
 export const MAX_RENDER_DISTANCE_M = 9000;
 
 // Juli 2026-fix (kritisk buggrapport: "inga verk visas alls"): `hideAll`
@@ -1107,6 +1117,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         blinkOffsetMs,
         renderDistM: 0,
         forceVisible: false,
+        viewPresence: 0,
         cachedMeshes,
         loggedPlaced: false,
         loggedVisible: false,
@@ -1375,10 +1386,12 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // kortsluter BÅDA dämpningsfaktorerna (Outdoor Confidence Index/
       // inomhus-heuristiken OCH himmelsmasken) till 1 — se propens jsdoc.
       const { disableOcclusion: occlusionDisabled } = modeRef.current;
+      // V35/Fix1: presence (0..1) kopplar forceVisible-banan till faktisk vinkel.
+      const presence = Math.min(1, Math.max(0, obj.viewPresence));
       const naturalGlobalFactor = occlusionDisabled
         ? 1
         : obj.forceVisible
-          ? 1
+          ? presence
           : modeRef.current.hideAll
             ? INDOOR_DIM_FACTOR
             : Math.max(modeRef.current.globalVisibilityFactor, MIN_CONFIDENCE_VISIBILITY_FACTOR);
@@ -1389,15 +1402,22 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // inomhus-heuristik/himmelsmask, och blandas sedan LINJÄRT (aldrig ett
       // hopp) mot deras normalt beräknade ("naturliga") värden. `1 + (x-1)*b`
       // ger exakt 1 vid b=0 och exakt x vid b=1.
+      // V35: force-banan hoppar worldLockBlend-boost — annars hänger fallback
+      // kvar off-axis med konstant opacity 1.
       const worldLockBlend = worldLockBlendRef.current;
-      const globalFactor = 1 + (naturalGlobalFactor - 1) * worldLockBlend;
-      const naturalSkyFactor = occlusionDisabled ? 1 : (obj.forceVisible ? 1 : obj.skyFactor) * naturalGlobalFactor;
+      const globalFactor = obj.forceVisible
+        ? naturalGlobalFactor
+        : 1 + (naturalGlobalFactor - 1) * worldLockBlend;
+      const forcedSky = obj.forceVisible ? presence : obj.skyFactor;
+      const naturalSkyFactor = occlusionDisabled ? 1 : forcedSky * (obj.forceVisible ? 1 : naturalGlobalFactor);
       // "Visa/dölj verk"-togglens egna, oberoende 0..1-tonings-faktor
       // (`turbinesVisibleFactorRef`, 0.5s in/ut) multipliceras in sist, på
       // BÅDA kanalerna, så hela verket (kropp + etiketter/ljus/glöd) tonar
       // enhetligt.
       const turbinesVisibleFactor = turbinesVisibleFactorRef.current;
-      const skyFactor = (1 + (naturalSkyFactor - 1) * worldLockBlend) * turbinesVisibleFactor;
+      const skyFactor = (obj.forceVisible
+        ? naturalSkyFactor
+        : 1 + (naturalSkyFactor - 1) * worldLockBlend) * turbinesVisibleFactor;
       const bodyOpacity = obj.baseOpacity * globalFactor * turbinesVisibleFactor;
       // Grå/blå ton (produktkrav: "gray/blue tint" när verket visas dämpat
       // p.g.a. inomhus-heuristiken) — blandas alltid tillbaka mot
@@ -1810,15 +1830,32 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
             ? (Math.acos(Math.min(1, Math.max(-1, -camSpaceVec.z / camSpaceDist))) * 180) / Math.PI
             : null;
         const nearCenter = angleFromOpticalAxisDeg !== null && angleFromOpticalAxisDeg <= NEAR_CENTER_FORCE_DEG;
+        // V35/Fix1: viewPresence (0..1) — mjuk fade från FOV-kant till
+        // FORCE_FADE_OUT_DEG. Stoppar "fastklistrade" verk utanför kamerans
+        // synfält.
+        let viewPresence = 0;
+        if (angleFromOpticalAxisDeg !== null) {
+          if (angleFromOpticalAxisDeg <= IN_VIEW_HALF_ANGLE_DEG) {
+            viewPresence = 1;
+          } else if (angleFromOpticalAxisDeg >= FORCE_FADE_OUT_DEG) {
+            viewPresence = 0;
+          } else {
+            viewPresence =
+              1 -
+              (angleFromOpticalAxisDeg - IN_VIEW_HALF_ANGLE_DEG) /
+                (FORCE_FADE_OUT_DEG - IN_VIEW_HALF_ANGLE_DEG);
+          }
+        }
+        obj.viewPresence = viewPresence;
         obj.forceVisible =
           (nearCenter && obj.renderDistM <= MAX_RENDER_DISTANCE_M) ||
           modeRef.current.forceVisibleIds.has(obj.turbine.id);
         // V29: Bypass Three.js frustum culling när forceVisible är sant.
-        // Default frustumCulled=true blockerar rendering av meshar utanför
-        // kamerans trånga FOV även om opaciteten är 1 (opacitet styrs av
-        // material, frustumCulled styrs av renderaren — de är oberoende).
+        // V35: Gata frustum-bypass på presence > 0.02 — ingen rendering av
+        // verk som ändå är helt transparenta off-axis.
+        const forceDraw = obj.forceVisible && viewPresence > 0.02;
         for (const mesh of obj.cachedMeshes) {
-          mesh.frustumCulled = !obj.forceVisible;
+          mesh.frustumCulled = !forceDraw;
         }
         // V34/C2a: Skalboost för force-visible verk långt bort — säkerställer
         // att de syns som mer än enstaka pixlar trots 3–14 km avstånd.
@@ -1913,8 +1950,9 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         obj.light.visible = blinkOn;
         obj.glow.visible = blinkOn;
 
+        // V35/Fix1: Skuggans globalFactor följer presence längs force-banan.
         const shadowGlobalFactor = obj.forceVisible
-          ? 1
+          ? Math.min(1, Math.max(0, obj.viewPresence))
           : modeRef.current.hideAll
             ? INDOOR_DIM_FACTOR
             : Math.max(modeRef.current.globalVisibilityFactor, MIN_CONFIDENCE_VISIBILITY_FACTOR);

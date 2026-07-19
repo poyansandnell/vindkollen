@@ -2192,8 +2192,18 @@ export default function Home() {
               Widgets inuti gatas separat på `arSessionVisible`. */}
           {started && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[45] flex flex-col-reverse">
+            {/* V35/Fix2: Solid svart underlay fyller home-indicator-zonen
+                (env(safe-area-inset-bottom) är 0 på äldre enhet/desktop).
+                `contentInset: "never"` i capacitor.config.ts krävs på iOS
+                native för att CSS ska kunna måla denna zon. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 bg-black"
+              style={{ height: "max(34px, env(safe-area-inset-bottom, 0px))" }}
+            />
+
             {/* === MENY-KNAPP — alltid synlig när started=true === */}
-            <div className="pointer-events-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="relative pointer-events-auto px-4 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))]">
               <button
                 onClick={() => setShowMenu(true)}
                 className="w-full rounded-full border border-white/50 bg-white/20 py-3 text-sm font-semibold text-white shadow-sm backdrop-blur-md hover:bg-white/30"
@@ -2204,7 +2214,7 @@ export default function Home() {
 
             {/* === ÖVRIGA WIDGETS — bara när AR-sessionen är synlig === */}
             {arSessionVisible && (
-            <div className="pointer-events-auto flex max-h-[55vh] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(4.5rem,calc(env(safe-area-inset-bottom)+1.25rem))] pt-8">
+            <div className="relative pointer-events-auto flex max-h-[55vh] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black from-30% via-black/90 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] pt-10">
               {/* V31 (produktfeedback: "gula fältet skulle vara ovanför den blå
                   rutan"): statusBanner (säkerhetskritisk varning: svag GPS/
                   kompass) visas NU FÖRST — positionOverride-pill (sekundär
@@ -2283,8 +2293,8 @@ export default function Home() {
               onClick={() => setShowMenu(false)}
             >
               <div
-                className="flex flex-col gap-3 rounded-t-3xl border-t border-white/10 bg-[#111]/95 px-4 pb-[max(3.5rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl"
-                style={{ maxHeight: "85dvh", overflowY: "auto" }}
+                className="flex flex-col gap-3 rounded-t-3xl border-t border-white/10 bg-[#111] px-4 pt-5 shadow-2xl"
+                style={{ maxHeight: "85dvh", overflowY: "auto", paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 0px))" }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between">

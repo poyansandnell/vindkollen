@@ -7,7 +7,7 @@ const config: CapacitorConfig = {
   webDir: "dist-native",
   bundledWebRuntime: false,
   ios: {
-    contentInset: "automatic",
+    contentInset: "never",
     // Gör WKWebView transparent så att native CameraPreview-lagret bakom syns igenom.
     // Krävs tillsammans med CameraPreview.start({ toBack: true }) och att alla
     // HTML-element saknar ogenomskinlig bakgrundsfärg när kameran är aktiv.
