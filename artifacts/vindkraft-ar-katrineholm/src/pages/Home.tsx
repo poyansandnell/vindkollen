@@ -1165,45 +1165,45 @@ export default function Home() {
       .map((x) => x.id);
   }, [activeTurbines, turbineDistancesM]);
 
-  // Produktkrav 3: om INGA verk legat inom kamerans FOV under 2 sammanhängande
-  // sekunder (medan AR-sessionen faktiskt är synlig/redo) tvingas de tre
+  // V37: om INGA verk faktiskt varit synliga (opacitet > 0.02 i ARScene)
+  // under 800 ms (medan AR-sessionen faktiskt är synlig/redo) tvingas de tre
   // närmaste verken synliga som "AR-testobjekt" (via `forceVisibleIds` till
   // `ARScene`, se dess jsdoc), tillsammans med en icke-blockerande
   // kalibreringsbanderoll. Låser ALDRIG appen i kalibreringsläge — så fort
-  // minst ett verk naturligt hamnar i FOV igen (`inFrontOfCameraCount > 0`)
+  // minst ett verk faktiskt blir synligt igen (`trueVisibleTurbineCount > 0`)
   // stängs fallbacken av igen automatiskt, utan att kräva någon
   // användaråtgärd.
   const [calibrationFallbackActive, setCalibrationFallbackActive] = useState(false);
-  const noTurbinesInFrontSinceRef = useRef<number | null>(null);
+  const noTurbinesVisibleSinceRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!arSessionVisible || !ready || inFrontOfCameraCount > 0) {
-      noTurbinesInFrontSinceRef.current = null;
+    // V37: räkna ett verk som "tillbaka" först när det FAKTISKT är synligt
+    // (opacitet > 0.02 i ARScene), inte bara när det ligger inom kamerans FOV.
+    // Tidigare kunde ett verk ligga i FOV men vara helt ockluderat/uttonat,
+    // vilket släckte fallbacken och lämnade användaren med en tom skärm.
+    if (!arSessionVisible || !ready || arDebugStats.trueVisibleTurbineCount > 0) {
+      noTurbinesVisibleSinceRef.current = null;
       setCalibrationFallbackActive(false);
       return;
     }
-    if (noTurbinesInFrontSinceRef.current === null) {
-      noTurbinesInFrontSinceRef.current = Date.now();
+    if (noTurbinesVisibleSinceRef.current === null) {
+      noTurbinesVisibleSinceRef.current = Date.now();
     }
-    const elapsed = Date.now() - noTurbinesInFrontSinceRef.current;
+    const elapsed = Date.now() - noTurbinesVisibleSinceRef.current;
     if (elapsed >= CALIBRATION_FALLBACK_DELAY_MS) {
-      // Juli 2026-fix (kritisk buggrapport punkt 6, "safety rule: force-
-      // recreate/force-show + log if nothing visible within 2s"): explicit
-      // konsolvarning så en testare/utvecklare ser exakt NÄR och VARFÖR
-      // säkerhetsnätet triggade, inte bara att verk plötsligt dök upp.
       console.warn(
-        `[AR][safety] No turbines in camera FOV for ${CALIBRATION_FALLBACK_DELAY_MS}ms — force-showing ${nearestThreeTurbineIds.length} nearest turbines`,
+        `[AR][safety] No turbines actually visible for ${CALIBRATION_FALLBACK_DELAY_MS}ms — force-showing ${nearestThreeTurbineIds.length} nearest turbines`,
       );
       setCalibrationFallbackActive(true);
       return;
     }
     const id = window.setTimeout(() => {
       console.warn(
-        `[AR][safety] No turbines in camera FOV for ${CALIBRATION_FALLBACK_DELAY_MS}ms — force-showing ${nearestThreeTurbineIds.length} nearest turbines`,
+        `[AR][safety] No turbines actually visible for ${CALIBRATION_FALLBACK_DELAY_MS}ms — force-showing ${nearestThreeTurbineIds.length} nearest turbines`,
       );
       setCalibrationFallbackActive(true);
     }, CALIBRATION_FALLBACK_DELAY_MS - elapsed);
     return () => window.clearTimeout(id);
-  }, [arSessionVisible, ready, inFrontOfCameraCount, nearestThreeTurbineIds]);
+  }, [arSessionVisible, ready, arDebugStats.trueVisibleTurbineCount, nearestThreeTurbineIds]);
 
   const forceVisibleIds = useMemo(() => {
     if (!calibrationFallbackActive || nearestThreeTurbineIds.length === 0) return undefined;

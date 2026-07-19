@@ -388,6 +388,9 @@ const INDOOR_TINT_BLEND = 0.6;
 // Meter -> scenens enheter. Vald så att den visuella storleken/avstånden
 // matchar kamerans FOV/klippplan (samma skala som tidigare, enklare modell).
 const METERS_TO_UNITS = 0.9;
+// V37: flygsäkerhetsbelysningen ska sitta på navcellens/generatorns tak,
+// inte vid navets mitt. Halva navcellshöjden (~2.2 m) ovanför navhöjden.
+const NACELLE_LIGHT_OFFSET_M = 2.2;
 
 // Antagen ögonhöjd (m) för användaren.
 const EYE_HEIGHT_M = 1.6;
@@ -1285,7 +1288,8 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         obj.distanceLabel.sprite.position.set(x, y + labelHeight + 22 * scaleDamp, z);
         obj.distanceLabel.sprite.scale.set(24 * scaleDamp, 6 * scaleDamp, 1);
 
-        const lightY = y + hubHeightUnits * scaleDamp * 1.02;
+        // V37: placera lampan på navcellens tak (hub + halva navcellshöjden).
+        const lightY = y + (hubHeightUnits + NACELLE_LIGHT_OFFSET_M * METERS_TO_UNITS) * scaleDamp;
         obj.light.position.set(x, lightY, z);
         // Minsta synliga storlek för flygsäkerhetsbelysning oavsett avstånd —
         // annars försvinner de vid >2 km som enkla pixels. `Math.max` säker-
@@ -1623,7 +1627,9 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // tystnar tillfälligt på iOS) snappar vi direkt till senaste kända
       // kvaternion så att sol/sprite inte fastnar på skärmen.
       {
-        const CAMERA_SLERP_TAU = 0.04;
+        // V37: ännu snabbare kamerainterpolation så sol/sprite/verk följer
+        // telefonrörelserna tätare.
+        const CAMERA_SLERP_TAU = 0.03;
         const stalled = modeRef.current.orientationStalled;
         const slerpFactor = dt > 0 ? 1 - Math.exp(-dt / CAMERA_SLERP_TAU) : 1;
         state.camera.quaternion.slerp(cameraTargetQuatRef.current, stalled ? 1 : slerpFactor);

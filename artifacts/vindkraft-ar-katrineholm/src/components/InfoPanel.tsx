@@ -6,8 +6,11 @@ export function InfoPanel({ onClose, projectId }: { onClose: () => void; project
     projectId != null && String(projectId) === String(KATRINEHOLM_PROJECT.id);
 
   return (
-    <div className="absolute inset-0 z-[60] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">
-      <div className="w-full max-w-md rounded-t-3xl bg-[#111111] p-6 shadow-2xl sm:rounded-3xl">
+    <div className="absolute inset-x-0 bottom-0 z-[60] flex max-h-[80vh] flex-col items-center justify-end pointer-events-none sm:items-center sm:justify-center">
+      {/* V37: informationsrutan är en kompakt bottom sheet istället för en
+          helskärms-overlay, så kamerabilden och AR-verken fortfarande syns
+          bakom/ovanför den. */}
+      <div className="pointer-events-auto w-full max-w-md rounded-t-3xl bg-[#111111]/95 p-5 shadow-2xl backdrop-blur-md sm:rounded-3xl">
         <div className="mb-4 flex items-start justify-between">
           <h2 className="text-xl font-semibold text-white">Om Vindkollen</h2>
           <button
@@ -18,7 +21,7 @@ export function InfoPanel({ onClose, projectId }: { onClose: () => void; project
           </button>
         </div>
 
-        <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1 text-sm leading-relaxed text-white/75">
+        <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-1 text-sm leading-relaxed text-white/75">
           <p>
             Vindkollen hjälper invånare att se och förstå hur planerade vindkraftsetableringar kan påverka
             landskapet, närboende och lokalsamhället.

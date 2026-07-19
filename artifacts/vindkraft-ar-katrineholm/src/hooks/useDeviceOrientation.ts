@@ -211,8 +211,8 @@ const DEADZONE_DEG = 0.5;
 // pekar åt samma håll innan det räknas som en avsiktlig vridning — en enskild
 // spik (t.ex. att man vinklar handleden en aning) faller annars igenom som
 // "turn" och ger precis den där sidledshoppet.
-const HEADING_NOISE_DELTA_DEG = 5;
-const HEADING_TURN_DELTA_DEG = 14;
+const HEADING_NOISE_DELTA_DEG = 4;
+const HEADING_TURN_DELTA_DEG = 12;
 // Sjunde kritiska buggrapporten ("verken hänger kvar ~1s innan de snäpper
 // till rätt läge"): 1.3s still-tidskonstant var satt konservativt för att
 // dämpa magnetometerbrus, men gjorde ÄVEN genuina, långsamma-till-måttliga
@@ -225,8 +225,8 @@ const HEADING_TURN_DELTA_DEG = 14;
 // `DEADZONE_DEG`), men en riktig, om än långsam, vridning känns nu klart
 // snabbare även UTAN gyro (t.ex. på skrivbord/desktop-test där devicemotion
 // saknas).
-const HEADING_STILL_TAU = 0.7;
-const HEADING_TURN_TAU = 0.15;
+const HEADING_STILL_TAU = 0.45;
+const HEADING_TURN_TAU = 0.08;
 // Sjunde kritiska buggrapporten (punkt 3, "gyroskopet ska styra snabba
 // rörelser, magnetometern bara långsam drift-korrigering"): en uppmätt
 // rotationshastighet (grader/sekund, från `devicemotion`s `rotationRate`)
@@ -240,13 +240,13 @@ const HEADING_TURN_TAU = 0.15;
 // är för riskabel att skeppa utan test på riktig hårdvara. Tröskeln (12°/s)
 // är satt klart under vad en avsiktlig, snabb telefonvridning normalt ger
 // (typiskt 60-200°/s) men klart över naturligt handskakningsbrus.
-const GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC = 12;
+const GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC = 8;
 // Åttonde kritiska buggrapporten: en MYCKET lägre tröskel än ovan, bara till
 // för att avgöra "rör sig telefonen alls just nu" (för `gyroLastActiveAtRef`)
 // — inte "är detta en avsiktlig snabb vridning". Måste vara klart över
 // sensorbrus i vila (typiskt <1°/s) men klart under en avsiktlig långsam
 // vridning, så den fångar även en lugn, kontrollerad rörelse mot pilen.
-const GYRO_ACTIVITY_THRESHOLD_DEG_PER_SEC = 3;
+const GYRO_ACTIVITY_THRESHOLD_DEG_PER_SEC = 2;
 // Hur många på varandra följande avläsningar med samma vridningsriktning
 // (och delta över bruströskeln) som krävs innan vi litar på att det är en
 // verklig, avsiktlig vridning och släpper igenom den snabba tidskonstanten —
@@ -284,11 +284,11 @@ const HEADING_LARGE_JUMP_DEG = 20;
 // tvåhastighets-/bekräftelsemönster som giren appliceras nu på beta/gamma
 // var för sig (egna bekräftelseräknare, då en ren pitch-rörelse inte ska
 // triggra rolls snabba läge och vice versa).
-const PITCH_ROLL_NOISE_DELTA_DEG = 2.5;
-const PITCH_ROLL_TURN_DELTA_DEG = 9;
+const PITCH_ROLL_NOISE_DELTA_DEG = 2;
+const PITCH_ROLL_TURN_DELTA_DEG = 7;
 // Sjunde kritiska buggrapporten: samma resonemang/sänkning som `HEADING_STILL_TAU` ovan.
-const PITCH_ROLL_STILL_TAU = 0.55;
-const PITCH_ROLL_TURN_TAU = 0.15;
+const PITCH_ROLL_STILL_TAU = 0.35;
+const PITCH_ROLL_TURN_TAU = 0.08;
 const PITCH_ROLL_TURN_CONFIRM_SAMPLES = 2;
 // Samma resonemang som `MAX_PLAUSIBLE_TURN_RATE_DEG_PER_SEC` ovan, men för
 // pitch/roll: en enskild avläsning som antyder en orimligt snabb tiltning
