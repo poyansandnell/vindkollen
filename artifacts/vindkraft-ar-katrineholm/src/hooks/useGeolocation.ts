@@ -32,6 +32,9 @@ export function useGeolocation(enabled: boolean): GeoState {
   const watchIdRef = useRef<number | null>(null);
   const nativeCleanupRef = useRef<(() => void) | null>(null);
   const [retryToken, setRetryToken] = useState(0);
+  // V25: separat "reset"-trigger för override-rensning. Ökar `resetTrigger`
+  // tvingar hela watchPosition-omstarten, vilket rensar även intern stale-cache.
+  const [resetTrigger, setResetTrigger] = useState(0);
 
   const retry = useCallback(() => {
     setState((s) => ({ ...s, error: null, permissionDenied: false, loading: true }));
@@ -64,14 +67,18 @@ export function useGeolocation(enabled: boolean): GeoState {
     };
   }, []);
 
-  // V24: GPS-refresh när positionOverride rensas — tvingar omedelbart nytt
-  // GPS-fix så AR aldrig fastnar på den senast kända (simulerade) positionen.
+  // V25 (uppgradering av V24-fix): lyssna alltid (inga deps) och trigga
+  // resetTrigger som är separat från retryToken — watchPosition startas om
+  // HELT, vilket tvingar ny GPS-fix utan möjlighet att återanvända intern
+  // stale-position från simuleringsläget.
   useEffect(() => {
-    if (!enabled) return;
-    const handler = () => setRetryToken((t) => t + 1);
+    const handler = () => {
+      console.info("[useGeolocation] overrideCleared → resetTrigger++");
+      setResetTrigger((t) => t + 1);
+    };
     window.addEventListener("vindkollen:overrideCleared", handler);
     return () => window.removeEventListener("vindkollen:overrideCleared", handler);
-  }, [enabled]);
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
@@ -258,7 +265,7 @@ export function useGeolocation(enabled: boolean): GeoState {
         watchIdRef.current = null;
       }
     };
-  }, [enabled, retryToken]);
+  }, [enabled, retryToken, resetTrigger]);
 
   return { ...state, retry };
 }

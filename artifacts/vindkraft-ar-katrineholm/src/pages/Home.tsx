@@ -1592,17 +1592,18 @@ export default function Home() {
             />
           )}
 
-          {/* V22: Riktningsbadge — visas när närmaste verk är >3km bort */}
-          {nearestFarTurbine && arSessionVisible && (
-            <div className="pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 rounded-full border border-[#FF8B01]/40 bg-black/80 px-4 py-2 text-sm text-white shadow-lg" style={{ top: "calc(env(safe-area-inset-top, 8px) + 72px)" }}>
-              <div className="flex items-center gap-2">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-[#FF8B01]" style={{ transform: `rotate(${nearestFarTurbine.bearing}deg)` }}>
+          {/* V25: Riktningsbadge — visas BARA om inget verk syns i FOV just nu
+              (nearestOnTarget=false). När pilen nere till höger aktiveras är
+              badget redundant och döljs för att inte överlappa status-badges. */}
+          {!nearestOnTarget && nearestFarTurbine && arSessionVisible && (
+            <div className="pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 rounded-full border border-[#FF8B01]/30 bg-black/60 px-3 py-1.5 text-xs text-white/85 shadow-md" style={{ top: "calc(env(safe-area-inset-top, 8px) + 72px)" }}>
+              <span className="flex items-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-[#FF8B01]" style={{ transform: `rotate(${nearestFarTurbine.bearing}deg)` }}>
                   <path d="M12 2 L8 14 L12 10 L16 14 Z" />
                 </svg>
-                <span className="text-xs">
-                  <strong>{(nearestFarTurbine.distanceM / 1000).toFixed(1)} km</strong> till närmaste verk — vrid dig {Math.round(nearestFarTurbine.bearing)}°
-                </span>
-              </div>
+                <strong className="font-semibold text-white">{(nearestFarTurbine.distanceM / 1000).toFixed(1)} km</strong>
+                <span className="text-white/60">— vrid {Math.round(nearestFarTurbine.bearing)}°</span>
+              </span>
             </div>
           )}
 

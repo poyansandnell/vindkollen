@@ -603,6 +603,10 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
   forwardedRef,
 ) {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  // V25: smoothad yaw-komponent (grader) för att dämpa diskreta sensor-hopp
+  // vid snabb rotation. Nollställs aldrig automatiskt — kontinuitet är bättre
+  // än reset-hopp vid re-renders.
+  const smoothedYawDegRef = useRef<number | null>(null);
   const sceneStateRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -1517,14 +1521,25 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         }
       }
 
-      // Kamerans riktning styrs helt av enhetens sensorer (gir/pitch/roll),
-      // så att verken förblir fast förankrade i verkligheten/horisonten
-      // istället för att följa skärmen när telefonen tiltas.
-      // V18: Nollställ alltid roll (Z-axeln) — verken ska alltid stå rakt,
-      // oavsett hur telefonen lutar. Behåll yaw (gir, Y-axeln) så man kan
-      // vrida sig runt, och pitch (X-axeln) så man kan titta upp/ner.
-      // Ingen slerp-interpolation — direkt respons, verken följer direkt.
+      // Kamerans riktning styrs av enhetens sensorer (gir/pitch/roll).
+      // V18: Nollställ alltid roll (Z-axeln). Behåll yaw (Y) och pitch (X).
+      // V25: Yaw-komponenten smoothas med EMA (ALPHA=0.35) för att dämpa
+      // diskreta CoreMotion-hopp vid snabb rotation. Pitch/roll lämnas råa
+      // (de är redan stabila och smoothing där orsakar horizon-drift).
+      const HEADING_SMOOTHING_ALPHA = 0.35;
       const sensorEuler = new THREE.Euler().setFromQuaternion(quaternionRef.current, "YXZ");
+      // Råa yaw-grader i [0, 360)
+      const rawYawDeg = ((sensorEuler.y * (180 / Math.PI)) % 360 + 360) % 360;
+      if (smoothedYawDegRef.current === null) {
+        smoothedYawDegRef.current = rawYawDeg;
+      } else {
+        // Hantera wrap-around (359° → 1° ska gå via 0°, inte via 358°)
+        let delta = rawYawDeg - smoothedYawDegRef.current;
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+        smoothedYawDegRef.current = ((smoothedYawDegRef.current + delta * HEADING_SMOOTHING_ALPHA) % 360 + 360) % 360;
+      }
+      sensorEuler.y = smoothedYawDegRef.current * (Math.PI / 180);
       sensorEuler.z = 0; // nollställ roll
       state.camera.quaternion.setFromEuler(sensorEuler);
       // Juli 2026-fix (TREDJE kritiska buggrapporten — trolig rotorsak):
