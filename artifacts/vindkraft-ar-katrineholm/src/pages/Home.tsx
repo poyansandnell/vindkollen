@@ -2091,68 +2091,69 @@ export default function Home() {
               Juli 2026-fix: precis som topp-baren, gated bakom
               `arSessionVisible` för att inte blöda igenom bakom
               `LoadingSequence`. */}
+          {/* V23: Bottencontainern delad i två lager — Meny alltid fast längst
+              ner, övriga widgets i en scrollbar kolumn ovanför.
+              flex-col-reverse placerar Meny-knappen sist i DOM men visuellt
+              längst ner (under widgets), oavsett hur många widgets visas. */}
           {arSessionVisible && (
-          <div className="absolute inset-x-0 bottom-0 z-[45]">
-          {/* Gradienten täcker hela bottenytan inklusive safe-area/home-indicator:
-              pb-[max(2.5rem,...)] skjuter upp knapparna med minst 40 px (täcker
-              home-indikatorn på alla iPhone-modeller) medan bakgrunden och
-              övertoningen sträcker sig hela vägen till skärmens nederkant.
-              Tidigare lösning: paddingBottom på yttre div → gradient slutade
-              ovanför safe-area-zonen, vilket såg avklippt ut. */}
-          <div className="flex flex-col gap-3 bg-gradient-to-t from-black to-transparent px-4 pb-[max(3.5rem,calc(env(safe-area-inset-bottom)+0.75rem))] pt-10">
-            {/* Simulerad betraktarposition — visas högt upp så det är tydligt */}
-            {positionOverride && (
-              <div className="flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-900/50 px-3 py-1.5 text-xs text-blue-200">
-                <span className="flex-1 truncate">
-                  👤 Simulerad position · {positionOverride.lat.toFixed(4)}°N {positionOverride.lon.toFixed(4)}°E
-                </span>
-                <button
-                  onClick={() => setPositionOverride(null)}
-                  className="shrink-0 font-semibold text-blue-300 hover:text-white"
-                >
-                  ✕ Rensa
-                </button>
-              </div>
-            )}
-            {/* Statusbanner — placerad ovanför paneler/knappar, inte mellan dem */}
-            {statusBanner && (
-              <div className={`rounded-full px-3 py-1.5 text-center text-xs font-medium shadow-md ${statusBannerToneClasses[statusBanner.tone]}`}>
-                {statusBanner.message}
-              </div>
-            )}
-            {ready && showSoundLevel && (
-              <SoundLevelPanel
-                estimate={soundLevelEstimate}
-                indoors={soundEnvironment === "inne"}
-                onClose={() => setShowSoundLevel(false)}
-              />
-            )}
-            {ready && showNoiseImpact && (
-              <NoiseImpactPanel result={noiseImpact} onClose={() => setShowNoiseImpact(false)} />
-            )}
-            {KATRINEHOLM_PROJECT.campaign?.enabled && activeProject?.projectId === KATRINEHOLM_PROJECT.id && (
-            <button
-              onClick={() => setShowPetition(true)}
-              className="w-full rounded-full bg-[#FF8B01] py-3.5 text-sm font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/30 hover:bg-[#FFB347]"
-            >
-              Jag vill skriva på för att få till folkomröstning
-            </button>
-            )}
-            {ready && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[45] flex flex-col-reverse">
+            {/* === MENY-KNAPP — fast vid safe-area, alltid synlig === */}
+            <div className="pointer-events-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <button
-                onClick={handleCapturePhoto}
-                className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
+                onClick={() => setShowMenu(true)}
+                className="w-full rounded-full border border-white/50 bg-white/20 py-3 text-sm font-semibold text-white shadow-sm backdrop-blur-md hover:bg-white/30"
               >
-                📸 Fotomontage
+                ☰ Meny
               </button>
-            )}
-            <button
-              onClick={() => setShowMenu(true)}
-              className="w-full rounded-full border border-white/50 bg-white/20 py-3 text-sm font-semibold text-white shadow-sm hover:bg-white/30"
-            >
-              ☰ Meny
-            </button>
-          </div>
+            </div>
+
+            {/* === ÖVRIGA WIDGETS — scrollbara ovanför Meny === */}
+            <div className="pointer-events-auto flex max-h-[55vh] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-8">
+              {positionOverride && (
+                <div className="flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-900/50 px-3 py-1.5 text-xs text-blue-200">
+                  <span className="flex-1 truncate">
+                    👤 Simulerad position · {positionOverride.lat.toFixed(4)}°N {positionOverride.lon.toFixed(4)}°E
+                  </span>
+                  <button
+                    onClick={() => setPositionOverride(null)}
+                    className="shrink-0 font-semibold text-blue-300 hover:text-white"
+                  >
+                    ✕ Rensa
+                  </button>
+                </div>
+              )}
+              {statusBanner && (
+                <div className={`rounded-full px-3 py-1.5 text-center text-xs font-medium shadow-md ${statusBannerToneClasses[statusBanner.tone]}`}>
+                  {statusBanner.message}
+                </div>
+              )}
+              {ready && showSoundLevel && (
+                <SoundLevelPanel
+                  estimate={soundLevelEstimate}
+                  indoors={soundEnvironment === "inne"}
+                  onClose={() => setShowSoundLevel(false)}
+                />
+              )}
+              {ready && showNoiseImpact && (
+                <NoiseImpactPanel result={noiseImpact} onClose={() => setShowNoiseImpact(false)} />
+              )}
+              {KATRINEHOLM_PROJECT.campaign?.enabled && activeProject?.projectId === KATRINEHOLM_PROJECT.id && (
+                <button
+                  onClick={() => setShowPetition(true)}
+                  className="w-full rounded-full bg-[#FF8B01] py-3.5 text-sm font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/30 hover:bg-[#FFB347]"
+                >
+                  Jag vill skriva på för att få till folkomröstning
+                </button>
+              )}
+              {ready && (
+                <button
+                  onClick={handleCapturePhoto}
+                  className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
+                >
+                  📸 Fotomontage
+                </button>
+              )}
+            </div>
           </div>
           )}
 

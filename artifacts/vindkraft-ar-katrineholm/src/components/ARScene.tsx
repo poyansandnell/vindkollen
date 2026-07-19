@@ -826,6 +826,10 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     }
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // V23: Filmisk tonemapping — förhindrar överexponering i starkt ljus/sol.
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.85;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
 
     // Om WebGL-kontexten ändå skulle tappas (t.ex. GPU-minnestryck på äldre
@@ -843,9 +847,10 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored, false);
     console.info("[AR][pipeline] Renderer attached");
 
-    const ambient = new THREE.AmbientLight(0xffffff, 1.1);
+    // V23: Sänkt ljusstyrka — förhindrar vita tvättade verk i solljus.
+    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambient);
-    const sunLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    const sunLight = new THREE.DirectionalLight(0xffffff, 0.3);
     sunLight.position.set(5, 10, 5);
     scene.add(sunLight);
 
