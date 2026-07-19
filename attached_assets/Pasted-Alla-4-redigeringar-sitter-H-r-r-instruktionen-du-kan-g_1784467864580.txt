@@ -1,0 +1,51 @@
+Alla 4 redigeringar sitter. Här är instruktionen du kan ge till Replit:
+
+---
+
+## Instruktion till Replit — V28: `frustumCulled`-bypass för `forceVisible`
+
+### Bakgrund (vad som händer just nu)
+
+Loggarna från din senaste körning visar mönstret tydligt:
+
+```
+[AR] Modell synlig (V1, opacitet=1.00, avstånd=1291m, frustumVisible=false)
+[AR] Modell synlig (V2, opacitet=1.00, avstånd=2113m, frustumVisible=false)
+...
+[warn] [AR][safety] No turbines in camera FOV for 2000ms — force-showing 3 nearest turbines
+```
+
+Alla 8 verk har `opacitet=1.00` (fullt synliga i materialet) men `frustumVisible=false` (Three.js interna frustum culling blockerar renderingen). Även säkerhetsfallbacken efter 2 sekunder (`forceVisibleIds`) triggar, men verken syns ändå inte — för säkerhetsfallbacken tvingar bara opaciteten till 1 via `applyFinalOpacities()`, den rör INTE `frustumCulled`.
+
+**Rotorsak:** Three.js sätter `frustumCulled = true` som default på alla `Mesh`-objekt. När `forceVisible` är sant och opaciteten tvingas till 1, kör Three.js fortfarande sin frustum-test och vägrar rendera mesharna eftersom de ligger utanför kamerans trånga stående-FOV (~33° horisontellt i porträttläge). Verken är alltså fullt opaka i materialet men ritas aldrig ut.
+
+### Ändringar som redan är gjorda (i filen just nu)
+
+Alla ändringar är i **`src/components/ARScene.tsx`** — 4 ställen, en fil:
+
+| # | Rad | Vad |
+|---|-----|-----|
+| 1 | ~314 | `cachedMeshes: THREE.Mesh[]` — nytt fält i `TurbineObject`-interfacet |
+| 2 | ~999–1003 | Efter `scene.add(group)`: traversera `group`, samla alla `THREE.Mesh`-barn i `cachedMeshes`-arrayen |
+| 3 | ~1082 | `cachedMeshes,` inuti objektliteralen som returneras från `.map()` |
+| 4 | ~1753–1756 | I `animate()`-loopen, direkt efter `obj.forceVisible = ...`: loopa över `obj.cachedMeshes` och sätt `mesh.frustumCulled = !obj.forceVisible` |
+
+### Vad Replit ska göra
+
+1. **Verifiera att ovanstående 4 redigeringar finns.** Kör `grep -n 'cachedMeshes' src/components/ARScene.tsx` — ska ge 5 träffar (interface-deklaration + const + push + objektliteral + `for (const mesh`).
+
+2. **Kompilera och testa.** `npx tsc --noEmit` — de enda felen ska vara pre-existerande saknade type definitions (`@types/node`, `vite-plugin-pwa/client`, `vite/client`), inga nya fel från våra ändringar.
+
+3. **Bygg och kör på iOS-enhet.** Verifiera att:
+   - AR-sessionen startar (simulatorn är fortfarande trasig men det är en separat bugg)
+   - Efter 2 sekunder syns de 3 närmaste verken från säkerhetsfallbacken (ska trigga `[AR][safety] No turbines in camera FOV for 2000ms — force-showing 3 nearest turbines`)
+   - Verken är synliga på skärmen, inte bara opacitet=1.00 i loggen
+
+4. **Rikta telefonen mot vindkraftparkens faktiska bäring (~92–178° från användarens position).** Verken inom ±25° (`NEAR_CENTER_FORCE_DEG`) ska nu synas direkt, inte bara via säkerhetsfallbacken.
+
+5. **Committa som V28** med beskrivning: `V28: frustumCulled bypass when forceVisible is true — safety fallback turbines were opaque but invisible because Three.js default frustumCulled=true blocked rendering. Cache all Mesh children per turbine at init; toggle frustumCulled each frame based on forceVisible.`
+
+### Övriga observationer (separata issues, inte denna fix)
+
+- **Camera yaw ≠ Heading i loggarna.** Exempel: `Heading=43.8° Camera yaw=336.9°` — kamerans faktiska girvinkel avviker kraftigt från kompassens heading. Detta kan bero på `betaOffsetRef` (horisontkalibrering) eller på att telefonen inte hålls helt vertikalt (beta ≠ 90°). Påverkar inte denna fix men förklarar varför verken hamnar utanför FOV — kameran pekar åt ett helt annat håll än vad kompassen tror.
+- **Simulatorn startar fortfarande inte** — separat bugg, inte relaterad till frustum/problemet.

@@ -310,6 +310,13 @@ interface TurbineObject {
    * gång per bildruta.
    */
   lastBearingDeg: number;
+  /**
+   * V29: Alla THREE.Mesh-barn i `group`, cachade vid init. Används för att
+   * toggla `frustumCulled` per frame när `forceVisible` är sant — annars
+   * blockerar Three.js default frustum-culling rendering även om opaciteten
+   * är 1.
+   */
+  cachedMeshes: THREE.Mesh[];
 }
 
 interface CanvasLabel {
@@ -1008,6 +1015,12 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       const { group, bladesGroup, materials } = buildTurbineMesh(turbine);
       for (const mat of materials) attachOcclusionShader(mat);
       scene.add(group);
+      // V29: Samla alla Mesh-barn i en array vid init så vi kan toggla
+      // frustumCulled per frame utan att traversera scengraphen varje gång.
+      const cachedMeshes: THREE.Mesh[] = [];
+      group.traverse((child) => {
+        if (child instanceof THREE.Mesh) cachedMeshes.push(child);
+      });
       // "Anchor created"/"Model loaded": denna app använder inte WebXR/
       // ARCore-ankare (se replit.md: bäring/avstånd + enhetsorientering,
       // för bred webbläsarkompatibilitet) — gruppens/mesh:ens skapande OCH
@@ -1087,6 +1100,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         blinkOffsetMs,
         renderDistM: 0,
         forceVisible: false,
+        cachedMeshes,
         loggedPlaced: false,
         loggedVisible: false,
         lastBearingDeg: 0,
@@ -1793,6 +1807,13 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         obj.forceVisible =
           (nearCenter && obj.renderDistM <= MAX_RENDER_DISTANCE_M) ||
           modeRef.current.forceVisibleIds.has(obj.turbine.id);
+        // V29: Bypass Three.js frustum culling när forceVisible är sant.
+        // Default frustumCulled=true blockerar rendering av meshar utanför
+        // kamerans trånga FOV även om opaciteten är 1 (opacitet styrs av
+        // material, frustumCulled styrs av renderaren — de är oberoende).
+        for (const mesh of obj.cachedMeshes) {
+          mesh.frustumCulled = !obj.forceVisible;
+        }
         if (
           angleFromOpticalAxisDeg !== null &&
           angleFromOpticalAxisDeg <= IN_VIEW_HALF_ANGLE_DEG &&
