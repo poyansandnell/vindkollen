@@ -997,6 +997,29 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started]);
 
+  // V31 (produktfeedback: "nedräkning när man går in i AR men ser inga verk"):
+  // Live-sekundräknare som visar hur länge användaren stirrat på en tom
+  // AR-vy. Nollställs och stoppas så fort ett verk blivit synligt — eller
+  // om AR-sessionen avslutas. Placerad EFTER arDebugStats-deklarationen
+  // (beroende på trueVisibleTurbineCount).
+  const [searchElapsedSec, setSearchElapsedSec] = useState(0);
+  useEffect(() => {
+    if (!arSessionVisible || arStartedAtMs === null) {
+      setSearchElapsedSec(0);
+      return;
+    }
+    if (arDebugStats.trueVisibleTurbineCount > 0) {
+      setSearchElapsedSec(0);
+      return;
+    }
+    const tick = () => {
+      setSearchElapsedSec(Math.floor((Date.now() - arStartedAtMs) / 1000));
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [arSessionVisible, arStartedAtMs, arDebugStats.trueVisibleTurbineCount]);
+
   // Juli 2026-fix (produktkrav 6, ny omgång): "Heading age (ms)" i
   // felsökningsraden — tid sedan senaste `deviceorientation`-händelsen,
   // oavsett om den kom via kompass eller (produktkrav 4) gyro-fallback.
@@ -1821,6 +1844,32 @@ export default function Home() {
             <div className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-b from-[#0a1030]/55 via-[#0a1030]/35 to-[#0a1030]/60" />
           )}
 
+          {/* V31 (produktfeedback: "nedräkning när man går in i AR men ser inga
+              verk"): centrerat sökhint-överlägg visas SÅ LÄNGE ingen turbin är
+              synlig. Tickar varje sekund tills trueVisibleTurbineCount > 0 →
+              searchElapsedSec sätts till 0 → alla villkor false → overlay
+              försvinner automatiskt. pointer-events-none så att NearestTurbin-
+              Arrow och knappar förblir klickbara. z-30: under topp-baren (z-45)
+              och pilen (z-50) men ovanför kameran. */}
+          {arSessionVisible &&
+            arStartedAtMs !== null &&
+            arDebugStats.trueVisibleTurbineCount === 0 &&
+            inFrontOfCameraCount === 0 && (
+              <div
+                className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
+                aria-live="polite"
+              >
+                <div className="rounded-2xl border border-white/20 bg-black/55 px-5 py-3 text-center shadow-2xl backdrop-blur-md">
+                  <p className="text-sm font-semibold text-white">
+                    🔍 Hittar vindkraftverken…
+                  </p>
+                  <p className="mt-0.5 text-xs text-white/70">
+                    {searchElapsedSec}s — peka kameran runt så fixar jag positionen
+                  </p>
+                </div>
+              </div>
+            )}
+
           {!ready && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/50 px-8 text-center">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#FF8B01] border-t-transparent" />
@@ -2070,20 +2119,12 @@ export default function Home() {
                 <LineOfSightStatus status={lineOfSightStatus} />
               </div>
             )}
-            {/* Rad 3: Närmaste verk-information */}
-            {nearestTurbineInfo && (
-              <div className="text-[11px] leading-none text-white/60">
-                🌬️ Närmaste verk ·{" "}
-                {nearestTurbineInfo.distanceM >= 1000
-                  ? `${(nearestTurbineInfo.distanceM / 1000).toFixed(1)} km`
-                  : `${Math.round(nearestTurbineInfo.distanceM)} m`}
-                {" · "}
-                {["N","NNÖ","NÖ","ÖNÖ","Ö","ÖSÖ","SÖ","SSÖ","S","SSV","SV","VSV","V","VNV","NV","NNV"][
-                  Math.round(((nearestTurbineInfo.bearingDeg % 360) + 360) % 360 / 22.5) % 16
-                ]}
-              </div>
-            )}
-            {/* Rad 4: Ljud · Ute/Inne · Dölj status · ⚙️ */}
+            {/* V31 (produktfeedback: "det är dubbla info om avstånd, nästan
+                trippla"): den tidigare "Rad 3: Närmaste verk · 1.8 km · ÖSÖ"-
+                raden togs BORT — exakt samma info (avstånd + kompassriktning
+                till närmaste verk) visas redan i NearestTurbineArrow-rutan på
+                höger sida. Vi behåller pilen som enda avståndskälla. */}
+            {/* Rad 3 (fd. rad 4): Ljud · Ute/Inne · Dölj status · ⚙️ */}
             <div className="flex items-center gap-1.5">
               {ready && (
                 <button
@@ -2170,6 +2211,15 @@ export default function Home() {
             {/* === ÖVRIGA WIDGETS — bara när AR-sessionen är synlig === */}
             {arSessionVisible && (
             <div className="pointer-events-auto flex max-h-[55vh] flex-col gap-3 overflow-y-auto bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-8">
+              {/* V31 (produktfeedback: "gula fältet skulle vara ovanför den blå
+                  rutan"): statusBanner (säkerhetskritisk varning: svag GPS/
+                  kompass) visas NU FÖRST — positionOverride-pill (sekundär
+                  info) hamnar under. */}
+              {statusBanner && (
+                <div className={`rounded-full px-3 py-1.5 text-center text-xs font-medium shadow-md ${statusBannerToneClasses[statusBanner.tone]}`}>
+                  {statusBanner.message}
+                </div>
+              )}
               {positionOverride && (
                 <div className="flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-900/50 px-3 py-1.5 text-xs text-blue-200">
                   <span className="flex-1 truncate">
@@ -2181,11 +2231,6 @@ export default function Home() {
                   >
                     ✕ Rensa
                   </button>
-                </div>
-              )}
-              {statusBanner && (
-                <div className={`rounded-full px-3 py-1.5 text-center text-xs font-medium shadow-md ${statusBannerToneClasses[statusBanner.tone]}`}>
-                  {statusBanner.message}
                 </div>
               )}
               {ready && showSoundLevel && (
