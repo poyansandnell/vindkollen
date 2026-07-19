@@ -18,6 +18,26 @@ export function isNative(): boolean {
 // ---------------------------------------------------------------------------
 
 /**
+ * Öppnar en PDF i en extern visare.
+ *
+ * - Native (iOS/Android): använder @capacitor/browser för att öppna filen i
+ *   Safari/Chrome, vilket ger korrekt nedladdning/visning av PDF:er.
+ * - Webb: faller tillbaka på window.open() i en ny flik.
+ */
+export async function openPdf(url: string): Promise<void> {
+  if (isNative()) {
+    try {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url, presentationStyle: "popover" });
+      return;
+    } catch (err) {
+      console.error("[Vindkollen] Browser.open failed:", err);
+    }
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+/**
  * Öppnar Sverigekartan.
  *
  * - Webb: navigerar direkt till /vindkraft-karta/ (path routing).

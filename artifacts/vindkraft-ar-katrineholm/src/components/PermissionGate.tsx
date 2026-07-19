@@ -152,7 +152,7 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
             )}
             {SHORT_HASH && (
               <p className="text-center text-[10px] text-white/35 font-mono">
-                Version {VERSION} · Build {SHORT_HASH}
+                Beta Version {VERSION} · Build {SHORT_HASH}
               </p>
             )}
           </>

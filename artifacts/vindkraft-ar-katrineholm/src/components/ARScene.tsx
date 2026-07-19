@@ -147,6 +147,13 @@ interface ARSceneProps {
    */
   turbinesVisible?: boolean;
   /**
+   * V36: signal från `useDeviceOrientation` att inga nya sensor-event har
+   * kommit på ett tag. När sant snappar kameran direkt till senaste kända
+   * kvaternion istället för att mjuka ut — sol/sprite fastnar inte på
+   * skärmen om sensorn tillfälligt tystnat.
+   */
+  orientationStalled?: boolean;
+  /**
    * V20: Anropas varje gång antalet "landade" verk ändras under
    * ingångs-animationen (fall-in, 1.5 s). Används för "X / N på plats"-
    * räknaren i Home.tsx. Kallas inte alls om animationen redan slutförts.
@@ -617,6 +624,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     disableOcclusion = false,
     arStartedAtMs = null,
     turbinesVisible = true,
+    orientationStalled = false,
     onTurbineLanded,
   },
   forwardedRef,
@@ -652,6 +660,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     disableOcclusion,
     arStartedAtMs: arStartedAtMs ?? null,
     turbinesVisible: turbinesVisible ?? true,
+    orientationStalled: orientationStalled ?? false,
   });
   const skyRef = useRef({
     isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
@@ -797,6 +806,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
     disableOcclusion,
     arStartedAtMs: arStartedAtMs ?? null,
     turbinesVisible: turbinesVisible ?? true,
+    orientationStalled: orientationStalled ?? false,
   };
   skyRef.current = {
     isPointSky: isPointSky ?? DEFAULT_IS_POINT_SKY,
@@ -1388,10 +1398,16 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       const { disableOcclusion: occlusionDisabled } = modeRef.current;
       // V35/Fix1: presence (0..1) kopplar forceVisible-banan till faktisk vinkel.
       const presence = Math.min(1, Math.max(0, obj.viewPresence));
+      // V36: under de första sekunderna av en AR-session (worldLockBlend < 1)
+      // tvingar vi force-visible-verk till full närvaro oavsett om kameran
+      // pekar åt rätt håll. Verken dyker upp direkt i riktig AR; fades
+      // korrekt mot vinkelstyrd opacitet när blenden nått 1.
+      const forceVisibleCold = obj.forceVisible && worldLockBlendRef.current < 1;
+      const effectivePresence = forceVisibleCold ? 1 : presence;
       const naturalGlobalFactor = occlusionDisabled
         ? 1
         : obj.forceVisible
-          ? presence
+          ? effectivePresence
           : modeRef.current.hideAll
             ? INDOOR_DIM_FACTOR
             : Math.max(modeRef.current.globalVisibilityFactor, MIN_CONFIDENCE_VISIBILITY_FACTOR);
@@ -1408,7 +1424,7 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       const globalFactor = obj.forceVisible
         ? naturalGlobalFactor
         : 1 + (naturalGlobalFactor - 1) * worldLockBlend;
-      const forcedSky = obj.forceVisible ? presence : obj.skyFactor;
+      const forcedSky = obj.forceVisible ? effectivePresence : obj.skyFactor;
       const naturalSkyFactor = occlusionDisabled ? 1 : forcedSky * (obj.forceVisible ? 1 : naturalGlobalFactor);
       // "Visa/dölj verk"-togglens egna, oberoende 0..1-tonings-faktor
       // (`turbinesVisibleFactorRef`, 0.5s in/ut) multipliceras in sist, på
@@ -1595,10 +1611,22 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
         isValidNumber(sensorEuler.y) &&
         isValidNumber(sensorEuler.z)
       ) {
-        state.camera.quaternion.setFromEuler(sensorEuler);
+        // V36: Lagra i target-ref istället för att sätta kameran direkt —
+        // kameran slerpar sedan mjukt mot detta värde nedan.
+        cameraTargetQuatRef.current.setFromEuler(sensorEuler);
       } else if (typeof window !== "undefined" && !(window as unknown as Record<string, unknown>)["__nanGuardLogged"]) {
         console.warn("[ARScene] sensorEuler innehåller NaN/Infinity — hoppar över quaternion-set denna frame");
         (window as unknown as Record<string, unknown>)["__nanGuardLogged"] = true;
+      }
+      // V36: Mjuk kamera-slerp mot senaste giltiga sensor-kvaternion.
+      // Tau=0.04s → ~120ms till 95% vid 60fps. Vid sensor-stall (sensorn
+      // tystnar tillfälligt på iOS) snappar vi direkt till senaste kända
+      // kvaternion så att sol/sprite inte fastnar på skärmen.
+      {
+        const CAMERA_SLERP_TAU = 0.04;
+        const stalled = modeRef.current.orientationStalled;
+        const slerpFactor = dt > 0 ? 1 - Math.exp(-dt / CAMERA_SLERP_TAU) : 1;
+        state.camera.quaternion.slerp(cameraTargetQuatRef.current, stalled ? 1 : slerpFactor);
       }
       // Juli 2026-fix (TREDJE kritiska buggrapporten — trolig rotorsak):
       // `matrixWorldInverse` uppdateras normalt bara inuti
@@ -1851,9 +1879,11 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
           (nearCenter && obj.renderDistM <= MAX_RENDER_DISTANCE_M) ||
           modeRef.current.forceVisibleIds.has(obj.turbine.id);
         // V29: Bypass Three.js frustum culling när forceVisible är sant.
-        // V35: Gata frustum-bypass på presence > 0.02 — ingen rendering av
-        // verk som ändå är helt transparenta off-axis.
-        const forceDraw = obj.forceVisible && viewPresence > 0.02;
+        // V36: Gata frustum-bypass på presence > 0.02 ELLER cold-start
+        // (worldLockBlend < 1) — kalibreringsfallbackens närmaste verk ritas
+        // även om de ligger utanför FOV vid kallstart.
+        const forceDraw =
+          obj.forceVisible && (viewPresence > 0.02 || worldLockBlendRef.current < 1);
         for (const mesh of obj.cachedMeshes) {
           mesh.frustumCulled = !forceDraw;
         }

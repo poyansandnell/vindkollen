@@ -909,7 +909,7 @@ export default function Home() {
   }, [started]);
 
   const CALIBRATION_FALLBACK_TURBINE_COUNT = 3;
-  const CALIBRATION_FALLBACK_DELAY_MS = 2000;
+  const CALIBRATION_FALLBACK_DELAY_MS = 800;
 
   // Antal laddade verk (produktkrav 2: debug-fält "turbines loaded count") —
   // samma mängd som skickas till `ARScene`.
@@ -1730,6 +1730,7 @@ export default function Home() {
             globalVisibilityFactor={1}
             hideAll={false}
             forceVisibleIds={new Set(activeTurbines.map(t => t.id))}
+            orientationStalled={orientation.orientationStalled}
             debugForceNearest={debugForceNearest}
             disableOcclusion={debugDisableOcclusion}
             arStartedAtMs={arStartedAtMs}
@@ -2446,7 +2447,7 @@ export default function Home() {
       )}
 
       {showPetition && <PetitionModal onClose={() => setShowPetition(false)} />}
-      {showInfo && <InfoPanel onClose={() => setShowInfo(false)} />}
+      {showInfo && <InfoPanel onClose={() => setShowInfo(false)} projectId={activeProject?.projectId} />}
       {capturedPhoto && (
         <PhotoMontageModal
           imageDataUrl={capturedPhoto}

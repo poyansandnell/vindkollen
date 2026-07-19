@@ -68,6 +68,7 @@ const plugins = [
   { name: 'CapacitorCamera',                relativeTarget: '../../../../node_modules/@capacitor/camera' },
   { name: 'CapacitorGeolocation',           relativeTarget: '../../../../node_modules/@capacitor/geolocation' },
   { name: 'CapacitorCommunityCameraPreview', relativeTarget: '../../../../node_modules/@capacitor-community/camera-preview' },
+  { name: 'CapacitorBrowser',               relativeTarget: '../../../../node_modules/@capacitor/browser' },
 ];
 
 mkdirSync(symlinksDir, { recursive: true });

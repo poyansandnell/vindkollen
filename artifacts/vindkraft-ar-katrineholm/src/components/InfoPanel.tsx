@@ -1,7 +1,13 @@
-export function InfoPanel({ onClose }: { onClose: () => void }) {
+import { KATRINEHOLM_PROJECT } from "@/lib/bundledProjects";
+import { openPdf } from "@/lib/capacitorBridge";
+
+export function InfoPanel({ onClose, projectId }: { onClose: () => void; projectId?: number | string }) {
+  const showEricsberg =
+    projectId != null && String(projectId) === String(KATRINEHOLM_PROJECT.id);
+
   return (
     <div className="absolute inset-0 z-[60] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">
-      <div className="w-full max-w-md rounded-t-3xl bg-[#111111] px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 shadow-2xl sm:rounded-3xl sm:pb-6">
+      <div className="w-full max-w-md rounded-t-3xl bg-[#111111] p-6 shadow-2xl sm:rounded-3xl">
         <div className="mb-4 flex items-start justify-between">
           <h2 className="text-xl font-semibold text-white">Om Vindkollen</h2>
           <button
@@ -33,33 +39,32 @@ export function InfoPanel({ onClose }: { onClose: () => void }) {
             Katrineholms tätort kan påverka staden och dess invånare.
           </p>
 
-          <div className="mt-1 border-t border-white/10 pt-3">
-            <h3 className="mb-2 text-sm font-semibold text-white">Ericsbergs planer — Katrineholms kommun</h3>
-            <p>
-              Denna projektvy har tagits fram åt Katrineholm Framåt för att tydliggöra hur den planerade
-              etableringen norr om Katrineholm kan upplevas från olika delar av kommunen.
-            </p>
-            <p className="mt-2">
-              Verktyget visar bland annat verkens riktning, avstånd, uppskattad ljudnivå och visuella
-              påverkan. Syftet är att ge invånarna ett mer konkret underlag inför den fortsatta
-              diskussionen om etableringen.
-            </p>
-            <button
-              onClick={() => {
-                // Explicit window.open() för att säkerställa att PDF öppnas
-                // i extern webbläsare/PDF-visare på iOS Capacitor-native
-                // (target="_blank" på <a> kan fastna i WKWebView internt).
-                const base = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim() ?? "";
-                const url = base
-                  ? `${base}/samradsyttrande-forsvarsmakten.pdf`
-                  : "/samradsyttrande-forsvarsmakten.pdf";
-                window.open(url, "_blank", "noopener,noreferrer");
-              }}
-              className="mt-3 flex w-full items-center gap-2 rounded-xl border border-[#FF8B01]/30 bg-[#FF8B01]/10 px-3 py-2 text-left text-sm font-medium text-[#FFB347] hover:bg-[#FF8B01]/20"
-            >
-              📄 Försvarsmaktens samrådsyttrande (PDF)
-            </button>
-          </div>
+          {showEricsberg && (
+            <div className="mt-1 border-t border-white/10 pt-3">
+              <h3 className="mb-2 text-sm font-semibold text-white">Ericsbergs planer — Katrineholms kommun</h3>
+              <p>
+                Denna projektvy har tagits fram åt Katrineholm Framåt för att tydliggöra hur den planerade
+                etableringen norr om Katrineholm kan upplevas från olika delar av kommunen.
+              </p>
+              <p className="mt-2">
+                Verktyget visar bland annat verkens riktning, avstånd, uppskattad ljudnivå och visuella
+                påverkan. Syftet är att ge invånarna ett mer konkret underlag inför den fortsatta
+                diskussionen om etableringen.
+              </p>
+              <button
+                onClick={() => {
+                  const base = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim() ?? "";
+                  const url = base
+                    ? `${base}/samradsyttrande-forsvarsmakten.pdf`
+                    : `${window.location.origin}/samradsyttrande-forsvarsmakten.pdf`;
+                  openPdf(url);
+                }}
+                className="mt-3 flex w-full items-center gap-2 rounded-xl border border-[#FF8B01]/30 bg-[#FF8B01]/10 px-3 py-2 text-left text-sm font-medium text-[#FFB347] hover:bg-[#FF8B01]/20"
+              >
+                📄 Försvarsmaktens samrådsyttrande (PDF)
+              </button>
+            </div>
+          )}
         </div>
 
         <button
