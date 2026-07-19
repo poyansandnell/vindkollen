@@ -1613,12 +1613,12 @@ export default function Home() {
             nightMode={nightMode}
             shadowFlicker={shadowFlicker}
             simTimeHour={simTimeHour}
-            isPointSky={positionOverride !== null ? () => true : sky.isPointSky}
-            getOcclusionGrid={positionOverride !== null ? () => new Float32Array(GRID_COLS * GRID_ROWS).fill(1) : sky.getOcclusionGrid}
+            isPointSky={() => true}
+            getOcclusionGrid={() => new Float32Array(GRID_COLS * GRID_ROWS).fill(1)}
             showHiddenTurbines={showHiddenTurbines}
-            globalVisibilityFactor={positionOverride !== null ? 1 : globalVisibilityFactor}
-            hideAll={positionOverride !== null ? false : indoorsOrNoSight}
-            forceVisibleIds={positionOverride !== null ? new Set(activeTurbines.map(t => t.id)) : forceVisibleIds}
+            globalVisibilityFactor={1}
+            hideAll={false}
+            forceVisibleIds={new Set(activeTurbines.map(t => t.id))}
             debugForceNearest={debugForceNearest}
             disableOcclusion={debugDisableOcclusion}
             arStartedAtMs={arStartedAtMs}
