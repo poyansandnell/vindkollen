@@ -272,8 +272,9 @@ export default function PlaceTurbines() {
           willOverride: byId.length >= 3,
         });
 
-        if (byId.length < 3) {
-          // Inte tillräckligt många projectAreaId-träffar — behåll preloaded
+        // V41: behåll preloaded om API returnerar FÄRRE verk än vi redan har —
+        // t.ex. Ericsbergs 29 verk ska inte överskridas av 8-9 API-träffar.
+        if (byId.length < 3 || byId.length < turbineCount) {
           setNationalTurbinesLoading(false);
           return;
         }
@@ -912,11 +913,6 @@ export default function PlaceTurbines() {
         )}
       </div>
 
-      {result.playfulWarning && !editHandoff && (
-        <div className="mx-3 mb-2 rounded-xl border border-yellow-400/30 bg-yellow-500/15 px-3 py-2 text-xs text-yellow-100">
-          ⚠️ {result.playfulWarning}
-        </div>
-      )}
 
       {editHandoff && contextLoading && (
         <div className="mx-3 mb-1 flex items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs text-white/60">
@@ -1024,6 +1020,16 @@ export default function PlaceTurbines() {
           >
             📍 Närmaste verk (mitt GPS-läge) → AR
           </button>
+        )}
+        {editHandoff && (
+          <a
+            href="/samradsyttrande-forsvarsmakten.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-2 text-[11px] font-medium text-white/50 hover:bg-white/10 hover:text-white/70"
+          >
+            📄 Ladda ner ansökan (PDF)
+          </a>
         )}
 
         {compareOpen && (

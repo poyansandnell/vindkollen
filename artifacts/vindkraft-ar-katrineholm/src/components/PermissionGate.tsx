@@ -145,11 +145,6 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
             <p className="text-center text-[11px] text-white/30">
               Fungerar bäst utomhus, i dagsljus eller kväll, med fri sikt mot horisonten.
             </p>
-            {BUILD_LABEL && (
-              <p className="text-center text-[11px] font-bold text-[#FF8B01]">
-                {BUILD_LABEL}
-              </p>
-            )}
             {SHORT_HASH && (
               <p className="text-center text-[10px] text-white/35 font-mono">
                 Beta Version {VERSION} · Build {SHORT_HASH}
