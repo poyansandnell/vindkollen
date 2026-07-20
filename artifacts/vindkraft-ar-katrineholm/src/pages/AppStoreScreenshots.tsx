@@ -64,7 +64,7 @@ function TopoBackground() {
   return (
     <svg
       className="absolute inset-0 w-full h-full"
-      viewBox="0 0 1290 2796"
+      viewBox="0 0 1284 2778"
       preserveAspectRatio="xMidYMid slice"
       xmlns="http://www.w3.org/2000/svg"
     >
@@ -74,14 +74,14 @@ function TopoBackground() {
           <stop offset="100%" stopColor="#FF8B01" stopOpacity="0" />
         </radialGradient>
       </defs>
-      <rect width="1290" height="2796" fill="url(#glow)" />
+      <rect width="1284" height="2778" fill="url(#glow)" />
       {/* Topographic contour lines — repeated vertically */}
       {[0, 1, 2].map((rep) =>
         TOPO_PATHS.map((d, i) => (
           <path
             key={`${rep}-${i}`}
             d={d.replace(/(\d+),(\d+)/g, (_, x, y) =>
-              `${(parseInt(x) * 1290) / 1390},${parseInt(y) + rep * 1100}`
+              `${(parseInt(x) * 1284) / 1390},${parseInt(y) + rep * 1100}`
             )}
             fill="none"
             stroke="#FF8B01"
@@ -149,8 +149,8 @@ function Slide({
     <div
       ref={slideRef}
       style={{
-        width: "430px",
-        height: "932px",
+        width: "428px",
+        height: "926px",
         background: "#0a0a0a",
         position: "relative",
         overflow: "hidden",
@@ -336,7 +336,7 @@ export default function AppStoreScreenshots() {
               App Store-skärmbilder
             </h2>
             <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px", margin: "4px 0 0" }}>
-              {current + 1} / {SLIDES.length} · 430 × 932 px (3× = 1290 × 2796)
+              {current + 1} / {SLIDES.length} · 428 × 926 px (3× = 1284 × 2778)
             </p>
           </div>
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -475,8 +475,8 @@ export default function AppStoreScreenshots() {
             key={slide.id}
             ref={(el) => { allSlideRefs.current[i] = el; }}
             style={{
-              width: "430px",
-              height: "932px",
+              width: "428px",
+              height: "926px",
               background: "#0a0a0a",
               position: "relative",
               overflow: "hidden",
@@ -521,7 +521,7 @@ export default function AppStoreScreenshots() {
       </div>
 
       <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px", marginTop: "32px", textAlign: "center" }}>
-        Tryck "Ladda ner" för PNG i 1290×2796 px (Apples rekommenderade format för iPhone 15 Pro Max)
+        Tryck "Ladda ner" för PNG i 1284×2778 px (Apples godkända format för App Store)
       </p>
     </div>
   );
