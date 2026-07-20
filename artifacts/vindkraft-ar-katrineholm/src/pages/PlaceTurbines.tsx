@@ -22,7 +22,7 @@ import {
   setCustomBoundary,
   type LatLon,
 } from "@/lib/ericsbergArea";
-import { type ApiProjectArea } from "@/lib/bundledProjects";
+import { KATRINEHOLM_PROJECT, type ApiProjectArea } from "@/lib/bundledProjects";
 import { generateProjectGrid, translateDefaultTurbines } from "@/lib/projectGridLayout";
 import { NationalMapView } from "@/components/NationalMapView";
 import { generatePlacementPdf } from "@/lib/projectPdfExport";
@@ -1019,24 +1019,25 @@ export default function PlaceTurbines() {
             📍 Närmaste verk (mitt GPS-läge) → AR
           </button>
         )}
-        {editHandoff && (
-          <button
-            onClick={() => {
-              const url =
-                window.location.origin +
-                import.meta.env.BASE_URL +
-                "samradsyttrande-forsvarsmakten.pdf";
-              if (isNative()) {
-                openPdfRoute(url, "Försvarsmaktens samrådsyttrande");
-              } else {
-                window.open(url, "_blank", "noopener,noreferrer");
-              }
-            }}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-2 text-[11px] font-medium text-white/50 hover:bg-white/10 hover:text-white/70"
-          >
-            📄 Ladda ner ansökan (PDF)
-          </button>
-        )}
+        {editHandoff &&
+          editHandoff.projectId === String(KATRINEHOLM_PROJECT.id) && (
+            <button
+              onClick={() => {
+                const url =
+                  window.location.origin +
+                  import.meta.env.BASE_URL +
+                  "samradsyttrande-forsvarsmakten.pdf";
+                if (isNative()) {
+                  openPdfRoute(url, "Försvarsmaktens samrådsyttrande");
+                } else {
+                  window.open(url, "_blank", "noopener,noreferrer");
+                }
+              }}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-2 text-[11px] font-medium text-white/50 hover:bg-white/10 hover:text-white/70"
+            >
+              📄 Ladda ner ansökan (PDF)
+            </button>
+          )}
 
         {compareOpen && (
           <div className="mt-3 space-y-2">
