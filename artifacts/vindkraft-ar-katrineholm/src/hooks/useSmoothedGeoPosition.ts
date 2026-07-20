@@ -47,6 +47,16 @@ const MAX_TAU_MULTIPLIER = 2.5;
  */
 const MAX_PLAUSIBLE_SPEED_MPS = 4; // ~14 km/h, generöst för gång/lätt jogg
 
+/**
+ * En positionsförändring STÖRRE än detta (10 km) kan omöjligen vara en verklig
+ * GPS-spike (typiska spikes är <500 m). Det enda rimliga scenariot är att en
+ * simulerad positions-override (t.ex. Gretas Klackar 2 → verkligt GPS) just
+ * rensats. I det fallet ska den utjämnade positionen seedas om direkt till den
+ * nya positionen — annars fastnar spike-skyddet och ignorerar varje verklig
+ * GPS-avläsning permanent tills smoothedRef.current har konvergerat 282 km.
+ */
+const TELEPORT_THRESHOLD_M = 10_000;
+
 /** Tidsbaserad exponentiell utjämningsfaktor (oberoende av GPS-avläsningsfrekvens). */
 function timeSmoothingFactor(tau: number, dt: number): number {
   if (dt <= 0) return 0;
@@ -120,6 +130,18 @@ export function useSmoothedGeoPosition(
   lastTimeRef.current = now;
 
   const jumpM = distanceMeters(smoothedRef.current.lat, smoothedRef.current.lon, lat, lon);
+
+  if (jumpM > TELEPORT_THRESHOLD_M) {
+    // Hoppet överstiger 10 km — omöjligt för en GPS-spike. Det enda rimliga
+    // scenariot är att en positions-override just rensats (t.ex. simuleringen
+    // av ett fjärran vindkraftsprojekt). Seeda om till den nya positionen
+    // direkt; annars blockerar spike-skyddet nedan ALLA efterföljande riktiga
+    // GPS-avläsningar och position fastnar vid override-koordinaterna.
+    smoothedRef.current = { lat, lon };
+    lastTimeRef.current = now;
+    return smoothedRef.current;
+  }
+
   const maxPlausibleM = MAX_PLAUSIBLE_SPEED_MPS * dt + (accuracy ?? REFERENCE_ACCURACY_M);
   if (jumpM > maxPlausibleM) {
     // Orimligt hopp för den förflutna tiden — troligen en GPS-spik
