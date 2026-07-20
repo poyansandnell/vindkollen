@@ -19,6 +19,11 @@ interface PermissionGateProps {
 export function PermissionGate({ onStart, starting, errors, turbineCount }: PermissionGateProps) {
   const [inApp] = useState(() => (typeof navigator !== "undefined" ? isInAppBrowser() : false));
   const [appName] = useState(() => (typeof navigator !== "undefined" ? inAppBrowserName() : ""));
+  // Dator utan pekskärm: AR fungerar inte (ingen kamera/GPS/kompass i browser-API:erna).
+  const [isDesktop] = useState(() => {
+    if (typeof navigator === "undefined") return false;
+    return navigator.maxTouchPoints === 0 && !("ontouchstart" in window);
+  });
 
   return (
     <div
@@ -119,17 +124,28 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
         */}
         {!inApp && (
           <>
-            <button
-              onClick={() => {
-                console.log("[AR] Start button pressed - PermissionGate onClick fired");
-                onStart();
-              }}
-              disabled={starting}
-              className="w-full rounded-full bg-[#FF8B01] py-4 text-base font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] disabled:opacity-60"
-            >
-              {starting ? "Startar…" : "📷 Starta AR"}
-            </button>
-            {/* V7: B4 öppnar NATIVE PlaceTurbines (med V5-focus + MapLibre), inte webbsidan */}
+            {isDesktop ? (
+              /* Desktop: AR fungerar inte — visa tydligt meddelande + Sverigekartan */
+              <div className="rounded-xl border border-white/15 bg-white/[0.04] p-4 text-center space-y-2">
+                <p className="text-2xl">💻</p>
+                <p className="font-semibold text-white text-sm">AR-vyn kräver mobiltelefon</p>
+                <p className="text-xs text-white/55 leading-relaxed">
+                  Du behöver en smartphone med kamera, GPS och kompass för att se vindkraftverken i AR. Öppna den här sidan på din mobil.
+                </p>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  console.log("[AR] Start button pressed - PermissionGate onClick fired");
+                  onStart();
+                }}
+                disabled={starting}
+                className="w-full rounded-full bg-[#FF8B01] py-4 text-base font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/20 transition hover:bg-[#FFB347] disabled:opacity-60"
+              >
+                {starting ? "Startar…" : "📷 Starta AR"}
+              </button>
+            )}
+            {/* Sverigekartan är alltid tillgänglig — oavsett om det är desktop eller mobil */}
             <button
               onClick={() => {
                 void openPlaceraWithFocus();
@@ -142,9 +158,11 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
             <p className="text-center text-[11px] text-white/40">
               Sverigekartan visar alla planerade vindkraftverk i Sverige. Klicka på ett projekt och välj Redigera eller Visa i AR — kräver ingen kamera, GPS eller kompass.
             </p>
-            <p className="text-center text-[11px] text-white/30">
-              Fungerar bäst utomhus, i dagsljus eller kväll, med fri sikt mot horisonten.
-            </p>
+            {!isDesktop && (
+              <p className="text-center text-[11px] text-white/30">
+                Fungerar bäst utomhus, i dagsljus eller kväll, med fri sikt mot horisonten.
+              </p>
+            )}
             {SHORT_HASH && (
               <p className="text-center text-[10px] text-white/35 font-mono">
                 Beta Version {VERSION} · Build {SHORT_HASH}

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, X } from "lucide-react";
@@ -20,6 +21,13 @@ const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
 function isCapacitorNative(): boolean {
   return !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
     .Capacitor?.isNativePlatform?.();
+}
+
+// Desktop-webbläsare: maxTouchPoints === 0 och inget ontouchstart => ingen kamera/GPS/kompass.
+function isDesktopBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  if (isCapacitorNative()) return false;
+  return navigator.maxTouchPoints === 0 && !("ontouchstart" in window);
 }
 
 function openInAr(
@@ -73,6 +81,20 @@ interface DetailPanelProps {
   turbines?: WindTurbine[];
 }
 
+function DesktopArNotice({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900">
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-semibold">📱 AR kräver mobiltelefon</p>
+        <button onClick={onClose} className="shrink-0 text-amber-600 hover:text-amber-900 leading-none">✕</button>
+      </div>
+      <p className="mt-1 text-xs text-amber-800/80">
+        AR-visningen kräver kamera, GPS och kompass. Öppna den här sidan på din smartphone för att prova det.
+      </p>
+    </div>
+  );
+}
+
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === null || value === undefined || value === "") return null;
   return (
@@ -84,6 +106,9 @@ function Field({ label, value }: { label: string; value: string | number | null 
 }
 
 export default function DetailPanel({ selection, onClose, focusPoint, turbines }: DetailPanelProps) {
+  const [desktopArWarning, setDesktopArWarning] = useState(false);
+  const desktop = isDesktopBrowser();
+
   const pointParams = focusPoint ? { lat: focusPoint.lat, lng: focusPoint.lng } : undefined;
   const turbineQuery = useGetWindTurbine(selection.id, pointParams, {
     query: { enabled: selection.kind === "turbine" } as UseQueryOptions<WindTurbine>,
@@ -154,18 +179,22 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                 <Field label="Senast uppdaterad" value={turbineQuery.data.lastUpdated ? String(turbineQuery.data.lastUpdated).slice(0, 10) : null} />
               </div>
               {turbineQuery.data.lat != null && turbineQuery.data.lng != null && (
-                <Button
-                  className="w-full mt-4 bg-[#FF8B01] hover:bg-[#FFB347] text-[#090909] font-semibold"
-                  onClick={() =>
-                    openInAr([{
-                      id: String(turbineQuery.data!.id),
-                      lat: turbineQuery.data!.lat!,
-                      lon: turbineQuery.data!.lng!,
-                    }])
-                  }
-                >
-                  📱 Visa i AR
-                </Button>
+                <>
+                  <Button
+                    className="w-full mt-4 bg-[#FF8B01] hover:bg-[#FFB347] text-[#090909] font-semibold"
+                    onClick={() => {
+                      if (desktop) { setDesktopArWarning(true); return; }
+                      openInAr([{
+                        id: String(turbineQuery.data!.id),
+                        lat: turbineQuery.data!.lat!,
+                        lon: turbineQuery.data!.lng!,
+                      }]);
+                    }}
+                  >
+                    📱 Visa i AR
+                  </Button>
+                  {desktopArWarning && <DesktopArNotice onClose={() => setDesktopArWarning(false)} />}
+                </>
               )}
               {sourceLabel(turbineQuery.data.source) && (
                 <div className="text-xs text-muted-foreground mt-3 pt-3 border-t">
@@ -286,19 +315,23 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                       </p>
                     )}
                     {projectTurbines.length > 0 && (
-                      <Button
-                        className="w-full bg-[#FF8B01] hover:bg-[#FFB347] text-[#090909] font-semibold"
-                        onClick={() =>
-                          openInAr(projectTurbines, {
-                            projectId: projectAreaQuery.data?.id,
-                            projectName: projectAreaQuery.data?.name,
-                            projectMunicipality: projectAreaQuery.data?.kommun ?? undefined,
-                          })
-                        }
-                        data-testid="button-ar-project"
-                      >
-                        📱 Visa {displayCount} verk i AR
-                      </Button>
+                      <>
+                        <Button
+                          className="w-full bg-[#FF8B01] hover:bg-[#FFB347] text-[#090909] font-semibold"
+                          onClick={() => {
+                            if (desktop) { setDesktopArWarning(true); return; }
+                            openInAr(projectTurbines, {
+                              projectId: projectAreaQuery.data?.id,
+                              projectName: projectAreaQuery.data?.name,
+                              projectMunicipality: projectAreaQuery.data?.kommun ?? undefined,
+                            });
+                          }}
+                          data-testid="button-ar-project"
+                        >
+                          📱 Visa {displayCount} verk i AR
+                        </Button>
+                        {desktopArWarning && <DesktopArNotice onClose={() => setDesktopArWarning(false)} />}
+                      </>
                     )}
                     {isKatrineholm && (
                       <a
