@@ -4,13 +4,21 @@ const PDF_URL_KEY = "vindkraft:pendingPdfUrl";
 const PDF_TITLE_KEY = "vindkraft:pendingPdfTitle";
 
 /**
- * Markör i localStorage (inte sessionStorage!) för att detektera att
- * WKWebView har navigerat tillbaka från native PDF-visaren.
+ * localStorage-nycklar för PDF-returflödet.
  *
- * localStorage överlever WKWebView-omstart (till skillnad från sessionStorage
- * som kan nollställas när Capacitor laddar om appen efter PDF-navigering).
+ * Varför localStorage och inte sessionStorage?
+ * WKWebView kan ladda om React-appen helt från scratch när användaren
+ * sveper tillbaka från native PDF-visaren ("WebView loaded" syns dubbelt
+ * i Xcode-loggen). sessionStorage nollställs vid WKWebView-omstart;
+ * localStorage överlever och möjliggör pålitlig retur.
+ *
+ * Varför spara returroutten?
+ * WKWebView-omstarten nollställer också window.history, så history.back()
+ * har ingenstans att gå. Istället sparas hash-routten (t.ex. "#/placera")
+ * och vi navigerar dit explicit med window.location.hash = returnRoute.
  */
 const PDF_RETURN_KEY = "vindkraft:pdfReturn";
+const PDF_RETURN_ROUTE_KEY = "vindkraft:pdfReturnRoute";
 
 /**
  * Navigera till PDF-visarens hashroute.
@@ -19,7 +27,12 @@ const PDF_RETURN_KEY = "vindkraft:pdfReturn";
 export function openPdfRoute(url: string, title: string): void {
   sessionStorage.setItem(PDF_URL_KEY, url);
   sessionStorage.setItem(PDF_TITLE_KEY, title);
-  // Rensa eventuell kvarlämnad returmarkör så att nästa besök börjar rent.
+  // Spara ursprungsroutten så goBack() kan navigera dit efter WKWebView-omstart.
+  localStorage.setItem(
+    PDF_RETURN_ROUTE_KEY,
+    window.location.hash || "#/",
+  );
+  // Rensa eventuell kvarlämnad returmarkör.
   localStorage.removeItem(PDF_RETURN_KEY);
   window.location.hash = "/pdf-viewer";
 }
@@ -27,23 +40,22 @@ export function openPdfRoute(url: string, title: string): void {
 /**
  * Dedikerad PDF-visarsida för native (iOS/Android).
  *
- * Flöde (native):
- *  1. Komponenten monteras vid #/pdf-viewer.
- *  2. Sätter localStorage.PDF_RETURN_KEY = "1" och navigerar via
- *     window.location.href = pdfUrl → WKWebView öppnar PDF med nativt PDFKit,
- *     alla sidor scrollbara. ✓
- *  3. Användaren sveper tillbaka. WKWebView kan ladda om React-appen helt
- *     (dvs. ingen BFCache). Appen startar om vid #/pdf-viewer.
- *  4. useState-initialiseraren läser localStorage.PDF_RETURN_KEY = "1" →
- *     returnedFromPdf = true → visas "← Tillbaka"-knappar. ✓
- *  5. Om BFCache-återställning används istället (React fryses/tinas):
- *     pageshow-lyssnaren fångar event.persisted = true och anropar
- *     setReturnedFromPdf(true) → React renderar om med knappar. ✓
- *  6. "← Tillbaka" rensar localStorage-markören och anropar history.back().
+ * Flöde:
+ *  1. Monteras vid #/pdf-viewer. Sparar returroutten i localStorage.
+ *  2. Navigerar WKWebView till capacitor://localhost/xxx.pdf via
+ *     window.location.href — native PDFKit, alla sidor scrollbara. ✓
+ *  3. Användaren sveper tillbaka. WKWebView startar om React från scratch.
+ *     localStorage.PDF_RETURN_KEY = "1" → returnedFromPdf = true. ✓
+ *  4. Om BFCache används (frys/tina): pageshow-lyssnaren sätter
+ *     returnedFromPdf = true via setState. ✓
+ *  5. "← Tillbaka" rensar localStorage och navigerar till sparad returroutt
+ *     (t.ex. #/ eller #/placera) via window.location.hash — tillförlitligt
+ *     oavsett om history är tom efter WKWebView-omstart. ✓
  */
 export default function PdfViewer() {
   const pdfUrl = sessionStorage.getItem(PDF_URL_KEY) ?? "";
   const pdfTitle = sessionStorage.getItem(PDF_TITLE_KEY) ?? "PDF-dokument";
+  const returnRoute = localStorage.getItem(PDF_RETURN_ROUTE_KEY) ?? "#/";
 
   const [returnedFromPdf, setReturnedFromPdf] = useState<boolean>(
     () => !!localStorage.getItem(PDF_RETURN_KEY),
@@ -51,8 +63,8 @@ export default function PdfViewer() {
 
   const navigated = useRef(false);
 
-  // BFCache-fallback: pageshow med persisted=true innebär att sidan
-  // återställdes från fryst tillstånd — state-initialiseraren körde inte igen.
+  // BFCache-fallback: om sidan återställs från fryst JS-tillstånd kör
+  // inte useState-initialiseraren om — pageshow fångar det.
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
       if (e.persisted && localStorage.getItem(PDF_RETURN_KEY)) {
@@ -63,7 +75,7 @@ export default function PdfViewer() {
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
-  // Navigera till PDF första gången (när returnedFromPdf är false).
+  // Navigera till PDF första gången.
   useEffect(() => {
     if (!returnedFromPdf && pdfUrl && !navigated.current) {
       navigated.current = true;
@@ -74,7 +86,9 @@ export default function PdfViewer() {
 
   function goBack() {
     localStorage.removeItem(PDF_RETURN_KEY);
-    window.history.back();
+    // Navigera explicit — history kan vara tom efter WKWebView-omstart.
+    const target = returnRoute.startsWith("#") ? returnRoute.slice(1) : "/";
+    window.location.hash = target;
   }
 
   return (
@@ -82,7 +96,6 @@ export default function PdfViewer() {
       className="flex h-[100dvh] flex-col bg-[#111111] text-white"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
-      {/* Header alltid synlig — nödutväg även om PDF inte öppnas */}
       <div className="flex items-center gap-3 border-b border-white/10 bg-[#111111] px-4 py-3">
         <button
           onClick={goBack}
