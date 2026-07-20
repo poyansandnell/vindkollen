@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
-import { openPlaceraWithFocus } from "@/lib/capacitorBridge";
+import { isNative, stopNativeCameraPreview } from "@/lib/capacitorBridge";
 
 /** Ändra VERSION och BUILD_LABEL inför varje ny native-testbygge. Ta bort inför release. */
 const VERSION = "21";
@@ -17,6 +18,7 @@ interface PermissionGateProps {
 }
 
 export function PermissionGate({ onStart, starting, errors, turbineCount }: PermissionGateProps) {
+  const [, navigate] = useLocation();
   const [inApp] = useState(() => (typeof navigator !== "undefined" ? isInAppBrowser() : false));
   const [appName] = useState(() => (typeof navigator !== "undefined" ? inAppBrowserName() : ""));
   // Dator utan pekskärm: AR fungerar inte (ingen kamera/GPS/kompass i browser-API:erna).
@@ -148,7 +150,14 @@ export function PermissionGate({ onStart, starting, errors, turbineCount }: Perm
             {/* Sverigekartan är alltid tillgänglig — oavsett om det är desktop eller mobil */}
             <button
               onClick={() => {
-                void openPlaceraWithFocus();
+                sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
+                sessionStorage.setItem("vindkollen:placeraFresh", "1");
+                if (isNative()) {
+                  void stopNativeCameraPreview();
+                  window.location.hash = "/placera";
+                } else {
+                  navigate("/placera");
+                }
               }}
               disabled={starting}
               className="w-full rounded-full border border-white/10 bg-white/[0.03] py-3 text-sm font-medium text-white/70 transition hover:bg-white/10 disabled:opacity-60"

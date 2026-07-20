@@ -2037,7 +2037,7 @@ export default function Home() {
                     void stopNativeCameraPreview();
                     window.location.hash = "/placera";
                   } else {
-                    window.location.href = "/placera";
+                    navigate("/placera");
                   }
                 }}
                 className="rounded-full bg-[#FF8B01] px-6 py-3 text-sm font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/30 hover:bg-[#FFB347]"
@@ -2404,7 +2404,7 @@ export default function Home() {
                       void stopNativeCameraPreview();
                       window.location.hash = "/placera";
                     } else {
-                      window.location.href = "/placera";
+                      navigate("/placera");
                     }
                   }}
                   className="w-full rounded-full border border-[#FF8B01]/40 bg-[#FF8B01]/10 py-3 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
