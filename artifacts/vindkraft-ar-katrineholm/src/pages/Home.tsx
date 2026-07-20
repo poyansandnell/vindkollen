@@ -512,22 +512,18 @@ export default function Home() {
     return () => observer.disconnect();
   }, [arSessionVisible]);
 
-  // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 1/2): tidsstämpeln
-  // för när AR-sessionen FÖRST blev synlig — skickas till `ARScene` som
-  // `arStartedAtMs` och styr dess 5-sekunders "Direkt AR" → "World locked"-
-  // övertoning (se `WORLD_LOCK_BLEND_MS` i `ARScene.tsx`). Sätts EN gång per
-  // session (inte om vid varje omrendering) och nollställs så fort sessionen
-  // slutar vara synlig, så en ny AR-start (t.ex. efter att appen minimerats)
-  // alltid får en ny, egen "Direkt AR"-period istället för att ärva den
-  // gamla övertoningens redan förflutna tid.
+  // V40: sätts FÖRST när arSessionVisible blir sant (sensorer klara +
+  // AR-vy på skärmen). Nollställs bara när started blir false.
   const [arStartedAtMs, setArStartedAtMs] = useState<number | null>(null);
   useEffect(() => {
-    // Nollställ timern när AR-sessionen slutar — nästa LoadingSequence-
-    // avslutning (handleLoadingSequenceComplete) sätter ett nytt värde.
-    if (!arSessionVisible) {
+    if (!started) {
       setArStartedAtMs(null);
+      return;
     }
-  }, [arSessionVisible]);
+    if (arSessionVisible) {
+      setArStartedAtMs((prev) => prev ?? Date.now());
+    }
+  }, [arSessionVisible, started]);
 
   // Juli 2026-fix (SJÄTTE kritiska buggrapporten, punkt 3): "Visa/dölj
   // verk"-togglen — påverkar ENDAST turbinernas synlighet (0.5s
@@ -916,7 +912,7 @@ export default function Home() {
   }, [started]);
 
   const CALIBRATION_FALLBACK_TURBINE_COUNT = 3;
-  const CALIBRATION_FALLBACK_DELAY_MS = 800;
+  const CALIBRATION_FALLBACK_DELAY_MS = 0; // V40: omedelbart, inte 800 ms
 
   // Antal laddade verk (produktkrav 2: debug-fält "turbines loaded count") —
   // samma mängd som skickas till `ARScene`.
@@ -1389,8 +1385,7 @@ export default function Home() {
     // istället för via handleLoadingSequenceComplete.
     if (hasOnboarded) {
       console.log("[AR] hasOnboarded=true — hoppar över LoadingSequence");
-      setArStartedAtMs(Date.now());
-      // V34/C3: Visa "Startar AR…"-toast i 1,5 s.
+      // V40: arStartedAtMs sätts av effecten när arSessionVisible=true
       setShowArStartToast(true);
       setTimeout(() => setShowArStartToast(false), 1500);
     } else {
@@ -1514,16 +1509,7 @@ export default function Home() {
   // blir klar ("Startar AR…") men appen fastnar där för evigt.
   const handleLoadingSequenceComplete = useCallback(() => {
     setShowLoadingSequence(false);
-    // Juli 2026-fix (turbiner osynliga vid AR-start): `arStartedAtMs`-timern
-    // måste starta HÄR — när laddningsskärmen stänger och AR-vyn faktiskt
-    // öppnas — INTE när sensorerna klarna (arSessionVisible=true), vilket kan
-    // ske tiotals sekunder INNAN LoadingSequence stänger. Den 5-sekunders
-    // "force-visible"-perioden (worldLockBlend 0→1) löper då helt under
-    // laddningsskärmen och är redan slut när användaren ser AR-vyn första
-    // gången.
-    setArStartedAtMs(Date.now());
-    // V24: Markera att användaren genomfört kalibreringen — nästa start
-    // skippar hela LoadingSequence-overlayen (skipEntireSequence=true).
+    // V40: arStartedAtMs via arSessionVisible-effecten
     markOnboarded();
   }, [markOnboarded]);
 
@@ -1731,12 +1717,20 @@ export default function Home() {
             nightMode={nightMode}
             shadowFlicker={shadowFlicker}
             simTimeHour={simTimeHour}
-            isPointSky={() => true}
-            getOcclusionGrid={() => new Float32Array(GRID_COLS * GRID_ROWS).fill(1)}
+            isPointSky={positionOverride !== null ? () => true : sky.isPointSky}
+            getOcclusionGrid={
+              positionOverride !== null
+                ? () => new Float32Array(GRID_COLS * GRID_ROWS).fill(1)
+                : sky.getOcclusionGrid
+            }
             showHiddenTurbines={showHiddenTurbines}
-            globalVisibilityFactor={1}
-            hideAll={false}
-            forceVisibleIds={new Set(activeTurbines.map(t => t.id))}
+            globalVisibilityFactor={positionOverride !== null ? 1 : globalVisibilityFactor}
+            hideAll={positionOverride !== null ? false : indoorsOrNoSight}
+            forceVisibleIds={
+              positionOverride !== null
+                ? new Set(activeTurbines.map((t) => t.id))
+                : forceVisibleIds
+            }
             orientationStalled={orientation.orientationStalled}
             debugForceNearest={debugForceNearest}
             disableOcclusion={debugDisableOcclusion}
@@ -2114,7 +2108,7 @@ export default function Home() {
                 flex-wrap garanterar att de passar oavsett skärmbredd.
                 showStatusDetails styr nu om hela raden visas (dölj/visa). */}
             {showStatusDetails && (
-              <div className="flex flex-nowrap items-center gap-1 overflow-x-auto text-[10px]">
+              <div className="flex flex-wrap items-center gap-1 text-[10px]">
                 <GpsQualityBadge quality={arTracking.debug.gpsQuality} accuracyM={arTracking.debug.gpsAccuracyM} />
                 <CompassStabilityBadge percent={arTracking.compassQualityPercent} />
                 <ArStabilityBadge percent={arTracking.positioningConfidencePercent} />

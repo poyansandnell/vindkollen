@@ -1405,7 +1405,9 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
       // tvingar vi force-visible-verk till full närvaro oavsett om kameran
       // pekar åt rätt håll. Verken dyker upp direkt i riktig AR; fades
       // korrekt mot vinkelstyrd opacitet när blenden nått 1.
-      const forceVisibleCold = obj.forceVisible && worldLockBlendRef.current < 1;
+      const isSafetyForced = modeRef.current.forceVisibleIds.has(obj.turbine.id);
+      const forceVisibleCold =
+        isSafetyForced || (obj.forceVisible && worldLockBlendRef.current < 1);
       const effectivePresence = forceVisibleCold ? 1 : presence;
       const naturalGlobalFactor = occlusionDisabled
         ? 1
@@ -1880,15 +1882,14 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
           }
         }
         obj.viewPresence = viewPresence;
+        const isSafetyForced = modeRef.current.forceVisibleIds.has(obj.turbine.id);
         obj.forceVisible =
-          (nearCenter && obj.renderDistM <= MAX_RENDER_DISTANCE_M) ||
-          modeRef.current.forceVisibleIds.has(obj.turbine.id);
+          (nearCenter && obj.renderDistM <= MAX_RENDER_DISTANCE_M) || isSafetyForced;
         // V29: Bypass Three.js frustum culling när forceVisible är sant.
-        // V36: Gata frustum-bypass på presence > 0.02 ELLER cold-start
-        // (worldLockBlend < 1) — kalibreringsfallbackens närmaste verk ritas
-        // även om de ligger utanför FOV vid kallstart.
+        // V40: safety-forced ritas alltid, oavsett presence/worldLockBlend.
         const forceDraw =
-          obj.forceVisible && (viewPresence > 0.02 || worldLockBlendRef.current < 1);
+          obj.forceVisible &&
+          (isSafetyForced || viewPresence > 0.02 || worldLockBlendRef.current < 1);
         for (const mesh of obj.cachedMeshes) {
           mesh.frustumCulled = !forceDraw;
         }
@@ -1999,7 +2000,9 @@ export const ARScene = forwardRef<ARSceneHandle, ARSceneProps>(function ARScene(
 
         // V35/Fix1: Skuggans globalFactor följer presence längs force-banan.
         const shadowGlobalFactor = obj.forceVisible
-          ? Math.min(1, Math.max(0, obj.viewPresence))
+          ? (modeRef.current.forceVisibleIds.has(obj.turbine.id)
+              ? 1
+              : Math.min(1, Math.max(0, obj.viewPresence)))
           : modeRef.current.hideAll
             ? INDOOR_DIM_FACTOR
             : Math.max(modeRef.current.globalVisibilityFactor, MIN_CONFIDENCE_VISIBILITY_FACTOR);
