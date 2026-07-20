@@ -234,7 +234,9 @@ export default function PlaceTurbines() {
     let cancelled = false;
     setNationalTurbinesLoading(true);
 
-    const turbineCount = editHandoff?.turbines?.length ?? 8;
+    // V41b-fix: använd turbinesRef.current.length som fallback — hanterar
+    // gamla localStorage-handoffs som saknar turbines-fältet (persisted format).
+    const turbineCount = Math.max(editHandoff?.turbines?.length ?? 0, turbinesRef.current.length, 8);
     const delta = Math.max(0.15, Math.min(0.5, Math.sqrt(turbineCount) * 0.06));
     const minLat = (centerLat - delta).toFixed(5);
     const maxLat = (centerLat + delta).toFixed(5);
@@ -930,6 +932,7 @@ export default function PlaceTurbines() {
         minimized={scoreMinimized}
         onToggleMinimized={() => setScoreMinimized((v) => !v)}
         showEricsbergFeatures={!editHandoff}
+        loading={editHandoff !== null && contextLoading && locationContext === null}
       />
       </div>
 
@@ -1023,7 +1026,7 @@ export default function PlaceTurbines() {
         )}
         {editHandoff && (
           <a
-            href="/samradsyttrande-forsvarsmakten.pdf"
+            href={`${import.meta.env.BASE_URL}samradsyttrande-forsvarsmakten.pdf`}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-2 text-[11px] font-medium text-white/50 hover:bg-white/10 hover:text-white/70"

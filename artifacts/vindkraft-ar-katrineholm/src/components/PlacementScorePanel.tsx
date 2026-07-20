@@ -256,9 +256,11 @@ interface PlacementScorePanelProps {
   onToggleMinimized: () => void;
   /** Om false filtreras Ericsberg-specifika faktorer och disclaimers bort */
   showEricsbergFeatures?: boolean;
+  /** Sann medan platskontext (orter/skyddsområden) laddas — döljer faktorlistan */
+  loading?: boolean;
 }
 
-export function PlacementScorePanel({ result, minimized, onToggleMinimized, showEricsbergFeatures = true }: PlacementScorePanelProps) {
+export function PlacementScorePanel({ result, minimized, onToggleMinimized, showEricsbergFeatures = true, loading = false }: PlacementScorePanelProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
 
@@ -328,8 +330,16 @@ export function PlacementScorePanel({ result, minimized, onToggleMinimized, show
           </button>
         </div>
 
+        {/* ── Loading state ── */}
+        {loading && (
+          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-xs text-white/50">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
+            Hämtar platsdata (orter, naturskydd)…
+          </div>
+        )}
+
         {/* ── Top-3 problems ── */}
-        {top3.length > 0 && (
+        {!loading && top3.length > 0 && (
           <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5">
             <p className="mb-1.5 text-[10px] uppercase tracking-widest text-white/35">Största problemen</p>
             <ul className="space-y-1">
