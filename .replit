@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "python-3.11"]
+modules = ["nodejs-24", "python-3.11", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -39,3 +39,6 @@ externalPort = 3000
 
 [userenv.shared]
 VITE_API_BASE_URL = "https://b9014749-0395-4a74-81ac-8deb3fc86054-00-1te953tm13n9f.riker.replit.dev"
+
+[nix]
+channel = "stable-25_05"

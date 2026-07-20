@@ -2006,8 +2006,33 @@ export default function Home() {
               </div>
               <button
                 onClick={() => {
-                  sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
-                  sessionStorage.setItem("vindkollen:placeraFresh", "1");
+                  if (activeProject && activeTurbines.length > 0) {
+                    const wgsTurbines = activeTurbines.map((t) => {
+                      const wgs = swerefToWgs84(t.easting, t.northing);
+                      return { id: t.id, lat: wgs.lat, lon: wgs.lon };
+                    });
+                    localStorage.setItem(
+                      "vindkraft:editHandoff",
+                      JSON.stringify({
+                        projectId:
+                          activeProject.projectId != null
+                            ? String(activeProject.projectId)
+                            : undefined,
+                        projectName: activeProject.projectName ?? "Vindkraftsprojekt",
+                        municipality: activeProject.municipality ?? undefined,
+                        turbines: wgsTurbines,
+                        centerLat:
+                          wgsTurbines.reduce((s, t) => s + t.lat, 0) / wgsTurbines.length,
+                        centerLng:
+                          wgsTurbines.reduce((s, t) => s + t.lon, 0) / wgsTurbines.length,
+                        boundary: null,
+                        savedAt: Date.now(),
+                      }),
+                    );
+                  } else {
+                    sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
+                    sessionStorage.setItem("vindkollen:placeraFresh", "1");
+                  }
                   if (isNative()) {
                     void stopNativeCameraPreview();
                   }
@@ -2346,8 +2371,33 @@ export default function Home() {
                 </div>
                 <button
                   onClick={() => {
-                    sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
-                    sessionStorage.setItem("vindkollen:placeraFresh", "1");
+                    if (activeProject && activeTurbines.length > 0) {
+                      const wgsTurbines = activeTurbines.map((t) => {
+                        const wgs = swerefToWgs84(t.easting, t.northing);
+                        return { id: t.id, lat: wgs.lat, lon: wgs.lon };
+                      });
+                      localStorage.setItem(
+                        "vindkraft:editHandoff",
+                        JSON.stringify({
+                          projectId:
+                            activeProject.projectId != null
+                              ? String(activeProject.projectId)
+                              : undefined,
+                          projectName: activeProject.projectName ?? "Vindkraftsprojekt",
+                          municipality: activeProject.municipality ?? undefined,
+                          turbines: wgsTurbines,
+                          centerLat:
+                            wgsTurbines.reduce((s, t) => s + t.lat, 0) / wgsTurbines.length,
+                          centerLng:
+                            wgsTurbines.reduce((s, t) => s + t.lon, 0) / wgsTurbines.length,
+                          boundary: null,
+                          savedAt: Date.now(),
+                        }),
+                      );
+                    } else {
+                      sessionStorage.setItem("vindkollen:sverigekartanFocusNearest", "1");
+                      sessionStorage.setItem("vindkollen:placeraFresh", "1");
+                    }
                     if (isNative()) {
                       void stopNativeCameraPreview();
                     }
