@@ -1,5 +1,7 @@
 import { useLocation } from "wouter";
 
+const SUPPORT_EMAIL = "support@vindkollen.com";
+
 export default function Contact() {
   const [, navigate] = useLocation();
   return (
@@ -8,27 +10,52 @@ export default function Contact() {
         <button onClick={() => navigate("/")} className="mb-6 text-sm text-white/50 hover:text-white">
           ← Tillbaka
         </button>
-        <h1 className="mb-4 text-2xl font-bold">Kontakt</h1>
-        <div className="space-y-4 text-white/80">
-          <p className="text-sm">
-            Har du frågor, hittat ett fel, eller vill begära radering av ditt konto?
-            Kontakta oss via formuläret nedan.
-          </p>
+        <h1 className="mb-2 text-2xl font-bold">Support &amp; Kontakt</h1>
+        <p className="mb-6 text-sm text-white/60">
+          Har du frågor, hittat ett fel eller vill rapportera något?
+        </p>
+
+        <div className="space-y-4">
+
+          <a
+            href={`mailto:${SUPPORT_EMAIL}`}
+            className="flex items-center gap-3 rounded-xl border border-[#FF8B01]/30 bg-[#FF8B01]/10 px-5 py-4 text-sm font-semibold text-[#FFB347] hover:bg-[#FF8B01]/20"
+          >
+            <span className="text-lg">✉️</span>
+            <span>{SUPPORT_EMAIL}</span>
+          </a>
 
           <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+            <h2 className="mb-4 text-sm font-semibold text-white">Skicka ett meddelande</h2>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 const form = e.currentTarget;
                 const email = (form.elements.namedItem("email") as HTMLInputElement).value;
+                const subject = (form.elements.namedItem("subject") as HTMLSelectElement).value;
                 const message = (form.elements.namedItem("message") as HTMLTextAreaElement).value;
-                window.location.href = `mailto:hej@vindkraftapp.se?subject=Kontakt&body=${encodeURIComponent(message)}&from=${encodeURIComponent(email)}`;
+                window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message + "\n\nSvar till: " + email)}`;
               }}
               className="space-y-4"
             >
               <div>
+                <label className="mb-1 block text-xs font-medium text-white/60" htmlFor="subject">
+                  Ämne
+                </label>
+                <select
+                  id="subject"
+                  name="subject"
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white focus:border-[#FF8B01] focus:outline-none"
+                >
+                  <option value="Fråga om appen">Fråga om appen</option>
+                  <option value="Tekniskt fel">Tekniskt fel / bugg</option>
+                  <option value="Radering av data">Radering av lokal data</option>
+                  <option value="Annat">Annat</option>
+                </select>
+              </div>
+              <div>
                 <label className="mb-1 block text-xs font-medium text-white/60" htmlFor="email">
-                  Din e-post
+                  Din e-post (för svar)
                 </label>
                 <input
                   id="email"
@@ -49,14 +76,14 @@ export default function Contact() {
                   required
                   rows={5}
                   className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#FF8B01] focus:outline-none"
-                  placeholder="Skriv ditt meddelande här…"
+                  placeholder="Beskriv ditt ärende…"
                 />
               </div>
               <button
                 type="submit"
-                className="w-full rounded-full bg-[#FF8B01] py-2.5 text-sm font-semibold text-[#090909]"
+                className="w-full rounded-full bg-[#FF8B01] py-2.5 text-sm font-semibold text-[#090909] hover:bg-[#FFB347]"
               >
-                Skicka
+                Öppna i e-postklient
               </button>
             </form>
           </div>
@@ -65,17 +92,15 @@ export default function Contact() {
             Vi strävar efter att svara inom 3 arbetsdagar.
           </p>
 
-          <div className="mt-6 space-y-1 text-xs text-white/40">
-            <p>
-              <a href="/integritetspolicy" className="underline hover:text-white/70">
-                Integritetspolicy
-              </a>{" "}
-              ·{" "}
-              <a href="/villkor" className="underline hover:text-white/70">
-                Användarvillkor
-              </a>
-            </p>
+          <div className="mt-4 flex gap-4 text-xs text-white/40">
+            <button onClick={() => navigate("/integritetspolicy")} className="underline hover:text-white/70">
+              Integritetspolicy
+            </button>
+            <button onClick={() => navigate("/villkor")} className="underline hover:text-white/70">
+              Användarvillkor
+            </button>
           </div>
+
         </div>
       </div>
     </div>

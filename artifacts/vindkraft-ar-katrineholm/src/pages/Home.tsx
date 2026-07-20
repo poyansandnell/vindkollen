@@ -2506,6 +2506,26 @@ export default function Home() {
                 >
                   {showDebugStrip ? "🔧 Dölj diagnostik" : "🔧 Visa diagnostik"}
                 </button>
+                <div className="flex justify-center gap-5 pt-1 pb-0.5">
+                  <button
+                    onClick={() => { setShowMenu(false); navigate("/om"); }}
+                    className="text-[11px] text-white/30 hover:text-white/60 underline underline-offset-2"
+                  >
+                    Om appen
+                  </button>
+                  <button
+                    onClick={() => { setShowMenu(false); navigate("/integritetspolicy"); }}
+                    className="text-[11px] text-white/30 hover:text-white/60 underline underline-offset-2"
+                  >
+                    Integritetspolicy
+                  </button>
+                  <button
+                    onClick={() => { setShowMenu(false); navigate("/kontakt"); }}
+                    className="text-[11px] text-white/30 hover:text-white/60 underline underline-offset-2"
+                  >
+                    Support
+                  </button>
+                </div>
               </div>
             </div>
           )}
