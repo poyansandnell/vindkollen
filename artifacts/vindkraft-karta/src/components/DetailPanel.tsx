@@ -242,7 +242,14 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                   .filter((t) => t.projectAreaId === selection.id && t.lat != null && t.lng != null)
                   .map((t) => ({ id: String(t.id), lat: t.lat!, lon: t.lng! }));
                 const projectName = projectAreaQuery.data?.name ?? "Vindkraftsprojekt";
-                const turbineCount = projectAreaQuery.data?.turbineCountPlannedMax ?? projectTurbines.length;
+                // Använd planerat antal från DB som display-siffra — viewport-laddade
+                // verk kan vara färre om kartan är delvis utanför bbox.
+                const plannedCount =
+                  projectAreaQuery.data?.turbineCountPlannedMax ??
+                  projectAreaQuery.data?.turbineCountPlannedMin ??
+                  projectTurbines.length;
+                const displayCount = Math.max(plannedCount, projectTurbines.length);
+                const isKatrineholm = projectAreaQuery.data?.kommun === "Katrineholm";
                 return (
                   <div className="mt-4 space-y-2">
                     <Button
@@ -269,8 +276,8 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                         }}
                       >
                         {projectTurbines.length > 0
-                          ? `✏️ Redigera ${projectTurbines.length} verk`
-                          : `✏️ Placera ${turbineCount ? `${turbineCount} ` : ""}verk`}
+                          ? `✏️ Redigera ${displayCount} verk`
+                          : `✏️ Placera ${displayCount ? `${displayCount} ` : ""}verk`}
                       </a>
                     </Button>
                     {projectTurbines.length === 0 && (
@@ -290,8 +297,18 @@ export default function DetailPanel({ selection, onClose, focusPoint, turbines }
                         }
                         data-testid="button-ar-project"
                       >
-                        📱 Visa {projectTurbines.length} verk i AR
+                        📱 Visa {displayCount} verk i AR
                       </Button>
+                    )}
+                    {isKatrineholm && (
+                      <a
+                        href={`${import.meta.env.BASE_URL}samradsyttrande-forsvarsmakten.pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 w-full rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+                      >
+                        📄 Försvarsmaktens samrådsyttrande (PDF)
+                      </a>
                     )}
                   </div>
                 );
