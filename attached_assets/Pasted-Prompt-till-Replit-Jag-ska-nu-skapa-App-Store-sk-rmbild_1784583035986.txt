@@ -1,0 +1,134 @@
+Prompt till Replit
+
+Jag ska nu skapa App Store-skärmbilder för Vindkollen.
+
+Utgå från de sex riktiga skärmbilderna jag laddar upp. Ändra inte appens innehåll eller lägg till funktioner som inte finns.
+
+Målet är att skapa mycket professionella App Store-bilder i Apples stil.
+
+Design
+
+Skapa sex stående bilder.
+
+Bakgrund:
+
+* modern
+* mörk grafit/svart
+* Vindkollens orange (#FF8B01) som accent
+* gärna en diskret topografisk karta eller höjdkurvor i bakgrunden med låg opacitet
+* mycket luft
+* premiumkänsla
+
+Skärmbilden ska vara det tydligaste objektet.
+
+Lägg gärna mobilen i en tunn iPhone-ram.
+
+Använd ett modernt Apple-liknande typsnitt.
+
+Rubriken ska vara stor.
+
+Underrubriken mindre.
+
+Ingen överdriven grafik.
+
+⸻
+
+Bild 1
+
+Rubrik:
+
+Se framtidens vindkraft redan idag
+
+Underrubrik:
+
+Visualisera vindkraftverk direkt i den verkliga miljön med hjälp av AR.
+
+Använd:
+AR-bilden från huset i dagsljus.
+
+⸻
+
+Bild 2
+
+Rubrik:
+
+Upplev vindkraft – dag och natt
+
+Underrubrik:
+
+Se hur landskapet förändras under olika tider på dygnet.
+
+Använd:
+AR-bilden från taket på kvällen.
+
+⸻
+
+Bild 3
+
+Rubrik:
+
+Se utsikten från din egen plats
+
+Underrubrik:
+
+Placera dig där du bor och upplev hur vindkraftverken kan komma att synas.
+
+Använd:
+AR-bilden från gatan.
+
+⸻
+
+Bild 4
+
+Rubrik:
+
+Utforska hela Sveriges vindkraft
+
+Underrubrik:
+
+Över 3 500 projekt och mer än 13 000 vindkraftverk samlade på en interaktiv karta.
+
+Använd:
+Sverigekartan.
+
+⸻
+
+Bild 5
+
+Rubrik:
+
+Analysera innan beslut fattas
+
+Underrubrik:
+
+Flytta verk, jämför placeringar och se hur olika alternativ påverkar omgivningen.
+
+Använd:
+Redigeringsvyn.
+
+⸻
+
+Bild 6
+
+Rubrik:
+
+Kom igång på några sekunder
+
+Underrubrik:
+
+Öppna kartan eller starta AR direkt och börja utforska.
+
+Använd:
+Startsidan.
+
+⸻
+
+Viktigt
+
+* Ändra inte innehållet i appen.
+* Behåll alla riktiga skärmbilder.
+* Skapa endast en snygg marknadsföringslayout runt bilderna.
+* Exportera i Apples rekommenderade stående App Store-format.
+* Gör designen minimalistisk och exklusiv, inspirerad av Apple, Tesla och DJI.
+* Använd samma layout och grafiska stil på samtliga sex bilder.
+* Låt den orange accentfärgen från Vindkollen vara den enda starka färgen i designen.

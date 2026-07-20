@@ -97,6 +97,7 @@
     "@capacitor/core": "^8.4.2",
     "@capacitor/geolocation": "^8.2.0",
     "@capacitor/ios": "^8.4.2",
+    "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "maplibre-gl": "^5.24.0",
     "pdfjs-dist": "^6.1.200",

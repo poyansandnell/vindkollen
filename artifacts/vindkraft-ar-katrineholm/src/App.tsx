@@ -14,6 +14,7 @@ import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
 import Contact from "@/pages/Contact";
+import AppStoreScreenshots from "@/pages/AppStoreScreenshots";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/integritetspolicy" component={Privacy} />
       <Route path="/villkor" component={Terms} />
       <Route path="/kontakt" component={Contact} />
+      <Route path="/appstore-screenshots" component={AppStoreScreenshots} />
       <Route component={NotFound} />
     </Switch>
   );
