@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "se.vindkollen.app",
+  appId: "se.catchme.vindkollen",
   appName: "Vindkollen",
   // dist-native = output from `pnpm native:build` (vite.native.config.ts)
   webDir: "dist-native",

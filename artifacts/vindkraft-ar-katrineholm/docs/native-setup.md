@@ -110,7 +110,7 @@ VITE_API_BASE_URL=https://<repl-name>--<owner>.repl.co \
 3. Tryck ▶ eller `Cmd+R` för att bygga och köra
 4. För App Store: *Product → Archive*, sedan ladda upp via Xcode Organizer
 
-**Bundle ID:** `se.vindkollen.app`  
+**Bundle ID:** `se.catchme.vindkollen`  
 **Display Name:** Vindkollen  
 **Version:** 1.0.0 · Build: 1
 

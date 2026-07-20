@@ -61,7 +61,7 @@
     <array>
         <dict>
             <key>CFBundleURLName</key>
-            <string>com.vindkollen.app</string>
+            <string>se.catchme.vindkollen</string>
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>vindkollen</string>

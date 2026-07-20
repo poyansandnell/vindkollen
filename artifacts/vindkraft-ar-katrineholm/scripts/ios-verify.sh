@@ -64,8 +64,8 @@ check "CapApp-SPM produktberoende (XCSwiftPackageProductDependency)" \
   'productName = "CapApp-SPM"' "$PBXPROJ"
 check "CapApp-SPM länkad i Frameworks Build Phase" \
   'CapApp-SPM in Frameworks' "$PBXPROJ"
-check "Bundle ID satt till se.vindkollen.app" \
-  'PRODUCT_BUNDLE_IDENTIFIER = se\.vindkollen\.app' "$PBXPROJ"
+check "Bundle ID satt till se.catchme.vindkollen" \
+  'PRODUCT_BUNDLE_IDENTIFIER = se\.catchme\.vindkollen' "$PBXPROJ"
 check_absent "INGEN direkt XCRemoteSwiftPackageReference för capacitor-swift-pm" \
   'XCRemoteSwiftPackageReference "capacitor-swift-pm"' "$PBXPROJ"
 check_absent "INGET direkt Capacitor-produktberoende i pbxproj (ska gå via CapApp-SPM)" \
