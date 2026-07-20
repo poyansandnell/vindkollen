@@ -1,85 +1,105 @@
+import { useState } from "react";
 import { KATRINEHOLM_PROJECT } from "@/lib/bundledProjects";
-import { openPdf } from "@/lib/capacitorBridge";
+import { isNative } from "@/lib/capacitorBridge";
 
 export function InfoPanel({ onClose, projectId }: { onClose: () => void; projectId?: number | string }) {
   const showEricsberg =
     projectId != null && String(projectId) === String(KATRINEHOLM_PROJECT.id);
+  const [pdfOpen, setPdfOpen] = useState(false);
+
+  const pdfUrl =
+    window.location.origin + import.meta.env.BASE_URL + "samradsyttrande-forsvarsmakten.pdf";
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-[60] flex max-h-[80vh] flex-col items-center justify-end pointer-events-none sm:items-center sm:justify-center">
-      {/* V37: informationsrutan är en kompakt bottom sheet istället för en
-          helskärms-overlay, så kamerabilden och AR-verken fortfarande syns
-          bakom/ovanför den. */}
-      <div className="pointer-events-auto w-full max-w-md rounded-t-3xl bg-[#111111]/95 p-5 shadow-2xl backdrop-blur-md sm:rounded-3xl">
-        <div className="mb-4 flex items-start justify-between">
-          <h2 className="text-xl font-semibold text-white">Om Vindkollen</h2>
+    <>
+      {pdfOpen && (
+        <div className="fixed inset-0 z-[200] flex flex-col bg-black">
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/10 bg-[#111111] px-4">
+            <span className="text-sm font-medium text-white/80">📄 Försvarsmaktens samrådsyttrande</span>
+            <button
+              onClick={() => setPdfOpen(false)}
+              className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+              aria-label="Stäng PDF"
+            >
+              ✕
+            </button>
+          </div>
+          <iframe src={pdfUrl} className="flex-1 w-full border-0" title="Samrådsyttrande PDF" />
+        </div>
+      )}
+
+      <div className="absolute inset-x-0 bottom-0 z-[60] flex max-h-[80vh] flex-col items-center justify-end pointer-events-none sm:items-center sm:justify-center">
+        {/* V37: informationsrutan är en kompakt bottom sheet istället för en
+            helskärms-overlay, så kamerabilden och AR-verken fortfarande syns
+            bakom/ovanför den. */}
+        <div className="pointer-events-auto w-full max-w-md rounded-t-3xl bg-[#111111]/95 p-5 shadow-2xl backdrop-blur-md sm:rounded-3xl">
+          <div className="mb-4 flex items-start justify-between">
+            <h2 className="text-xl font-semibold text-white">Om Vindkollen</h2>
+            <button
+              onClick={onClose}
+              className="shrink-0 rounded-full bg-white/10 p-1.5 text-white hover:bg-white/20"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-1 text-sm leading-relaxed text-white/75">
+            <p>
+              Vindkollen hjälper invånare att se och förstå hur planerade vindkraftsetableringar kan påverka
+              landskapet, närboende och lokalsamhället.
+            </p>
+            <p>
+              Genom Sverigekartan, lokala projektvyer och AR-visualisering kan användaren undersöka verkens
+              placering, avstånd, riktning, ljudnivå och visuella påverkan direkt från den plats där man
+              befinner sig.
+            </p>
+            <p>
+              Målet är att göra information om planerade etableringar mer tillgänglig, tydlig och begriplig —
+              så att fler kan bilda sig en egen uppfattning och delta i den lokala demokratiska processen.
+            </p>
+            <p>
+              Vindkollen är utvecklad av{" "}
+              <span className="font-medium text-[#FFB347]">@PoyanSandnell</span>. Den första versionen togs
+              fram åt Katrineholm Framåt för att visa hur den planerade vindkraftsetableringen nära
+              Katrineholms tätort kan påverka staden och dess invånare.
+            </p>
+
+            {showEricsberg && (
+              <div className="mt-1 border-t border-white/10 pt-3">
+                <h3 className="mb-2 text-sm font-semibold text-white">Ericsbergs planer — Katrineholms kommun</h3>
+                <p>
+                  Denna projektvy har tagits fram åt Katrineholm Framåt för att tydliggöra hur den planerade
+                  etableringen norr om Katrineholm kan upplevas från olika delar av kommunen.
+                </p>
+                <p className="mt-2">
+                  Verktyget visar bland annat verkens riktning, avstånd, uppskattad ljudnivå och visuella
+                  påverkan. Syftet är att ge invånarna ett mer konkret underlag inför den fortsatta
+                  diskussionen om etableringen.
+                </p>
+                <button
+                  onClick={() => {
+                    if (isNative()) {
+                      setPdfOpen(true);
+                    } else {
+                      window.open(pdfUrl, "_blank", "noopener,noreferrer");
+                    }
+                  }}
+                  className="mt-3 flex w-full items-center gap-2 rounded-xl border border-[#FF8B01]/30 bg-[#FF8B01]/10 px-3 py-2 text-left text-sm font-medium text-[#FFB347] hover:bg-[#FF8B01]/20"
+                >
+                  📄 Försvarsmaktens samrådsyttrande (PDF)
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={onClose}
-            className="shrink-0 rounded-full bg-white/10 p-1.5 text-white hover:bg-white/20"
+            className="mt-5 w-full rounded-full bg-[#FF8B01] py-3 text-sm font-semibold text-[#090909] hover:bg-[#FFB347]"
           >
-            ✕
+            Stäng
           </button>
         </div>
-
-        <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-1 text-sm leading-relaxed text-white/75">
-          <p>
-            Vindkollen hjälper invånare att se och förstå hur planerade vindkraftsetableringar kan påverka
-            landskapet, närboende och lokalsamhället.
-          </p>
-          <p>
-            Genom Sverigekartan, lokala projektvyer och AR-visualisering kan användaren undersöka verkens
-            placering, avstånd, riktning, ljudnivå och visuella påverkan direkt från den plats där man
-            befinner sig.
-          </p>
-          <p>
-            Målet är att göra information om planerade etableringar mer tillgänglig, tydlig och begriplig —
-            så att fler kan bilda sig en egen uppfattning och delta i den lokala demokratiska processen.
-          </p>
-          <p>
-            Vindkollen är utvecklad av{" "}
-            <span className="font-medium text-[#FFB347]">@PoyanSandnell</span>. Den första versionen togs
-            fram åt Katrineholm Framåt för att visa hur den planerade vindkraftsetableringen nära
-            Katrineholms tätort kan påverka staden och dess invånare.
-          </p>
-
-          {showEricsberg && (
-            <div className="mt-1 border-t border-white/10 pt-3">
-              <h3 className="mb-2 text-sm font-semibold text-white">Ericsbergs planer — Katrineholms kommun</h3>
-              <p>
-                Denna projektvy har tagits fram åt Katrineholm Framåt för att tydliggöra hur den planerade
-                etableringen norr om Katrineholm kan upplevas från olika delar av kommunen.
-              </p>
-              <p className="mt-2">
-                Verktyget visar bland annat verkens riktning, avstånd, uppskattad ljudnivå och visuella
-                påverkan. Syftet är att ge invånarna ett mer konkret underlag inför den fortsatta
-                diskussionen om etableringen.
-              </p>
-              <button
-                onClick={() => {
-                  // Bygg alltid URL:en från window.location.origin + BASE_URL.
-                  // På iOS native är origin "capacitor://localhost" → openPdf()
-                  // hanterar det via WKWebView-navigering (inte Browser.open).
-                  const url =
-                    window.location.origin +
-                    import.meta.env.BASE_URL +
-                    "samradsyttrande-forsvarsmakten.pdf";
-                  openPdf(url);
-                }}
-                className="mt-3 flex w-full items-center gap-2 rounded-xl border border-[#FF8B01]/30 bg-[#FF8B01]/10 px-3 py-2 text-left text-sm font-medium text-[#FFB347] hover:bg-[#FF8B01]/20"
-              >
-                📄 Försvarsmaktens samrådsyttrande (PDF)
-              </button>
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={onClose}
-          className="mt-5 w-full rounded-full bg-[#FF8B01] py-3 text-sm font-semibold text-[#090909] hover:bg-[#FFB347]"
-        >
-          Stäng
-        </button>
       </div>
-    </div>
+    </>
   );
 }

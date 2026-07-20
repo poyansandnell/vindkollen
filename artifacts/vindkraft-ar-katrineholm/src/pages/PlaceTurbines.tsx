@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { apiUrl } from "@/lib/apiUrl";
-import { consumeDirectEditorFlag, consumeFreshPlaceraFlag, isNative, openPdf } from "@/lib/capacitorBridge";
+import { consumeDirectEditorFlag, consumeFreshPlaceraFlag, isNative } from "@/lib/capacitorBridge";
+import { TURBINES } from "@/lib/turbines";
+import { swerefToWgs84 } from "@/lib/sweref";
 import { PlacementMap } from "@/components/PlacementMap";
 import { PlacementScorePanel } from "@/components/PlacementScorePanel";
 import {
@@ -97,20 +99,13 @@ function consumeEditHandoff(): ActiveEditHandoff | null {
   }
 }
 
-// De 8 verkliga planerade vindkraftverk (från src/lib/turbines.ts, SWEREF99 TM
-// konverterat till WGS84) som ligger NÄRMAST Katrineholms centrum. Kartverktyget
-// utgår alltså från den verkliga planen — användaren experimenterar därifrån,
-// inte från en godtycklig startposition. Se replit.md / turbines.ts för källan.
-const DEFAULT_TURBINES: PlacedTurbine[] = [
-  { id: "t25", lat: 58.99268, lon: 16.26596 }, // V5-2, ~3.4 km från Katrineholm
-  { id: "t24", lat: 58.99401, lon: 16.28032 }, // V5-1, ~4.2 km
-  { id: "t29", lat: 58.97705, lon: 16.28416 }, // V5-6, ~4.9 km
-  { id: "t26", lat: 58.99142, lon: 16.29339 }, // V5-3, ~5.0 km
-  { id: "t27", lat: 58.98694, lon: 16.30302 }, // V5-4, ~5.6 km
-  { id: "t28", lat: 58.97971, lon: 16.30244 }, // V5-5, ~5.8 km
-  { id: "t14", lat: 58.93001, lon: 16.23653 }, // V3-1, ~7.5 km
-  { id: "t15", lat: 58.92455, lon: 16.21137 }, // V3-2, ~7.9 km
-];
+// Alla 29 bundlade Ericsberg-turbiner (SWEREF99 TM → WGS84) som fallback när
+// inget editHandoff finns. Tidigare var detta bara 8 verk; nu används alla 29
+// så att redigeringsläget alltid speglar det fullständiga OX2-projektet.
+const DEFAULT_TURBINES: PlacedTurbine[] = TURBINES.map((t) => {
+  const wgs = swerefToWgs84(t.easting, t.northing);
+  return { id: t.id, lat: wgs.lat, lon: wgs.lon };
+});
 
 interface SavedPlacement {
   id: string;
@@ -194,6 +189,7 @@ export default function PlaceTurbines() {
   const [showOnboarding, setShowOnboarding] = useState<boolean>(
     () => !localStorage.getItem(ONBOARDING_KEY),
   );
+  const [pdfOpen, setPdfOpen] = useState(false);
 
   // Global runtime-diagnostik — fångar JavaScript-krascher och oupphantade
   // promise-avvisanden som annars bara syns som vit skärm.
@@ -631,8 +627,26 @@ export default function PlaceTurbines() {
     );
   }
 
+  const pdfUrl = window.location.origin + import.meta.env.BASE_URL + "samradsyttrande-forsvarsmakten.pdf";
+
   return (
     <div className="relative flex h-[100svh] w-full flex-col overflow-hidden bg-[#090909] text-white">
+
+      {pdfOpen && (
+        <div className="fixed inset-0 z-[200] flex flex-col bg-black">
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/10 bg-[#111111] px-4">
+            <span className="text-sm font-medium text-white/80">📄 Försvarsmaktens samrådsyttrande</span>
+            <button
+              onClick={() => setPdfOpen(false)}
+              className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+              aria-label="Stäng PDF"
+            >
+              ✕
+            </button>
+          </div>
+          <iframe src={pdfUrl} className="flex-1 w-full border-0" title="Samrådsyttrande PDF" />
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <div>
@@ -1027,11 +1041,17 @@ export default function PlaceTurbines() {
         {editHandoff && (
           <button
             onClick={() => {
-              const url =
-                window.location.origin +
-                import.meta.env.BASE_URL +
-                "samradsyttrande-forsvarsmakten.pdf";
-              void openPdf(url);
+              if (isNative()) {
+                setPdfOpen(true);
+              } else {
+                window.open(
+                  window.location.origin +
+                    import.meta.env.BASE_URL +
+                    "samradsyttrande-forsvarsmakten.pdf",
+                  "_blank",
+                  "noopener,noreferrer",
+                );
+              }
             }}
             className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-2 text-[11px] font-medium text-white/50 hover:bg-white/10 hover:text-white/70"
           >
