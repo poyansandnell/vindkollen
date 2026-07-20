@@ -48,6 +48,27 @@ export async function openPdf(url: string): Promise<void> {
 }
 
 /**
+ * Öppnar en extern länk (integritetspolicy, användarmanual, webbplats osv.).
+ *
+ * - Native: SFSafariViewController via @capacitor/browser — användaren stänger
+ *   med "Klar"-knappen och befinner sig kvar i appen. Inga problem med
+ *   navigation eller att lämna appen.
+ * - Webb: öppnar en ny flik med window.open().
+ */
+export async function openExternalLink(url: string): Promise<void> {
+  if (isNative()) {
+    try {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url, presentationStyle: "fullscreen" });
+      return;
+    } catch (err) {
+      console.error("[Vindkollen] Browser.open misslyckades:", err);
+    }
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+/**
  * Öppnar Sverigekartan.
  *
  * - Webb: navigerar direkt till /vindkraft-karta/ (path routing).

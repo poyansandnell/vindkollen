@@ -1,0 +1,48 @@
+`UIScene` lifecycle will soon be required. Failure to adopt will result in an assert in the future.
+Reading from public effective user settings.
+Could not create a sandbox extension for '/var/containers/Bundle/Application/488E7278-B96A-41C2-8DCC-61F936712E41/App.app'
+⚡️  Loading app at capacitor://localhost...
+Networking process (0x11205c190) took 2.816267 seconds to launch
+GPU process (0x1121281e0) took 1.989922 seconds to launch
+WebContent process (0x1120f40c0) took 2.001770 seconds to launch
+(Fig) signalled err=-12710 at <>:601
+(Fig) signalled err=-12710 at <>:601
+(Fig) signalled err=-12710 at <>:601
+0x1120f40c0 - [PID=5262] WebProcessProxy::didBecomeUnresponsive:
+0x13acfc718 - [pageProxyID=7, webPageID=8, PID=5262] WebPageProxy::processDidBecomeUnresponsive:
+WebContent[5262] Could not register system wide server: -25204
+WebContent[5262] _AXAddToElementCache was called even though the element was in the cache: <WKAccessibilityWebPageObject: 0x8000001042a4000>
+WebContent[5262] Service "com.apple.CARenderServer" failed bootstrap look up (1) - (os/kern) invalid address
+WebContent[5262] Failed to initialize application enviroment context
+WebContent[5262] Failed to load a device context.
+WebContent[5262] Failed to initialize application enviroment context
+WebContent[5262] Failed to load a device context.
+WebContent[5262] Unable to hide query parameters from script (missing data)
+WebContent[5262] xpc_user_sessions_get_foreground_uid() failed with error 1 - Operation not permitted
+⚡️  [info] - [AR][pipeline] Project state: loading
+⚡️  WebView loaded
+⚡️  [info] - [NationalMap] Hämtar projekt {"native":true,"apiBase":"https://b9014749-0395-4a74-81ac-8deb3fc86054-00-1te953tm13n9f.riker.replit.dev","url":"https://b9014749-0395-4a74-81ac-8deb3fc86054-00-1te953tm13n9f.riker.replit.dev/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25","buildId":"2f12d0a@2026-07-20 11:36","bundledCount":20}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.4282078998743986}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.4282078998743986}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.4282078998743986}
+⚡️  [info] - [NationalMap] B4 auto-fokus: markerar närmaste projekt {"id":10001,"name":"Ericsbergs planer"}
+WebContent[5262] xpc_user_sessions_get_foreground_uid() failed with error 1 - Operation not permitted
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.4282078998743986}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.4282078998743986}
+⚡️  [info] - [NationalMap] GeoJSON features: 20 ( 20 proj)
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.4282078998743986}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.4282078998743986}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.4282078998743986}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.4282078998743986}
+⚡️  [info] - [NationalMap] API fetch {"ms":"1544","status":200,"url":"https://b9014749-0395-4a74-81ac-8deb3fc86054-00-1te953tm13n9f.riker.replit.dev/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25"}
+⚡️  [info] - [NationalMap] Live-data hämtad {"url":"https://b9014749-0395-4a74-81ac-8deb3fc86054-00-1te953tm13n9f.riker.replit.dev/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25","rawCount":3587,"normalizedCount":3587,"validCoordsCount":3587,"native":true,"ms":"1581"}
+⚡️  [info] - [NationalMap] MapLibre source updated with 3587 live projects
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.4282078998743986}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.4282078998743986}
+⚡️  [info] - [NationalMap] Öppna projektet klickad {"id":10001,"name":"Ericsbergs planer"}
+⚡️  [log] - [PlaceTurbines] Hämtar nationella verk {"projectId":"10001","centerLat":58.97,"centerLng":16.27,"delta":0.3231098884280702,"preloadedCount":29}
+⚡️  [log] - [PlaceTurbines] Verk hämtade {"projectId":"10001","allFromApi":152,"byProjectAreaId":0,"willOverride":false}
+⚡️  WebView loaded
+0.5
+Potential Structural Swift Concurrency Issue: unsafeForcedSync called from Swift Concurrent context.
+0.5
