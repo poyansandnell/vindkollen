@@ -375,6 +375,9 @@ export default function Home() {
   // ARScene direkt (se dess jsdoc), aldrig produktinställningarna ovan.
   const [debugForceNearest, setDebugForceNearest] = useState(false);
   const [debugDisableOcclusion, setDebugDisableOcclusion] = useState(false);
+  // V41: visa alltid verk oavsett hinder (träd/moln/byggnader) som standard.
+  // Användaren kan aktivera "Göm bakom hinder" via knapp för att slå på ocklusion.
+  const [hideOccluded, setHideOccluded] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   // Uppstartsnedräkning — visas tills första verket syns i kameran
@@ -1733,7 +1736,7 @@ export default function Home() {
             }
             orientationStalled={orientation.orientationStalled}
             debugForceNearest={debugForceNearest}
-            disableOcclusion={debugDisableOcclusion}
+            disableOcclusion={!hideOccluded || debugDisableOcclusion}
             arStartedAtMs={arStartedAtMs}
             turbinesVisible={turbinesVisible}
             onTurbineLanded={(landed, total) => setTurbineLandedCount({ landed, total })}
@@ -1841,7 +1844,8 @@ export default function Home() {
               top: max(120px, 22vh) ser till att rutan inte flyter bakom pilen. */}
           {arSessionVisible &&
             arStartedAtMs !== null &&
-            inFrontOfCameraCount === 0 && (
+            inFrontOfCameraCount === 0 &&
+            !nearestOnTarget && (
               <div
                 className="pointer-events-none absolute inset-x-0 z-[55] flex justify-center px-6"
                 aria-live="polite"
@@ -2156,6 +2160,14 @@ export default function Home() {
                 className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-white/20"
               >
                 {showStatusDetails ? "👁 Dölj" : "👁 Status"}
+              </button>
+              <button
+                onClick={() => setHideOccluded((v) => !v)}
+                aria-pressed={hideOccluded}
+                aria-label={hideOccluded ? "Visa verk även bakom hinder" : "Göm verk bakom hinder"}
+                className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-white/20 aria-pressed:bg-[#FF8B01]/25 aria-pressed:text-[#FFB347]"
+              >
+                {hideOccluded ? "🌳 Hinder PÅ" : "🌳 Hinder"}
               </button>
               <button
                 onClick={() => setShowControls(true)}
