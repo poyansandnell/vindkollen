@@ -3,7 +3,10 @@ import { useLocation } from "wouter";
 export default function About() {
   const [, navigate] = useLocation();
   return (
-    <div className="min-h-screen bg-[#090909] text-white pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+    <div
+      className="min-h-screen bg-[#090909] text-white pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
       <div className="mx-auto max-w-2xl px-4 py-8">
         <button onClick={() => navigate("/")} className="mb-6 text-sm text-white/50 hover:text-white">
           ← Tillbaka
