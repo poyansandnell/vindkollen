@@ -8,6 +8,7 @@ import { isNative } from "@/lib/capacitorBridge";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import PlaceTurbines from "@/pages/PlaceTurbines";
+import PdfViewer from "@/pages/PdfViewer";
 import MyProjects from "@/pages/MyProjects";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
@@ -21,6 +22,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/placera" component={PlaceTurbines} />
+      <Route path="/pdf-viewer" component={PdfViewer} />
       <Route path="/mina-projekt" component={MyProjects} />
       <Route path="/om" component={About} />
       <Route path="/integritetspolicy" component={Privacy} />

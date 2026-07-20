@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { apiUrl } from "@/lib/apiUrl";
 import { consumeDirectEditorFlag, consumeFreshPlaceraFlag, isNative } from "@/lib/capacitorBridge";
+import { openPdfRoute } from "@/pages/PdfViewer";
 import { TURBINES } from "@/lib/turbines";
 import { swerefToWgs84 } from "@/lib/sweref";
 import { PlacementMap } from "@/components/PlacementMap";
@@ -189,8 +190,6 @@ export default function PlaceTurbines() {
   const [showOnboarding, setShowOnboarding] = useState<boolean>(
     () => !localStorage.getItem(ONBOARDING_KEY),
   );
-  const [pdfOpen, setPdfOpen] = useState(false);
-
   // Global runtime-diagnostik — fångar JavaScript-krascher och oupphantade
   // promise-avvisanden som annars bara syns som vit skärm.
   useEffect(() => {
@@ -627,26 +626,8 @@ export default function PlaceTurbines() {
     );
   }
 
-  const pdfUrl = window.location.origin + import.meta.env.BASE_URL + "samradsyttrande-forsvarsmakten.pdf";
-
   return (
     <div className="relative flex h-[100svh] w-full flex-col overflow-hidden bg-[#090909] text-white">
-
-      {pdfOpen && (
-        <div className="fixed inset-0 z-[200] flex flex-col bg-black">
-          <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/10 bg-[#111111] px-4">
-            <span className="text-sm font-medium text-white/80">📄 Försvarsmaktens samrådsyttrande</span>
-            <button
-              onClick={() => setPdfOpen(false)}
-              className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
-              aria-label="Stäng PDF"
-            >
-              ✕
-            </button>
-          </div>
-          <iframe src={pdfUrl} className="flex-1 w-full border-0" title="Samrådsyttrande PDF" />
-        </div>
-      )}
 
       <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <div>
@@ -1041,16 +1022,14 @@ export default function PlaceTurbines() {
         {editHandoff && (
           <button
             onClick={() => {
+              const url =
+                window.location.origin +
+                import.meta.env.BASE_URL +
+                "samradsyttrande-forsvarsmakten.pdf";
               if (isNative()) {
-                setPdfOpen(true);
+                openPdfRoute(url, "Försvarsmaktens samrådsyttrande");
               } else {
-                window.open(
-                  window.location.origin +
-                    import.meta.env.BASE_URL +
-                    "samradsyttrande-forsvarsmakten.pdf",
-                  "_blank",
-                  "noopener,noreferrer",
-                );
+                window.open(url, "_blank", "noopener,noreferrer");
               }
             }}
             className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-2 text-[11px] font-medium text-white/50 hover:bg-white/10 hover:text-white/70"
