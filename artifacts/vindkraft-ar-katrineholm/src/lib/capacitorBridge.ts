@@ -20,12 +20,22 @@ export function isNative(): boolean {
 /**
  * Öppnar en PDF i en extern visare.
  *
- * - Native (iOS/Android): använder @capacitor/browser för att öppna filen i
- *   Safari/Chrome, vilket ger korrekt nedladdning/visning av PDF:er.
+ * - Native (iOS/Android) + HTTPS-URL: använder @capacitor/browser
+ *   (SFSafariViewController) för att öppna filen i Safari-arket.
+ * - Native + capacitor://-URL (lokal bundled-fil): navigerar WKWebView
+ *   direkt. SFSafariViewController hanterar inte capacitor://-schemat —
+ *   WKWebView renderar PDF:er nativt och användaren kan svepa tillbaka.
  * - Webb: faller tillbaka på window.open() i en ny flik.
  */
 export async function openPdf(url: string): Promise<void> {
   if (isNative()) {
+    const isLocalAsset =
+      url.startsWith("capacitor://") || url.startsWith("http://localhost");
+    if (isLocalAsset) {
+      // WKWebView hanterar PDF:er nativt; swipe-back fungerar som vanligt.
+      window.location.href = url;
+      return;
+    }
     try {
       const { Browser } = await import("@capacitor/browser");
       await Browser.open({ url, presentationStyle: "popover" });

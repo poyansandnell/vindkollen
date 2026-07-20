@@ -56,10 +56,13 @@ export function InfoPanel({ onClose, projectId }: { onClose: () => void; project
               </p>
               <button
                 onClick={() => {
-                  const base = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim() ?? "";
-                  const url = base
-                    ? `${base}/samradsyttrande-forsvarsmakten.pdf`
-                    : `${window.location.origin}/samradsyttrande-forsvarsmakten.pdf`;
+                  // Bygg alltid URL:en från window.location.origin + BASE_URL.
+                  // På iOS native är origin "capacitor://localhost" → openPdf()
+                  // hanterar det via WKWebView-navigering (inte Browser.open).
+                  const url =
+                    window.location.origin +
+                    import.meta.env.BASE_URL +
+                    "samradsyttrande-forsvarsmakten.pdf";
                   openPdf(url);
                 }}
                 className="mt-3 flex w-full items-center gap-2 rounded-xl border border-[#FF8B01]/30 bg-[#FF8B01]/10 px-3 py-2 text-left text-sm font-medium text-[#FFB347] hover:bg-[#FF8B01]/20"

@@ -1,0 +1,817 @@
+`UIScene` lifecycle will soon be required. Failure to adopt will result in an assert in the future.
+Reading from public effective user settings.
+Could not create a sandbox extension for '/var/containers/Bundle/Application/18885C3B-1BC7-415B-89EF-6F7F54371046/App.app'
+⚡️  Loading app at capacitor://localhost...
+void * _Nullable NSMapGet(NSMapTable * _Nonnull, const void * _Nullable): map table argument is NULL
+WebContent[4352] 0x400000101b68008 - [webPageID=8] WebPage::runJavaScriptInFrameInScriptWorld: Request to run JavaScript failed with error <private>
+⚡️  JS Eval error A JavaScript exception occurred
+WebContent[4352] Could not register system wide server: -25204
+WebContent[4352] _AXAddToElementCache was called even though the element was in the cache: <WKAccessibilityWebPageObject: 0x60000010119a5e0>
+(Fig) signalled err=-12710 at <>:601
+(Fig) signalled err=-12710 at <>:601
+(Fig) signalled err=-12710 at <>:601
+WebContent[4352] 0x400000101b68008 - [webPageID=8] WebPage::runJavaScriptInFrameInScriptWorld: Request to run JavaScript failed with error <private>
+WebContent[4352] Service "com.apple.CARenderServer" failed bootstrap look up (1) - (os/kern) invalid address
+WebContent[4352] Failed to initialize application enviroment context
+WebContent[4352] Failed to load a device context.
+WebContent[4352] Failed to initialize application enviroment context
+WebContent[4352] Failed to load a device context.
+⚡️  JS Eval error A JavaScript exception occurred
+WebContent[4352] Unable to hide query parameters from script (missing data)
+⚡️  WebView loaded
+WebContent[4352] xpc_user_sessions_get_foreground_uid() failed with error 1 - Operation not permitted
+⚡️  [info] - [AR][pipeline] Project state: loading
+⚡️  [log] - [AR] Start button pressed - PermissionGate onClick fired
+⚡️  [log] - [AR] Start button pressed
+⚡️  [log] - [AR] isNative: true | starting: false
+⚡️  [log] - [AR] Native path: calling requestAllPermissionsSequentially
+⚡️  [log] - [AR] Requesting camera permission
+⚡️  To Native ->  Camera checkPermissions 104974568
+⚡️  TO JS {"camera":"prompt","photos":"prompt"}
+⚡️  To Native ->  Camera requestPermissions 104974569
+⚡️  [log] - [Vindkollen] Camera.checkPermissions → prompt
+0.5
+Potential Structural Swift Concurrency Issue: unsafeForcedSync called from Swift Concurrent context.
+0.5
+⚡️  TO JS {"camera":"granted","photos":"prompt"}
+⚡️  [log] - [Vindkollen] Camera.requestPermissions → granted
+⚡️  [log] - [AR] Camera permission result: granted
+⚡️  [log] - [AR] Waiting 350 ms between permission dialogs
+⚡️  [log] - [AR] Requesting location permission
+⚡️  To Native ->  Geolocation checkPermissions 104974570
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  [log] - [Vindkollen] Geolocation.checkPermissions → granted
+⚡️  [log] - [AR] Location permission result: granted
+⚡️  [log] - [AR] All permissions granted ✓
+⚡️  [log] - [AR] requestAllPermissionsSequentially result: camera= true location= true error= none
+⚡️  [log] - [AR] All permissions granted, waiting 400 ms before starting services
+⚡️  [log] - [AR] 400 ms elapsed, checking compass permission. needsPermission: true
+⚡️  [log] - [AR] Requesting compass permission
+⚡️  [log] - [AR] Compass permission result: true
+⚡️  [log] - [AR] Starting compass (startCalibrationTracking)
+⚡️  [log] - [AR] Navigating to AR scene (setStarted true)
+⚡️  [info] - [AR][pipeline] Renderer attached
+⚡️  [info] - [AR][pipeline] Loaded 0 turbines
+⚡️  [info] - [AR][pipeline] startAR(): render-loop initierad, väntar på första renderFrame()
+⚡️  [log] - [AR] useGeolocation: alreadyGranted = true
+⚡️  [log] - [AR] useGeolocation: location permission = true
+⚡️  [log] - [AR] Starting geolocation (watchNativePosition)
+{"msg":"#Warning Error reading file", "file":"\/\/private\/var\/Managed Preferences\/mobile\/com.apple.CoreMotion.plist", "error":"Error Domain=NSCocoaErrorDomain Code=257 \"The file “com.apple.CoreMotion.plist” couldn’t be opened because you don’t have permission to view it.\" UserInfo={NSFilePath=\/\/private\/var\/Managed Preferences\/mobile\/com.apple.CoreMotion.plist, NSURL=file:\/\/\/\/private\/var\/Managed%20Preferences\/mobile\/com.apple.CoreMotion.plist, NSUnderlyingError=0x11cbc16b0 {Error Domain=NSPOSIXErrorDomain Code=1 \"Operation not permitted\"}}"}
+⚡️  To Native ->  Geolocation watchPosition 104974571
+⚡️  To Native ->  CameraPreview start 104974572
+⚡️  [log] - [AR] useCameraStream: alreadyGranted = true
+⚡️  [log] - [AR] useCameraStream: camera permission = true
+⚡️  [log] - [AR] Starting CameraPreview
+⚡️  [log] - [Vindkollen] Geolocation.watchPosition started, watchId: 104974571
+⚡️  [info] - [AR][pipeline] Renderer attached
+⚡️  [info] - [AR][pipeline] Loaded 0 turbines
+⚡️  [info] - [AR][pipeline] startAR(): render-loop initierad, väntar på första renderFrame()
+⚡️  TO JS {"coords":{"accuracy":6.2557529139642511,"heading":null,"altitude":67.741194814521137,"speed":-1,"longitude":16.24533118254973,"trueHeading":null,"headingAccuracy":null,"magneticHeading":null,"latitude":58.987953558069734,"altitudeAccuracy":30.000027204506
+⚡️  [info] - [AR][pipeline] Första renderFrame() kördes
+⚡️  TO JS {"coords":{"magneticHeading":null,"course":null,"altitude":67.741194814521137,"headingAccuracy":null,"longitude":16.24533118254973,"latitude":58.987953558069734,"trueHeading":null,"speed":-1,"accuracy":6.2557529139642511,"heading":null,"altitudeAccuracy":3
+⚡️  [info] - [AR][pipeline] Renderer attached
+⚡️  [info] - [AR][pipeline] Loaded 0 turbines
+⚡️  [info] - [AR][pipeline] startAR(): render-loop initierad, väntar på första renderFrame()
+⚡️  [info] - [AR] GPS position mottagen (lat=58.98795, lon=16.24533)
+⚡️  [info] - [AR][pipeline] GPS OK (lat=58.98795, lon=16.24533, accuracy=6.255752913964251m)
+⚡️  [info] - [AR][pipeline] GPS-automatval: "Ericsbergs planer" (Katrineholm), 29 verk, precise=true
+⚡️  TO JS {"coords":{"course":null,"magneticHeading":null,"headingAccuracy":null,"trueHeading":null,"longitude":16.24533118254973,"speed":-1,"accuracy":6.5950139999999999,"altitude":64.232227449256953,"latitude":58.987953558069734,"altitudeAccuracy":30.3298629921226
+⚡️  [info] - [AR][pipeline] Sensorfusion aktiv (gyroskop + kompass)
+⚡️  [info] - [AR][pipeline] Renderer attached
+⚡️  [info] - [AR][pipeline] Loaded 29 turbines
+⚡️  [info] - [AR][pipeline] Creating turbine #0 (V1-1)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #0 (V1-1)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #0 (V1-1)
+⚡️  [info] - [AR][pipeline] Creating turbine #1 (V1-2)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #1 (V1-2)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #1 (V1-2)
+⚡️  [info] - [AR][pipeline] Creating turbine #2 (V1-3)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #2 (V1-3)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #2 (V1-3)
+⚡️  TO JS {"timestamp":1784542209976.9722,"coords":{"course":null,"speed":-1,"trueHeading":76.043617248535156,"headingAccuracy":27.208494186401367,"longitude":16.245329805918924,"magneticHeading":69.063941955566406,"accuracy":6.1956363757366315,"altitude":67.7450972
+⚡️  [info] - [AR][pipeline] Creating turbine #3 (V1-4)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #3 (V1-4)
+⚡️  TO JS {"timestamp":1784542210008.4199,"coords":{"course":null,"speed":-1,"magneticHeading":69.063941955566406,"headingAccuracy":27.208494186401367,"longitude":16.24532981132144,"trueHeading":76.043617248535156,"accuracy":6.1958037603820797,"altitude":67.74119481
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #3 (V1-4)
+⚡️  [info] - [AR][pipeline] Creating turbine #4 (V1-5)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #4 (V1-5)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #4 (V1-5)
+⚡️  [info] - [AR][pipeline] Creating turbine #5 (V1-6)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #5 (V1-6)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #5 (V1-6)
+⚡️  [info] - [AR][pipeline] Creating turbine #6 (V1-7)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #6 (V1-7)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #6 (V1-7)
+⚡️  [info] - [AR][pipeline] Creating turbine #7 (V2-1)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #7 (V2-1)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #7 (V2-1)
+⚡️  [info] - [AR][pipeline] Creating turbine #8 (V2-2)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #8 (V2-2)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #8 (V2-2)
+⚡️  [info] - [AR][pipeline] Creating turbine #9 (V2-3)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #9 (V2-3)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #9 (V2-3)
+⚡️  [info] - [AR][pipeline] Creating turbine #10 (V2-4)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #10 (V2-4)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #10 (V2-4)
+⚡️  [info] - [AR][pipeline] Creating turbine #11 (V2-5)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #11 (V2-5)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #11 (V2-5)
+⚡️  [info] - [AR][pipeline] Creating turbine #12 (V2-6)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #12 (V2-6)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #12 (V2-6)
+⚡️  [info] - [AR][pipeline] Creating turbine #13 (V3-1)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #13 (V3-1)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #13 (V3-1)
+⚡️  [info] - [AR][pipeline] Creating turbine #14 (V3-2)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #14 (V3-2)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #14 (V3-2)
+⚡️  [info] - [AR][pipeline] Creating turbine #15 (V3-3)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #15 (V3-3)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #15 (V3-3)
+⚡️  [info] - [AR][pipeline] Creating turbine #16 (V3-4)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #16 (V3-4)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #16 (V3-4)
+⚡️  [info] - [AR][pipeline] Creating turbine #17 (V4-1)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #17 (V4-1)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #17 (V4-1)
+⚡️  [info] - [AR][pipeline] Creating turbine #18 (V4-2)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #18 (V4-2)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #18 (V4-2)
+⚡️  [info] - [AR][pipeline] Creating turbine #19 (V4-3)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #19 (V4-3)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #19 (V4-3)
+⚡️  [info] - [AR][pipeline] Creating turbine #20 (V4-4)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #20 (V4-4)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #20 (V4-4)
+⚡️  [info] - [AR][pipeline] Creating turbine #21 (V4-5)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #21 (V4-5)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #21 (V4-5)
+⚡️  [info] - [AR][pipeline] Creating turbine #22 (V4-6)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #22 (V4-6)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #22 (V4-6)
+⚡️  [info] - [AR][pipeline] Creating turbine #23 (V5-1)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #23 (V5-1)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #23 (V5-1)
+⚡️  [info] - [AR][pipeline] Creating turbine #24 (V5-2)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #24 (V5-2)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #24 (V5-2)
+⚡️  [info] - [AR][pipeline] Creating turbine #25 (V5-3)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #25 (V5-3)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #25 (V5-3)
+⚡️  [info] - [AR][pipeline] Creating turbine #26 (V5-4)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #26 (V5-4)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #26 (V5-4)
+⚡️  [info] - [AR][pipeline] Creating turbine #27 (V5-5)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #27 (V5-5)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #27 (V5-5)
+⚡️  [info] - [AR][pipeline] Creating turbine #28 (V5-6)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #28 (V5-6)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #28 (V5-6)
+⚡️  [info] - [AR] Modell placerad (V1-1, avstånd=7668m, bäring=171.6°, world=(192.2, -0.3, 1306.1), skala=0.550)
+⚡️  [info] - [AR] Modell placerad (V1-2, avstånd=8223m, bäring=167.9°, world=(289.9, -0.3, 1356.1), skala=0.564)
+⚡️  [info] - [AR] Modell placerad (V1-3, avstånd=8078m, bäring=176.5°, world=(82.7, -0.3, 1366.8), skala=0.560)
+⚡️  [info] - [AR] Modell placerad (V1-4, avstånd=8846m, bäring=165.1°, world=(375.6, -0.3, 1412.4), skala=0.581)
+⚡️  [info] - [AR] Modell placerad (V1-5, avstånd=9259m, bäring=160.9°, world=(483.1, -0.3, 1398.9), skala=0.568)
+⚡️  [info] - [AR] Modell placerad (V1-6, avstånd=9611m, bäring=165.6°, world=(366.9, -0.2, 1433.8), skala=0.548)
+⚡️  [info] - [AR] Modell placerad (V1-7, avstånd=10359m, bäring=165.4°, world=(374.1, -1.2, 1431.9), skala=0.508)
+⚡️  [info] - [AR] Modell placerad (V2-1, avstånd=10655m, bäring=186.6°, world=(-171.3, 0.8, 1470.1), skala=0.494)
+⚡️  [info] - [AR] Modell placerad (V2-2, avstånd=11260m, bäring=184.4°, world=(-114.2, -1.5, 1475.6), skala=0.467)
+⚡️  [info] - [AR] Modell placerad (V2-3, avstånd=12038m, bäring=182.2°, world=(-57.7, -1.4, 1478.9), skala=0.437)
+⚡️  [info] - [AR] Modell placerad (V2-4, avstånd=13049m, bäring=181.4°, world=(-36.8, -0.2, 1479.5), skala=0.403)
+⚡️  [info] - [AR] Modell placerad (V2-5, avstånd=13179m, bäring=184.9°, world=(-126.1, -0.2, 1474.6), skala=0.399)
+⚡️  [info] - [AR] Modell placerad (V2-6, avstånd=13740m, bäring=182.9°, world=(-73.7, -0.2, 1478.2), skala=0.383)
+⚡️  [info] - [AR] Modell placerad (V3-1, avstånd=6462m, bäring=184.5°, world=(-91.9, -2.1, 1171.9), skala=0.521)
+⚡️  [info] - [AR] Modell placerad (V3-2, avstånd=7314m, bäring=195.5°, world=(-340.5, -2.0, 1231.5), skala=0.541)
+⚡️  [info] - [AR] Modell placerad (V3-3, avstånd=7192m, bäring=188.0°, world=(-176.2, -2.0, 1250.7), skala=0.538)
+⚡️  [info] - [AR] Modell placerad (V3-4, avstånd=7889m, bäring=191.9°, world=(-278.0, -0.3, 1317.7), skala=0.555)
+⚡️  [info] - [AR] Modell placerad (V4-1, avstånd=9653m, bäring=148.7°, world=(768.0, -0.9, 1265.1), skala=0.545)
+⚡️  [info] - [AR] Modell placerad (V4-2, avstånd=10280m, bäring=151.0°, world=(718.1, -0.2, 1294.1), skala=0.512)
+⚡️  [info] - [AR] Modell placerad (V4-3, avstånd=10892m, bäring=153.3°, world=(666.1, -1.6, 1321.6), skala=0.483)
+⚡️  [info] - [AR] Modell placerad (V4-4, avstånd=11296m, bäring=157.8°, world=(558.5, -1.5, 1370.6), skala=0.466)
+⚡️  [info] - [AR] Modell placerad (V4-5, avstånd=11655m, bäring=154.3°, world=(642.5, -1.5, 1333.3), skala=0.452)
+⚡️  [info] - [AR] Modell placerad (V4-6, avstånd=12010m, bäring=158.7°, world=(538.2, -1.2, 1378.7), skala=0.438)
+⚡️  [info] - [AR] Modell placerad (V5-1, avstånd=2114m, bäring=71.4°, world=(619.6, -0.5, -208.5), skala=0.521)
+⚡️  [info] - [AR] Modell placerad (V5-2, avstånd=1293m, bäring=66.0°, world=(507.2, -0.6, -225.8), skala=0.628)
+⚡️  [info] - [AR] Modell placerad (V5-3, avstånd=2780m, bäring=82.0°, world=(726.5, -0.4, -102.1), skala=0.492)
+⚡️  [info] - [AR] Modell placerad (V5-4, avstånd=3307m, bäring=91.9°, world=(796.4, -0.4, 26.7), skala=0.484)
+⚡️  [info] - [AR] Modell placerad (V5-5, avstånd=3398m, bäring=105.6°, world=(777.9, -0.4, 217.6), skala=0.484)
+⚡️  [info] - [AR] Modell placerad (V5-6, avstånd=2533m, bäring=118.6°, world=(618.3, 2.2, 336.6), skala=0.500)
+⚡️  [info] - [AR][pipeline] startAR(): render-loop initierad, väntar på första renderFrame()
+⚡️  [info] - [AR][pipeline] Active project: "Ericsbergs planer" — 29 turbines (source: gps, precise: true)
+⚡️  [info] - [AR][pipeline] Compass OK (första kompassavläsning mottagen)
+<<<< FigAudioSession(AV) >>>> signalled err=-19224 at <>:612
+⚡️  [info] - [AR] Modell synlig (V1-1, opacitet=1.00, avstånd=7668m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-2, opacitet=1.00, avstånd=8223m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-3, opacitet=1.00, avstånd=8078m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-4, opacitet=1.00, avstånd=8846m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-5, opacitet=1.00, avstånd=9259m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-6, opacitet=1.00, avstånd=9611m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-7, opacitet=1.00, avstånd=10359m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-1, opacitet=1.00, avstånd=10655m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-2, opacitet=1.00, avstånd=11260m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-3, opacitet=1.00, avstånd=12038m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-4, opacitet=1.00, avstånd=13049m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-5, opacitet=1.00, avstånd=13179m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-6, opacitet=1.00, avstånd=13740m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V3-1, opacitet=1.00, avstånd=6462m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V3-2, opacitet=1.00, avstånd=7314m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V3-3, opacitet=1.00, avstånd=7192m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V3-4, opacitet=1.00, avstånd=7889m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-1, opacitet=1.00, avstånd=9653m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-2, opacitet=1.00, avstånd=10280m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-3, opacitet=1.00, avstånd=10892m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-4, opacitet=1.00, avstånd=11296m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-5, opacitet=1.00, avstånd=11655m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-6, opacitet=1.00, avstånd=12010m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-1, opacitet=1.00, avstånd=2114m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-2, opacitet=1.00, avstånd=1293m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-3, opacitet=1.00, avstånd=2780m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-4, opacitet=1.00, avstånd=3307m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-5, opacitet=1.00, avstånd=3398m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-6, opacitet=1.00, avstånd=2533m, frustumVisible=false)
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=68.5° Camera yaw=101.4° cameraForward=(0.63, -0.77, 0.13)
+⚡️  [info] - [AR][v34] nearest=V5-2 dist=1293m ang=71.3° scr=(-4387,-7375) force=0 frust=0 vis=1 camFwdY=-0.77
+<<<< FigXPCUtilities >>>> signalled err=-17281 at <>:308
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:569) - (err=-17281)
+<<<< FigCaptureSessionRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSessionRemote.m:910) - (err=-12784)
+⚡️  TO JS undefined
+App became active. Restarting location monitoring for watch callbacks.
+⚡️  TO JS {"coords":{"magneticHeading":24.685508728027344,"longitude":16.24532981132144,"trueHeading":31.665187835693359,"latitude":58.987955315606811,"altitudeAccuracy":30.000046800546105,"heading":31.665187835693359,"headingAccuracy":20.998615264892578,"course":nu
+⚡️  TO JS {"coords":{"magneticHeading":24.685508728027344,"longitude":16.24532981132144,"trueHeading":31.665187835693359,"latitude":58.987955315606811,"altitudeAccuracy":30.000046800546105,"heading":31.665187835693359,"headingAccuracy":20.998615264892578,"course":nu
+⚡️  TO JS {"coords":{"magneticHeading":13.999615669250488,"longitude":16.24532975361625,"trueHeading":20.979293823242188,"latitude":58.987955387348926,"altitudeAccuracy":30,"heading":20.979293823242188,"headingAccuracy":20.817459106445312,"course":null,"speed":-1,"a
+⚡️  [log] - [Vindkollen] CameraPreview started
+⚡️  [log] - [AR] CameraPreview started: true
+⚡️  TO JS {"timestamp":1784542211434.095,"coords":{"magneticHeading":13.999615669250488,"longitude":16.245329753616303,"trueHeading":20.979293823242188,"latitude":58.987955387349338,"altitudeAccuracy":30.000045808384574,"heading":20.979293823242188,"headingAccuracy"
+⚡️  [info] - [AR][pipeline] Visible=true (ARScene canvas)
+⚡️  [info] - [AR][pipeline] Visible=true (GPS+kompass+kamera redo, AR-scenen visas)
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=26.0° Camera yaw=105.0° cameraForward=(0.95, -0.21, 0.25)
+⚡️  [info] - [AR][v34] nearest=V5-2 dist=1293m ang=46.6° scr=(-446,47) force=0 frust=0 vis=1 camFwdY=-0.21
+⚡️  TO JS {"coords":{"magneticHeading":69.390106201171875,"longitude":16.245326303146832,"trueHeading":76.369781494140625,"latitude":58.987960447130625,"altitudeAccuracy":94.163177490234375,"heading":76.369781494140625,"headingAccuracy":14.529129028320312,"course":n
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=26.2° Camera yaw=103.2° cameraForward=(0.95, -0.21, 0.22)
+⚡️  [info] - [AR][v34] nearest=V5-2 dist=1293m ang=45.3° scr=(-406,49) force=0 frust=0 vis=1 camFwdY=-0.21
+⚡️  TO JS {"timestamp":1784542216817.2185,"coords":{"magneticHeading":70.449455261230469,"longitude":16.245315734316122,"trueHeading":77.429130554199219,"latitude":58.987960682317535,"altitudeAccuracy":13.528166770935059,"heading":77.429130554199219,"headingAccuracy
+⚡️  TO JS {"timestamp":1784542217817.2124,"coords":{"magneticHeading":73.522171020507812,"longitude":16.245323656538798,"trueHeading":80.501846313476562,"latitude":58.987959445713535,"altitudeAccuracy":9.6524076461791992,"heading":80.501846313476562,"headingAccuracy
+⚡️  TO JS {"timestamp":1784542218816.8618,"coords":{"magneticHeading":74.548576354980469,"longitude":16.245333446661377,"trueHeading":81.528251647949219,"latitude":58.987958532712817,"altitudeAccuracy":8.0501747131347656,"heading":81.528251647949219,"headingAccuracy
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=28.9° Camera yaw=105.9° cameraForward=(0.94, -0.21, 0.27)
+⚡️  [info] - [AR][v34] nearest=V5-2 dist=1294m ang=47.5° scr=(-469,38) force=0 frust=0 vis=1 camFwdY=-0.21
+⚡️  TO JS {"coords":{"magneticHeading":75.558158874511719,"longitude":16.245335862650556,"trueHeading":82.537834167480469,"latitude":58.987960937555734,"altitudeAccuracy":6.9579191207885742,"heading":82.537834167480469,"headingAccuracy":14.475589752197266,"course":1
+⚡️  TO JS {"coords":{"magneticHeading":75.425209045410156,"longitude":16.245338431495334,"trueHeading":82.404884338378906,"latitude":58.987963103954542,"altitudeAccuracy":5.5530004501342773,"heading":82.404884338378906,"headingAccuracy":14.471064567565918,"course":1
+⚡️  TO JS {"coords":{"magneticHeading":69.877662658691406,"longitude":16.245330325750071,"trueHeading":76.857337951660156,"latitude":58.987973501739049,"altitudeAccuracy":4.1664981842041016,"heading":76.857337951660156,"headingAccuracy":14.465852737426758,"course":1
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=28.5° Camera yaw=105.6° cameraForward=(0.94, -0.21, 0.26)
+⚡️  [info] - [AR][v34] nearest=V5-2 dist=1293m ang=47.2° scr=(-461,40) force=0 frust=0 vis=1 camFwdY=-0.21
+⚡️  TO JS {"timestamp":1784542222997.1755,"coords":{"magneticHeading":72.991798400878906,"longitude":16.245332674489639,"trueHeading":79.971473693847656,"latitude":58.987978570217848,"altitudeAccuracy":3.5562386512756348,"heading":79.971473693847656,"headingAccuracy
+⚡️  TO JS {"timestamp":1784542223997.3164,"coords":{"magneticHeading":73.235549926757812,"longitude":16.245335297791708,"trueHeading":80.215225219726562,"latitude":58.987981822722361,"altitudeAccuracy":3.2168374061584473,"heading":80.215225219726562,"headingAccuracy
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=72.6° Camera yaw=71.9° cameraForward=(0.94, -0.15, -0.31)
+⚡️  [info] - [AR][v34] nearest=V5-2 dist=1293m ang=23.8° scr=(140,157) force=1 frust=1 vis=1 camFwdY=-0.15
+⚡️  TO JS {"timestamp":1784542224997.4707,"coords":{"magneticHeading":72.133674621582031,"longitude":16.245334781169351,"trueHeading":79.113349914550781,"latitude":58.987981537236827,"altitudeAccuracy":3,"heading":79.113349914550781,"headingAccuracy":17.072723388671
+⚡️  [error] - [Vindkollen] Browser.open failed: {"code":"UNIMPLEMENTED"}
+⚡️  [error] - [Vindkollen] Browser.open failed: {"code":"UNIMPLEMENTED"}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+⚡️  [error] - [Vindkollen] Browser.open failed: {"code":"UNIMPLEMENTED"}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+⚡️  TO JS {"timestamp":1784542225997.6035,"coords":{"accuracy":2,"magneticHeading":72.133674621582031,"altitude":65.383368908990562,"latitude":58.987981409077896,"altitudeAccuracy":3,"heading":79.113349914550781,"headingAccuracy":17.072723388671875,"course":195.6274
+⚡️  [error] - [Vindkollen] Browser.open failed: {"code":"UNIMPLEMENTED"}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+⚡️  [error] - [Vindkollen] Browser.open failed: {"code":"UNIMPLEMENTED"}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+⚡️  [error] - [Vindkollen] Browser.open failed: {"code":"UNIMPLEMENTED"}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+⚡️  TO JS {"timestamp":1784542226997.7241,"coords":{"accuracy":2,"magneticHeading":73.214927673339844,"altitude":64.976745155222446,"latitude":58.987981288160519,"altitudeAccuracy":3,"heading":80.194602966308594,"headingAccuracy":16.973102569580078,"course":195.6274
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=73.5° Camera yaw=69.1° cameraForward=(0.92, -0.16, -0.35)
+⚡️  [info] - [AR][v34] nearest=V5-2 dist=1292m ang=23.7° scr=(178,151) force=1 frust=1 vis=1 camFwdY=-0.16
+⚡️  TO JS {"timestamp":1784542227997.8604,"coords":{"accuracy":2,"magneticHeading":72.178886413574219,"altitude":64.976745241321623,"latitude":58.987980291657585,"altitudeAccuracy":6.0965845558873628,"heading":79.158561706542969,"headingAccuracy":16.930517196655273,
+⚡️  TO JS {"timestamp":1784542228997.9644,"coords":{"accuracy":2.0262250774389328,"magneticHeading":72.178886413574219,"altitude":64.753421210683882,"latitude":58.987979795198754,"altitudeAccuracy":6.1427109751797007,"heading":79.158561706542969,"headingAccuracy":16
+⚡️  TO JS {"timestamp":1784542229998.0669,"coords":{"accuracy":2.0152405321986189,"magneticHeading":74.223762512207031,"altitude":64.753421197645366,"latitude":58.987980424655802,"altitudeAccuracy":6.1656106282516241,"heading":81.203437805175781,"headingAccuracy":16
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=74.5° Camera yaw=68.8° cameraForward=(0.92, -0.16, -0.36)
+⚡️  [info] - [AR][v34] nearest=V5-2 dist=1292m ang=23.7° scr=(183,151) force=1 frust=1 vis=1 camFwdY=-0.16
+⚡️  TO JS {"timestamp":1784542230998.1726,"coords":{"accuracy":2.0185647404769336,"magneticHeading":74.223762512207031,"altitude":64.753421197645366,"latitude":58.987980424719282,"altitudeAccuracy":6.1033970562533382,"heading":81.203437805175781,"headingAccuracy":16
+⚡️  TO JS {"timestamp":1784542231998.251,"coords":{"magneticHeading":75.255226135253906,"longitude":16.245336481462818,"trueHeading":82.234901428222656,"latitude":58.987980424788226,"altitudeAccuracy":6.6387580759400553,"heading":82.234901428222656,"headingAccuracy"
+⚡️  TO JS {"timestamp":1784542232998.3293,"coords":{"magneticHeading":75.255226135253906,"longitude":16.245336520270751,"trueHeading":82.234901428222656,"latitude":58.98798042612804,"altitudeAccuracy":6.6069730638392539,"heading":82.234901428222656,"headingAccuracy"
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=70.8° Camera yaw=78.3° cameraForward=(0.96, -0.19, -0.20)
+⚡️  [info] - [AR][v34] nearest=V5-2 dist=1292m ang=27.7° scr=(47,124) force=0 frust=1 vis=1 camFwdY=-0.19
+⚡️  TO JS {"timestamp":1784542233998.4163,"coords":{"magneticHeading":71.649795532226562,"longitude":16.24533744982854,"trueHeading":78.629470825195312,"latitude":58.987980526273709,"altitudeAccuracy":5.7343431278398684,"heading":78.629470825195312,"headingAccuracy"
+⚡️  To Native ->  CameraPreview stop 104974573
+<<<< FigXPCUtilities >>>> signalled err=-17281 at <>:308
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:569) - (err=-17281)
+⚡️  TO JS undefined
+⚡️  To Native ->  Geolocation clearWatch 104974574
+⚡️  [log] - [PlaceTurbines] Hämtar nationella verk {"projectId":"10001","centerLat":58.919050503587165,"centerLng":16.273668103714375,"delta":0.3231098884280702,"preloadedCount":29}
+⚡️  TO JS undefined
+⚡️  [log] - [Vindkollen] CameraPreview stopped
+⚡️  [log] - [Vindkollen] Geolocation.clearWatch: 104974571
+WebContent[4352] xpc_user_sessions_get_foreground_uid() failed with error 1 - Operation not permitted
+⚡️  [log] - [PlaceTurbines] Verk hämtade {"projectId":"10001","allFromApi":154,"byProjectAreaId":0,"willOverride":false}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+SOAuthorizationCoordinator::tryAuthorize (2): Attempting to perform subframe navigation.
+unable to make sandbox extension: [1: Operation not permitted]
+Failed to open URL capacitor://localhost/samradsyttrande-forsvarsmakten.pdf: Error Domain=LSApplicationWorkspaceErrorDomain Code=115 "(null)" UserInfo={_LSFile=LSDOpenService.mm, _LSLine=282, _LSFunction=-[_LSDOpenClient openURL:fileHandle:options:completionHandler:]}
+⚡️  [info] - [NationalMap] Hämtar projekt {"native":true,"apiBase":"https://b9014749-0395-4a74-81ac-8deb3fc86054-00-1te953tm13n9f.riker.replit.dev","url":"https://b9014749-0395-4a74-81ac-8deb3fc86054-00-1te953tm13n9f.riker.replit.dev/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25","buildId":"f67aa79@2026-07-20 10:09","bundledCount":20}
+⚡️  [info] - [NationalMap] API fetch {"ms":"10","status":200,"url":"https://b9014749-0395-4a74-81ac-8deb3fc86054-00-1te953tm13n9f.riker.replit.dev/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25"}
+⚡️  [info] - [NationalMap] Live-data hämtad {"url":"https://b9014749-0395-4a74-81ac-8deb3fc86054-00-1te953tm13n9f.riker.replit.dev/api/wind/project-areas?minLat=55&maxLat=70&minLng=10&maxLng=25","rawCount":3587,"normalizedCount":3587,"validCoordsCount":3587,"native":true,"ms":"22"}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.817419411785337}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.817419411785337}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.817419411785337}
+⚡️  [info] - [NationalMap] GeoJSON features: 3587 ( 3587 proj)
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.8221495636977343}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":62.96367608668399,"centerLng":17.350000000000023,"zoom":3.8221495636977343}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":61.82143077301032,"centerLng":18.12518988590159,"zoom":5.710828598797353}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":61.53191784392274,"centerLng":18.052165895129974,"zoom":7.0247029460100405}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":61.53191784392274,"centerLng":18.052165895129974,"zoom":7.0247029460100405}
+⚡️  [log] - [NationalMap] sparad vy {"centerLat":61.53191784392274,"centerLng":18.052165895129974,"zoom":7.0247029460100405}
+⚡️  [info] - [NationalMap] Öppna projektet klickad {"id":3532,"name":"Gretas Klackar 2"}
+⚡️  [log] - [PlaceTurbines] Hämtar nationella verk {"projectId":"3532","centerLat":61.30726228138395,"centerLng":17.75810763864538,"delta":0.35496478698597694,"preloadedCount":35}
+⚡️  [log] - [PlaceTurbines] Verk hämtade {"projectId":"3532","allFromApi":5,"byProjectAreaId":0,"willOverride":false}
+⚡️  [info] - [AR][pipeline] Active project: "Vindkraftsprojekt" — 35 turbines (source: handoff, precise: true)
+⚡️  [log] - [AR] V30: auto-starting handleStart (simulated mode from PlaceTurbines)
+⚡️  [log] - [AR] Start button pressed
+⚡️  [log] - [AR] isNative: true | starting: false
+⚡️  [log] - [AR] hasOnboarded=true — hoppar över LoadingSequence
+⚡️  [log] - [AR] Native path: calling requestAllPermissionsSequentially
+⚡️  [log] - [AR] Requesting camera permission
+⚡️  To Native ->  Camera checkPermissions 104974575
+⚡️  TO JS {"camera":"granted","photos":"prompt"}
+⚡️  [log] - [Vindkollen] Camera.checkPermissions → granted
+⚡️  [log] - [AR] Camera permission result: granted
+⚡️  [log] - [AR] Waiting 350 ms between permission dialogs
+⚡️  [log] - [AR] Requesting location permission
+⚡️  To Native ->  Geolocation checkPermissions 104974576
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  [log] - [Vindkollen] Geolocation.checkPermissions → granted
+⚡️  [log] - [AR] Location permission result: granted
+⚡️  [log] - [AR] All permissions granted ✓
+⚡️  [log] - [AR] requestAllPermissionsSequentially result: camera= true location= true error= none
+⚡️  [log] - [AR] All permissions granted, waiting 400 ms before starting services
+⚡️  [log] - [AR] 400 ms elapsed, checking compass permission. needsPermission: false
+⚡️  [log] - [AR] Starting compass (startCalibrationTracking)
+⚡️  [log] - [AR] Navigating to AR scene (setStarted true)
+⚡️  [info] - [AR][pipeline] Visible=true (ARScene canvas)
+⚡️  [info] - [AR][pipeline] Renderer attached
+⚡️  [info] - [AR][pipeline] Loaded 35 turbines
+⚡️  [info] - [AR][pipeline] Creating turbine #0 (V1)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #0 (V1)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #0 (V1)
+⚡️  [info] - [AR][pipeline] Creating turbine #1 (V2)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #1 (V2)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #1 (V2)
+⚡️  [info] - [AR][pipeline] Creating turbine #2 (V3)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #2 (V3)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #2 (V3)
+⚡️  [info] - [AR][pipeline] Creating turbine #3 (V4)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #3 (V4)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #3 (V4)
+⚡️  [info] - [AR][pipeline] Creating turbine #4 (V5)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #4 (V5)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #4 (V5)
+⚡️  [info] - [AR][pipeline] Creating turbine #5 (V6)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #5 (V6)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #5 (V6)
+⚡️  [info] - [AR][pipeline] Creating turbine #6 (V7)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #6 (V7)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #6 (V7)
+⚡️  [info] - [AR][pipeline] Creating turbine #7 (V8)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #7 (V8)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #7 (V8)
+⚡️  [info] - [AR][pipeline] Creating turbine #8 (V9)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #8 (V9)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #8 (V9)
+⚡️  [info] - [AR][pipeline] Creating turbine #9 (V10)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #9 (V10)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #9 (V10)
+⚡️  [info] - [AR][pipeline] Creating turbine #10 (V11)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #10 (V11)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #10 (V11)
+⚡️  [info] - [AR][pipeline] Creating turbine #11 (V12)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #11 (V12)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #11 (V12)
+⚡️  [info] - [AR][pipeline] Creating turbine #12 (V13)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #12 (V13)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #12 (V13)
+⚡️  [info] - [AR][pipeline] Creating turbine #13 (V14)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #13 (V14)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #13 (V14)
+⚡️  [info] - [AR][pipeline] Creating turbine #14 (V15)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #14 (V15)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #14 (V15)
+⚡️  [info] - [AR][pipeline] Creating turbine #15 (V16)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #15 (V16)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #15 (V16)
+⚡️  [info] - [AR][pipeline] Creating turbine #16 (V17)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #16 (V17)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #16 (V17)
+⚡️  [info] - [AR][pipeline] Creating turbine #17 (V18)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #17 (V18)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #17 (V18)
+⚡️  [info] - [AR][pipeline] Creating turbine #18 (V19)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #18 (V19)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #18 (V19)
+⚡️  [info] - [AR][pipeline] Creating turbine #19 (V20)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #19 (V20)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #19 (V20)
+⚡️  [info] - [AR][pipeline] Creating turbine #20 (V21)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #20 (V21)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #20 (V21)
+⚡️  [info] - [AR][pipeline] Creating turbine #21 (V22)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #21 (V22)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #21 (V22)
+⚡️  [info] - [AR][pipeline] Creating turbine #22 (V23)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #22 (V23)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #22 (V23)
+⚡️  [info] - [AR][pipeline] Creating turbine #23 (V24)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #23 (V24)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #23 (V24)
+⚡️  [info] - [AR][pipeline] Creating turbine #24 (V25)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #24 (V25)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #24 (V25)
+⚡️  [info] - [AR][pipeline] Creating turbine #25 (V26)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #25 (V26)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #25 (V26)
+⚡️  [info] - [AR][pipeline] Creating turbine #26 (V27)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #26 (V27)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #26 (V27)
+⚡️  [info] - [AR][pipeline] Creating turbine #27 (V28)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #27 (V28)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #27 (V28)
+⚡️  [info] - [AR][pipeline] Creating turbine #28 (V29)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #28 (V29)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #28 (V29)
+⚡️  [info] - [AR][pipeline] Creating turbine #29 (V30)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #29 (V30)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #29 (V30)
+⚡️  [info] - [AR][pipeline] Creating turbine #30 (V31)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #30 (V31)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #30 (V31)
+⚡️  [info] - [AR][pipeline] Creating turbine #31 (V32)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #31 (V32)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #31 (V32)
+⚡️  [info] - [AR][pipeline] Creating turbine #32 (V33)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #32 (V33)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #32 (V33)
+⚡️  [info] - [AR][pipeline] Creating turbine #33 (V34)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #33 (V34)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #33 (V34)
+⚡️  [info] - [AR][pipeline] Creating turbine #34 (V35)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #34 (V35)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #34 (V35)
+⚡️  [info] - [AR] Modell placerad (V1, avstånd=180m, bäring=347.2°, world=(-64.7, -0.3, -283.8), skala=1.841)
+⚡️  [info] - [AR] Modell placerad (V2, avstånd=271m, bäring=197.9°, world=(-126.3, -0.5, 389.9), skala=1.778)
+⚡️  [info] - [AR] Modell placerad (V3, avstånd=468m, bäring=122.6°, world=(384.3, -0.5, 245.8), skala=1.207)
+⚡️  [info] - [AR] Modell placerad (V4, avstånd=637m, bäring=241.0°, world=(-416.8, -0.5, 230.8), skala=0.961)
+⚡️  [info] - [AR] Modell placerad (V5, avstånd=553m, bäring=59.0°, world=(399.7, -0.5, -240.1), skala=1.064)
+⚡️  [info] - [AR] Modell placerad (V6, avstånd=616m, bäring=295.6°, world=(-427.3, -0.5, -205.0), skala=0.984)
+⚡️  [info] - [AR] Modell placerad (V7, avstånd=730m, bäring=358.5°, world=(-12.8, -0.6, -487.4), skala=0.875)
+⚡️  [info] - [AR] Modell placerad (V8, avstånd=803m, bäring=182.2°, world=(-19.5, -0.6, 496.0), skala=0.822)
+⚡️  [info] - [AR] Modell placerad (V9, avstånd=847m, bäring=320.4°, world=(-319.6, -0.6, -386.6), skala=0.795)
+⚡️  [info] - [AR] Modell placerad (V10, avstånd=814m, bäring=32.8°, world=(269.8, -0.6, -418.2), skala=0.814)
+⚡️  [info] - [AR] Modell placerad (V11, avstånd=870m, bäring=150.4°, world=(248.9, -0.6, 438.7), skala=0.781)
+⚡️  [info] - [AR] Modell placerad (V12, avstånd=931m, bäring=220.1°, world=(-329.6, -0.6, 391.5), skala=0.750)
+⚡️  [info] - [AR] Modell placerad (V13, avstånd=1052m, bäring=283.2°, world=(-512.4, -0.6, -119.9), skala=0.699)
+⚡️  [info] - [AR] Modell placerad (V14, avstånd=1054m, bäring=102.5°, world=(514.1, -0.6, 113.6), skala=0.698)
+⚡️  [info] - [AR] Modell placerad (V15, avstånd=1053m, bäring=77.6°, world=(514.1, -0.6, -113.1), skala=0.698)
+⚡️  [info] - [AR] Modell placerad (V16, avstånd=1185m, bäring=127.7°, world=(428.8, -0.6, 331.8), skala=0.656)
+⚡️  [info] - [AR] Modell placerad (V17, avstånd=1198m, bäring=355.6°, world=(-41.9, -0.6, -542.1), skala=0.652)
+⚡️  [info] - [AR] Modell placerad (V18, avstånd=1263m, bäring=183.0°, world=(-28.4, -0.6, 550.9), skala=0.635)
+⚡️  [info] - [AR] Modell placerad (V19, avstånd=1188m, bäring=55.7°, world=(448.0, -0.6, -306.1), skala=0.655)
+⚡️  [info] - [AR] Modell placerad (V20, avstånd=1294m, bäring=301.5°, world=(-473.2, -0.6, -290.5), skala=0.628)
+⚡️  [info] - [AR] Modell placerad (V21, avstånd=1327m, bäring=202.7°, world=(-215.9, -0.6, 515.9), skala=0.620)
+⚡️  [info] - [AR] Modell placerad (V22, avstånd=1297m, bäring=23.5°, world=(221.5, -0.6, -509.6), skala=0.627)
+⚡️  [info] - [AR] Modell placerad (V23, avstånd=1360m, bäring=160.5°, world=(187.8, -0.6, 531.0), skala=0.613)
+⚡️  [info] - [AR] Modell placerad (V24, avstånd=1369m, bäring=339.9°, world=(-194.1, -0.6, -529.8), skala=0.611)
+⚡️  [info] - [AR] Modell placerad (V25, avstånd=1515m, bäring=320.5°, world=(-370.0, -0.6, -448.9), skala=0.585)
+⚡️  [info] - [AR] Modell placerad (V26, avstånd=1483m, bäring=83.3°, world=(574.1, -0.6, -67.2), skala=0.590)
+⚡️  [info] - [AR] Modell placerad (V27, avstånd=1546m, bäring=101.3°, world=(574.3, -0.6, 114.3), skala=0.580)
+⚡️  [info] - [AR] Modell placerad (V28, avstånd=1576m, bäring=139.8°, world=(380.0, -0.6, 450.2), skala=0.575)
+⚡️  [info] - [AR] Modell placerad (V29, avstånd=1618m, bäring=293.8°, world=(-543.7, -0.6, -239.5), skala=0.569)
+⚡️  [info] - [AR] Modell placerad (V30, avstånd=1553m, bäring=39.6°, world=(374.1, -0.6, -451.5), skala=0.579)
+⚡️  [info] - [AR] Modell placerad (V31, avstånd=1608m, bäring=63.8°, world=(532.2, -0.6, -261.3), skala=0.571)
+⚡️  [info] - [AR] Modell placerad (V32, avstånd=1685m, bäring=119.8°, world=(522.7, -0.6, 299.0), skala=0.561)
+⚡️  [info] - [AR] Modell placerad (V33, avstånd=1906m, bäring=307.3°, world=(-500.0, -0.5, -381.1), skala=0.537)
+⚡️  [info] - [AR] Modell placerad (V34, avstånd=1920m, bäring=132.0°, world=(468.4, -0.5, 421.9), skala=0.536)
+⚡️  [info] - [AR] Modell placerad (V35, avstånd=1902m, bäring=49.6°, world=(478.6, -0.5, -407.0), skala=0.538)
+⚡️  [info] - [AR][pipeline] startAR(): render-loop initierad, väntar på första renderFrame()
+⚡️  [log] - [AR] useGeolocation: alreadyGranted = true
+⚡️  [log] - [AR] useGeolocation: location permission = true
+⚡️  [log] - [AR] Starting geolocation (watchNativePosition)
+⚡️  [log] - [AR] useCameraStream: alreadyGranted = true
+⚡️  [log] - [AR] useCameraStream: camera permission = true
+⚡️  [log] - [AR] Starting CameraPreview
+⚡️  [info] - [AR][pipeline] Visible=true (GPS+kompass+kamera redo, AR-scenen visas)
+⚡️  To Native ->  Geolocation watchPosition 104974577
+⚡️  [warn] - [AR][safety] No turbines actually visible for 0ms — force-showing 3 nearest turbines
+⚡️  To Native ->  CameraPreview start 104974578
+⚡️  [log] - [Vindkollen] Geolocation.watchPosition started, watchId: 104974577
+⚡️  [info] - [AR][pipeline] Sensorfusion aktiv (gyroskop + kompass)
+⚡️  [info] - [AR][pipeline] Första renderFrame() kördes
+<<<< FigXPCUtilities >>>> signalled err=-17281 at <>:308
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:569) - (err=-17281)
+<<<< FigXPCUtilities >>>> signalled err=-17281 at <>:308
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:569) - (err=-17281)
+<<<< FigXPCUtilities >>>> signalled err=-17281 at <>:308
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:569) - (err=-17281)
+⚡️  TO JS {"coords":{"magneticHeading":71.649795532226562,"latitude":58.987996448271204,"altitude":62.883979067427092,"heading":78.629470825195312,"course":321.13541401784005,"trueHeading":78.629470825195312,"altitudeAccuracy":9.1256799697875977,"longitude":16.24533
+<<<< FigXPCUtilities >>>> signalled err=-17281 at <>:308
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:569) - (err=-17281)
+<<<< FigXPCUtilities >>>> signalled err=-17281 at <>:308
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:569) - (err=-17281)
+<<<< FigXPCUtilities >>>> signalled err=-17281 at <>:308
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:569) - (err=-17281)
+<<<< FigXPCUtilities >>>> signalled err=-17281 at <>:308
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:569) - (err=-17281)
+⚡️  [info] - [AR] GPS position mottagen (lat=58.98800, lon=16.24534)
+⚡️  [info] - [AR][pipeline] GPS OK (lat=58.98800, lon=16.24534, accuracy=2.674131614286501m)
+⚡️  [info] - [AR][pipeline] Compass OK (första kompassavläsning mottagen)
+⚡️  [info] - [AR] Modell synlig (V1, opacitet=1.00, avstånd=180m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2, opacitet=1.00, avstånd=271m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V3, opacitet=1.00, avstånd=468m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4, opacitet=1.00, avstånd=637m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5, opacitet=1.00, avstånd=553m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V6, opacitet=1.00, avstånd=616m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V7, opacitet=1.00, avstånd=730m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V8, opacitet=1.00, avstånd=803m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V9, opacitet=1.00, avstånd=847m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V10, opacitet=1.00, avstånd=814m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V11, opacitet=1.00, avstånd=870m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V12, opacitet=1.00, avstånd=931m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V13, opacitet=1.00, avstånd=1052m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V14, opacitet=1.00, avstånd=1054m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V15, opacitet=1.00, avstånd=1053m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V16, opacitet=1.00, avstånd=1185m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V17, opacitet=1.00, avstånd=1198m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V18, opacitet=1.00, avstånd=1263m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V19, opacitet=1.00, avstånd=1188m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V20, opacitet=1.00, avstånd=1294m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V21, opacitet=1.00, avstånd=1327m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V22, opacitet=1.00, avstånd=1297m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V23, opacitet=1.00, avstånd=1360m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V24, opacitet=1.00, avstånd=1369m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V25, opacitet=1.00, avstånd=1515m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V26, opacitet=1.00, avstånd=1483m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V27, opacitet=1.00, avstånd=1546m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V28, opacitet=1.00, avstånd=1576m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V29, opacitet=1.00, avstånd=1618m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V30, opacitet=1.00, avstånd=1553m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V31, opacitet=1.00, avstånd=1608m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V32, opacitet=1.00, avstånd=1685m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V33, opacitet=1.00, avstånd=1906m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V34, opacitet=1.00, avstånd=1920m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V35, opacitet=1.00, avstånd=1902m, frustumVisible=false)
+⚡️  [info] - [AR][diagnostik] 35/35 verk synliga denna bildruta. Heading=0.0° Camera yaw=23.8° cameraForward=(0.28, -0.73, -0.63)
+⚡️  [info] - [AR][v34] nearest=V1 dist=180m ang=?° scr=(?,?) force=1 frust=0 vis=1 camFwdY=-0.73
+⚡️  TO JS {"timestamp":1784542279988.574,"coords":{"altitudeAccuracy":9.7633848079150152,"accuracy":2.8950139999999998,"altitude":62.88400623570093,"trueHeading":70.489089965820312,"headingAccuracy":27.537107467651367,"speed":1.2717075739084357e-07,"latitude":58.987
+⚡️  TO JS {"timestamp":1784542279989.1938,"coords":{"magneticHeading":63.509414672851562,"latitude":58.987996234217185,"altitude":64.992388159536546,"heading":70.489089965820312,"course":null,"trueHeading":70.489089965820312,"altitudeAccuracy":30,"longitude":16.2453
+⚡️  TO JS {"timestamp":1784542280013.791,"coords":{"altitudeAccuracy":30.000014637115758,"accuracy":2.7394611829971955,"altitude":64.988485724233811,"trueHeading":70.489089965820312,"headingAccuracy":27.537107467651367,"speed":-1,"latitude":58.987996242073855,"cours
+<<<< FigXPCUtilities >>>> signalled err=-17281 at <>:308
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:569) - (err=-17281)
+<<<< FigCaptureSessionRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSessionRemote.m:910) - (err=-12784)
+⚡️  TO JS undefined
+⚡️  [log] - [Vindkollen] CameraPreview started
+⚡️  [log] - [AR] CameraPreview started: true
+⚡️  [info] - [AR][diagnostik] 35/35 verk synliga denna bildruta. Heading=49.8° Camera yaw=352.2° cameraForward=(-0.14, -0.03, -0.99)
+⚡️  [info] - [AR][v34] nearest=V1 dist=180m ang=56.8° scr=(151,-668) force=1 frust=1 vis=1 camFwdY=-0.03
+⚡️  TO JS {"timestamp":1784542283320.6401,"coords":{"longitude":16.245337418523789,"altitudeAccuracy":96.563217163085938,"headingAccuracy":14.995517730712891,"accuracy":2.7338575846602997,"altitude":64.67407586722247,"trueHeading":59.129646301269531,"speed":1.219024
+⚡️  TO JS {"timestamp":1784542284320.6382,"coords":{"magneticHeading":41.200721740722656,"latitude":58.987994048831922,"altitude":66.227594733865885,"heading":48.180400848388672,"course":null,"trueHeading":48.180400848388672,"altitudeAccuracy":14.526366233825684,"lo
+⚡️  TO JS {"timestamp":1784542285320.6362,"coords":{"longitude":16.24534056194446,"altitudeAccuracy":10.339008331298828,"headingAccuracy":13.658115386962891,"accuracy":2.9091172151140499,"altitude":65.333890148433653,"trueHeading":57.507938385009766,"speed":1.219024
+⚡️  [info] - [AR][diagnostik] 35/35 verk synliga denna bildruta. Heading=63.7° Camera yaw=2.4° cameraForward=(0.04, -0.31, -0.95)
+⚡️  [info] - [AR][v34] nearest=V1 dist=180m ang=74.1° scr=(-196,-2132) force=1 frust=1 vis=1 camFwdY=-0.31
+⚡️  TO JS {"timestamp":1784542286320.6331,"coords":{"magneticHeading":53.875457763671875,"latitude":58.98799218202101,"altitude":64.18413301287751,"heading":60.855136871337891,"course":null,"trueHeading":60.855136871337891,"altitudeAccuracy":8.3098287582397461,"long
+⚡️  TO JS {"timestamp":1784542287321.2444,"coords":{"longitude":16.245340614705459,"headingAccuracy":12.882593154907227,"altitudeAccuracy":7.1311259269714355,"accuracy":2.8157451525760675,"altitude":62.85630069543997,"speed":0.9869341254234314,"course":228.003872231
+⚡️  TO JS {"timestamp":1784542288321.241,"coords":{"magneticHeading":48.534194946289062,"latitude":58.987989425316783,"altitude":62.106620737200288,"heading":55.513874053955078,"course":209.96942708686845,"trueHeading":55.513874053955078,"altitudeAccuracy":6.3554935
+⚡️  [info] - [AR][diagnostik] 35/35 verk synliga denna bildruta. Heading=49.0° Camera yaw=347.5° cameraForward=(-0.21, -0.29, -0.93)
+⚡️  [info] - [AR][v34] nearest=V1 dist=180m ang=71.6° scr=(212,-1781) force=1 frust=1 vis=1 camFwdY=-0.29
+⚡️  TO JS {"timestamp":1784542289321.238,"coords":{"longitude":16.245338330081502,"headingAccuracy":12.838481903076172,"altitudeAccuracy":5.6183762550354004,"accuracy":2.6336260668779303,"altitude":62.44244971831273,"speed":0.9869341254234314,"course":209.4577639557
+⚡️  [info] - [useGeolocation] overrideCleared → resetTrigger++
+⚡️  [log] - [AR] useGeolocation: alreadyGranted = true
+⚡️  [log] - [AR] useGeolocation: location permission = true
+⚡️  To Native ->  Geolocation clearWatch 104974579
+⚡️  [log] - [AR] Starting geolocation (watchNativePosition)
+⚡️  To Native ->  Geolocation watchPosition 104974580
+⚡️  TO JS undefined
+⚡️  [log] - [Vindkollen] Geolocation.watchPosition started, watchId: 104974580
+⚡️  [log] - [Vindkollen] Geolocation.clearWatch: 104974577
+⚡️  TO JS {"coords":{"magneticHeading":47.501522064208984,"latitude":58.987987605698152,"altitude":62.44244971831273,"heading":54.481201171875,"course":209.45776395576445,"trueHeading":54.481201171875,"altitudeAccuracy":5.6183762550354004,"longitude":16.245338330081
+⚡️  TO JS {"coords":{"longitude":16.245337303628872,"altitudeAccuracy":30,"headingAccuracy":12.839582443237305,"accuracy":2.6123470031677622,"altitude":64.992388159536546,"trueHeading":54.873008728027344,"speed":0.9869341254234314,"heading":54.873008728027344,"magne
+⚡️  [info] - [AR][diagnostik] 35/35 verk synliga denna bildruta. Heading=40.6° Camera yaw=342.3° cameraForward=(-0.30, -0.08, -0.95)
+⚡️  [info] - [AR][v34] nearest=V1 dist=180m ang=59.8° scr=(293,-808) force=0 frust=1 vis=1 camFwdY=-0.08
+⚡️  TO JS {"coords":{"magneticHeading":46.4896240234375,"latitude":58.987921369350836,"altitude":58.104632299150268,"heading":53.469303131103516,"course":null,"trueHeading":53.469303131103516,"altitudeAccuracy":49.974102020263672,"longitude":16.245326434997683,"head
+⚡️  [info] - [AR][diagnostik] 35/35 verk synliga denna bildruta. Heading=46.2° Camera yaw=347.5° cameraForward=(-0.21, -0.17, -0.96)
+⚡️  [info] - [AR][v34] nearest=V1 dist=180m ang=64.4° scr=(214,-1088) force=0 frust=1 vis=1 camFwdY=-0.17
+⚡️  TO JS {"coords":{"longitude":16.24532264711031,"altitudeAccuracy":13.980128288269043,"headingAccuracy":13.54157829284668,"accuracy":16.859468689884036,"altitude":64.579826029188737,"trueHeading":53.469303131103516,"speed":0.61765760183334351,"heading":53.4693031
+⚡️  TO JS {"coords":{"magneticHeading":48.546585083007812,"latitude":58.987961640010177,"altitude":64.277013483886094,"heading":55.526264190673828,"course":null,"trueHeading":55.526264190673828,"altitudeAccuracy":9.5436286926269531,"longitude":16.245322922161893,"he
+⚡️  [info] - [useGeolocation] overrideCleared → resetTrigger++
+⚡️  [info] - [AR][pipeline] Renderer attached
+⚡️  [info] - [AR][pipeline] Loaded 0 turbines
+⚡️  [info] - [AR][pipeline] startAR(): render-loop initierad, väntar på första renderFrame()
+⚡️  [info] - [AR][pipeline] Project state: loading
+⚡️  [log] - [AR] useGeolocation: alreadyGranted = true
+⚡️  [log] - [AR] useGeolocation: location permission = true
+⚡️  [log] - [AR] Starting geolocation (watchNativePosition)
+⚡️  To Native ->  Geolocation clearWatch 104974581
+⚡️  [info] - [AR][pipeline] GPS-automatval: "Ericsbergs planer" (Katrineholm), 29 verk, precise=true
+⚡️  To Native ->  Geolocation watchPosition 104974582
+⚡️  TO JS undefined
+⚡️  [log] - [Vindkollen] Geolocation.watchPosition started, watchId: 104974582
+⚡️  [info] - [AR][pipeline] Renderer attached
+⚡️  [info] - [AR][pipeline] Loaded 29 turbines
+⚡️  [info] - [AR][pipeline] Creating turbine #0 (V1-1)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #0 (V1-1)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #0 (V1-1)
+⚡️  [info] - [AR][pipeline] Creating turbine #1 (V1-2)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #1 (V1-2)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #1 (V1-2)
+⚡️  [info] - [AR][pipeline] Creating turbine #2 (V1-3)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #2 (V1-3)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #2 (V1-3)
+⚡️  [info] - [AR][pipeline] Creating turbine #3 (V1-4)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #3 (V1-4)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #3 (V1-4)
+⚡️  [info] - [AR][pipeline] Creating turbine #4 (V1-5)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #4 (V1-5)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #4 (V1-5)
+⚡️  [info] - [AR][pipeline] Creating turbine #5 (V1-6)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #5 (V1-6)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #5 (V1-6)
+⚡️  [info] - [AR][pipeline] Creating turbine #6 (V1-7)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #6 (V1-7)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #6 (V1-7)
+⚡️  [info] - [AR][pipeline] Creating turbine #7 (V2-1)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #7 (V2-1)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #7 (V2-1)
+⚡️  [info] - [AR][pipeline] Creating turbine #8 (V2-2)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #8 (V2-2)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #8 (V2-2)
+⚡️  [info] - [AR][pipeline] Creating turbine #9 (V2-3)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #9 (V2-3)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #9 (V2-3)
+⚡️  [info] - [AR][pipeline] Creating turbine #10 (V2-4)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #10 (V2-4)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #10 (V2-4)
+⚡️  [info] - [AR][pipeline] Creating turbine #11 (V2-5)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #11 (V2-5)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #11 (V2-5)
+⚡️  [info] - [AR][pipeline] Creating turbine #12 (V2-6)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #12 (V2-6)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #12 (V2-6)
+⚡️  [info] - [AR][pipeline] Creating turbine #13 (V3-1)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #13 (V3-1)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #13 (V3-1)
+⚡️  [info] - [AR][pipeline] Creating turbine #14 (V3-2)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #14 (V3-2)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #14 (V3-2)
+⚡️  [info] - [AR][pipeline] Creating turbine #15 (V3-3)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #15 (V3-3)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #15 (V3-3)
+⚡️  [info] - [AR][pipeline] Creating turbine #16 (V3-4)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #16 (V3-4)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #16 (V3-4)
+⚡️  [info] - [AR][pipeline] Creating turbine #17 (V4-1)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #17 (V4-1)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #17 (V4-1)
+⚡️  [info] - [AR][pipeline] Creating turbine #18 (V4-2)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #18 (V4-2)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #18 (V4-2)
+⚡️  [info] - [AR][pipeline] Creating turbine #19 (V4-3)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #19 (V4-3)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #19 (V4-3)
+⚡️  [info] - [AR][pipeline] Creating turbine #20 (V4-4)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #20 (V4-4)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #20 (V4-4)
+⚡️  [info] - [AR][pipeline] Creating turbine #21 (V4-5)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #21 (V4-5)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #21 (V4-5)
+⚡️  [info] - [AR][pipeline] Creating turbine #22 (V4-6)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #22 (V4-6)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #22 (V4-6)
+⚡️  [info] - [AR][pipeline] Creating turbine #23 (V5-1)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #23 (V5-1)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #23 (V5-1)
+⚡️  [info] - [AR][pipeline] Creating turbine #24 (V5-2)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #24 (V5-2)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #24 (V5-2)
+⚡️  [info] - [AR][pipeline] Creating turbine #25 (V5-3)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #25 (V5-3)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #25 (V5-3)
+⚡️  [info] - [AR][pipeline] Creating turbine #26 (V5-4)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #26 (V5-4)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #26 (V5-4)
+⚡️  [info] - [AR][pipeline] Creating turbine #27 (V5-5)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #27 (V5-5)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #27 (V5-5)
+⚡️  [info] - [AR][pipeline] Creating turbine #28 (V5-6)
+⚡️  [info] - [AR][pipeline] Anchor created for turbine #28 (V5-6)
+⚡️  [info] - [AR][pipeline] Model loaded for turbine #28 (V5-6)
+⚡️  [info] - [AR] Modell placerad (V1-1, avstånd=278098m, bäring=198.0°, world=(-456.5, -0.0, 1407.8), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V1-2, avstånd=278361m, bäring=197.8°, world=(-452.9, -0.0, 1409.0), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V1-3, avstånd=278735m, bäring=198.1°, world=(-458.8, -0.0, 1407.1), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V1-4, avstånd=278692m, bäring=197.7°, world=(-449.5, -0.0, 1410.1), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V1-5, avstånd=278676m, bäring=197.5°, world=(-445.6, -0.0, 1411.3), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V1-6, avstånd=279392m, bäring=197.6°, world=(-447.9, -0.0, 1410.6), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V1-7, avstånd=280009m, bäring=197.5°, world=(-445.7, -0.0, 1411.3), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V2-1, avstånd=281646m, bäring=198.2°, world=(-463.4, 0.0, 1405.6), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V2-2, avstånd=282156m, bäring=198.1°, world=(-460.8, -0.1, 1406.4), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V2-3, avstånd=282809m, bäring=198.0°, world=(-457.7, -0.1, 1407.4), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V2-4, avstånd=283740m, bäring=197.9°, world=(-455.6, -0.0, 1408.1), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V2-5, avstånd=284053m, bäring=198.1°, world=(-459.3, -0.0, 1406.9), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V2-6, avstånd=284493m, bäring=198.0°, world=(-456.3, -0.0, 1407.9), skala=0.018)
+⚡️  [info] - [AR] Modell placerad (V3-1, avstånd=277473m, bäring=198.4°, world=(-466.0, -0.1, 1404.7), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V3-2, avstånd=278479m, bäring=198.6°, world=(-472.1, -0.1, 1402.7), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V3-3, avstånd=278268m, bäring=198.4°, world=(-467.4, -0.1, 1404.2), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V3-4, avstånd=279023m, bäring=198.5°, world=(-469.6, -0.0, 1403.5), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V4-1, avstånd=277647m, bäring=197.2°, world=(-436.6, -0.0, 1414.1), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V4-2, avstånd=278362m, bäring=197.1°, world=(-435.6, -0.0, 1414.4), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V4-3, avstånd=279095m, bäring=197.1°, world=(-435.0, -0.1, 1414.6), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V4-4, avstånd=279976m, bäring=197.2°, world=(-437.1, -0.1, 1414.0), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V4-5, avstånd=279797m, bäring=197.0°, world=(-433.2, -0.1, 1415.2), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V4-6, avstånd=280647m, bäring=197.1°, world=(-435.6, -0.1, 1414.4), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V5-1, avstånd=269933m, bäring=198.3°, world=(-464.4, -0.0, 1405.3), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V5-2, avstånd=270316m, bäring=198.4°, world=(-468.3, -0.0, 1404.0), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V5-3, avstånd=269991m, bäring=198.1°, world=(-460.2, -0.0, 1406.6), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V5-4, avstånd=270308m, bäring=198.0°, world=(-456.7, -0.0, 1407.8), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V5-5, avstånd=271089m, bäring=197.9°, world=(-455.7, -0.0, 1408.1), skala=0.019)
+⚡️  [info] - [AR] Modell placerad (V5-6, avstånd=271673m, bäring=198.1°, world=(-460.5, 0.0, 1406.5), skala=0.019)
+⚡️  [info] - [AR][pipeline] startAR(): render-loop initierad, väntar på första renderFrame()
+⚡️  [info] - [AR][pipeline] Active project: "Ericsbergs planer" — 29 turbines (source: gps, precise: true)
+⚡️  [log] - [Vindkollen] Geolocation.clearWatch: 104974580
+⚡️  TO JS {"coords":{"longitude":16.245322922161893,"altitudeAccuracy":9.5436286926269531,"headingAccuracy":13.540652275085449,"accuracy":12.607953780366026,"altitude":64.277013483886094,"trueHeading":55.526264190673828,"speed":0.48994755744934082,"heading":55.52626
+⚡️  [info] - [AR] Modell synlig (V1-1, opacitet=1.00, avstånd=278098m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-2, opacitet=1.00, avstånd=278361m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-3, opacitet=1.00, avstånd=278735m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-4, opacitet=1.00, avstånd=278692m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-5, opacitet=1.00, avstånd=278676m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-6, opacitet=1.00, avstånd=279392m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V1-7, opacitet=1.00, avstånd=280009m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-1, opacitet=1.00, avstånd=281646m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-2, opacitet=1.00, avstånd=282156m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-3, opacitet=1.00, avstånd=282809m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-4, opacitet=1.00, avstånd=283740m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-5, opacitet=1.00, avstånd=284053m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V2-6, opacitet=1.00, avstånd=284493m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V3-1, opacitet=1.00, avstånd=277473m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V3-2, opacitet=1.00, avstånd=278479m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V3-3, opacitet=1.00, avstånd=278268m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V3-4, opacitet=1.00, avstånd=279023m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-1, opacitet=1.00, avstånd=277647m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-2, opacitet=1.00, avstånd=278362m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-3, opacitet=1.00, avstånd=279095m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-4, opacitet=1.00, avstånd=279976m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-5, opacitet=1.00, avstånd=279797m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V4-6, opacitet=1.00, avstånd=280647m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-1, opacitet=1.00, avstånd=269933m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-2, opacitet=1.00, avstånd=270316m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-3, opacitet=1.00, avstånd=269991m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-4, opacitet=1.00, avstånd=270308m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-5, opacitet=1.00, avstånd=271089m, frustumVisible=false)
+⚡️  [info] - [AR] Modell synlig (V5-6, opacitet=1.00, avstånd=271673m, frustumVisible=false)
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=49.0° Camera yaw=350.3° cameraForward=(-0.17, -0.16, -0.97)
+⚡️  [info] - [AR][v34] nearest=V5-1 dist=269933m ang=?° scr=(?,?) force=0 frust=0 vis=1 camFwdY=-0.16
+⚡️  TO JS {"timestamp":1784542297128.1599,"coords":{"magneticHeading":48.546585083007812,"latitude":58.987961640010177,"altitude":64.277013483886094,"heading":55.526264190673828,"course":null,"trueHeading":55.526264190673828,"altitudeAccuracy":9.5436286926269531,"lo
+⚡️  TO JS {"timestamp":1784542297128.5159,"coords":{"longitude":16.245321181619826,"altitudeAccuracy":30,"headingAccuracy":13.534321784973145,"accuracy":10.653175129507485,"altitude":64.692664794921882,"trueHeading":56.388332366943359,"speed":0.48994755744934082,"he
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=51.4° Camera yaw=357.6° cameraForward=(-0.04, 0.06, -1.00)
+⚡️  [info] - [AR][v34] nearest=V5-1 dist=269933m ang=?° scr=(?,?) force=0 frust=0 vis=1 camFwdY=0.06
+⚡️  TO JS {"coords":{"magneticHeading":8.170074462890625,"latitude":58.987997470758934,"altitude":69.271087353547685,"heading":15.149752616882324,"course":null,"trueHeading":15.149752616882324,"altitudeAccuracy":36.800357818603516,"longitude":16.245342158845645,"hea
+⚡️  TO JS {"coords":{"longitude":16.245372950781832,"altitudeAccuracy":13.055403709411621,"headingAccuracy":13.15143871307373,"accuracy":20.315182361787926,"altitude":65.738186715276271,"trueHeading":49.995990753173828,"speed":1.9559301137924194,"heading":49.9959907
+⚡️  TO JS {"coords":{"magneticHeading":105.76042938232422,"latitude":58.987991792991672,"altitude":66.102184984753492,"heading":112.74010467529297,"course":null,"trueHeading":112.74010467529297,"altitudeAccuracy":9.723912239074707,"longitude":16.245373511582404,"hea
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=88.6° Camera yaw=40.2° cameraForward=(0.64, -0.08, -0.76)
+⚡️  [info] - [AR][v34] nearest=V5-1 dist=269933m ang=?° scr=(?,?) force=0 frust=0 vis=1 camFwdY=-0.08
+⚡️  TO JS {"timestamp":1784542303732.1753,"coords":{"longitude":16.245330845992086,"altitudeAccuracy":8.0291814804077148,"headingAccuracy":12.497014045715332,"accuracy":13.988381137373986,"altitude":66.441700960116592,"trueHeading":69.401718139648438,"speed":1.41045
+⚡️  TO JS {"timestamp":1784542304732.1707,"coords":{"magneticHeading":75.359550476074219,"latitude":58.987978135154123,"altitude":66.856454563494069,"heading":82.339225769042969,"course":14.051421184160732,"trueHeading":82.339225769042969,"altitudeAccuracy":7.110309
+⚡️  TO JS {"timestamp":1784542305732.1658,"coords":{"longitude":16.245321410441615,"altitudeAccuracy":6.4197683334350586,"headingAccuracy":17.769279479980469,"accuracy":13.793168246620912,"altitude":66.595733891361874,"trueHeading":66.126289367675781,"speed":0.79759
+⚡️  [info] - [AR][diagnostik] 29/29 verk synliga denna bildruta. Heading=60.7° Camera yaw=6.2° cameraForward=(0.11, -0.21, -0.97)
+⚡️  [info] - [AR][v34] nearest=V5-1 dist=269933m ang=?° scr=(?,?) force=0 frust=0 vis=1 camFwdY=-0.21
+⚡️  TO JS {"coords":{"magneticHeading":63.845352172851562,"latitude":58.987968394235757,"altitude":65.987883177857938,"heading":70.825027465820312,"course":358.0109223278219,"trueHeading":70.825027465820312,"altitudeAccuracy":6.0008783340454102,"longitude":16.245313
+⚡️  To Native ->  CameraPreview stop 104974583
+<<<< FigXPCUtilities >>>> signalled err=-17281 at <>:308
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:569) - (err=-17281)
+⚡️  TO JS undefined
+⚡️  To Native ->  Geolocation clearWatch 104974584
+⚡️  [log] - [PlaceTurbines] Hämtar nationella verk {"projectId":"10001","centerLat":58.919050503587165,"centerLng":16.273668103714375,"delta":0.3231098884280702,"preloadedCount":29}
+⚡️  TO JS undefined
+⚡️  [log] - [PlaceTurbines] Verk hämtade {"projectId":"10001","allFromApi":154,"byProjectAreaId":0,"willOverride":false}
+⚡️  [log] - [Vindkollen] CameraPreview stopped
+⚡️  [log] - [Vindkollen] Geolocation.clearWatch: 104974582

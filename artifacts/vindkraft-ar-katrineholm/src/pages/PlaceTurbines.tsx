@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { apiUrl } from "@/lib/apiUrl";
-import { consumeDirectEditorFlag, consumeFreshPlaceraFlag, isNative } from "@/lib/capacitorBridge";
+import { consumeDirectEditorFlag, consumeFreshPlaceraFlag, isNative, openPdf } from "@/lib/capacitorBridge";
 import { PlacementMap } from "@/components/PlacementMap";
 import { PlacementScorePanel } from "@/components/PlacementScorePanel";
 import {
@@ -1025,14 +1025,18 @@ export default function PlaceTurbines() {
           </button>
         )}
         {editHandoff && (
-          <a
-            href={`${import.meta.env.BASE_URL}samradsyttrande-forsvarsmakten.pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => {
+              const url =
+                window.location.origin +
+                import.meta.env.BASE_URL +
+                "samradsyttrande-forsvarsmakten.pdf";
+              void openPdf(url);
+            }}
             className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-2 text-[11px] font-medium text-white/50 hover:bg-white/10 hover:text-white/70"
           >
             📄 Ladda ner ansökan (PDF)
-          </a>
+          </button>
         )}
 
         {compareOpen && (
