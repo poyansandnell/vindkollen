@@ -28,10 +28,16 @@
     <string>Vindkollen behöver använda kameran för att visa vindkraftverken i AR.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Vindkollen behöver din position för att beräkna avstånd och riktning till vindkraftverken.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Vindkollen använder din position för att beräkna avstånd och riktning till vindkraftverken i AR och på kartan. Platsen används medan appen är öppen.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Vindkollen behöver mikrofonbehörighet för kamerafunktionen i AR-läget.</string>
     <key>NSMotionUsageDescription</key>
     <string>Vindkollen behöver använda rörelsesensorer och kompass för att visa rätt riktning i AR.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Vindkollen behöver tillgång till fotobiblioteket så att du kan spara och dela fotomontage av vindkraftverk i AR.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Vindkollen behöver spara fotomontage av vindkraftverk till ditt fotobibliotek.</string>
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
     <key>UIMainStoryboardFile</key>
