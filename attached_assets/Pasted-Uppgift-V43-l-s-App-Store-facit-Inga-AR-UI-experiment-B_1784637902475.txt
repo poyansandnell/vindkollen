@@ -1,0 +1,62 @@
+Uppgift: V43 – lås App Store-facit. Inga AR/UI-experiment.
+
+Bakgrund (inatt, App Store Connect / Apple Developer):
+- App-namn + display: Vindkollen
+- Bundle ID: se.catchme.vindkollen  (ALDRIG se.vindkollen.app – den är upptagen globalt)
+- Team: Catch Me AB / poyan.sandnell@catchme.se
+- Version 1.0 – build 1+2 failed (ITMS-90683 photo), build 3 Complete i TestFlight
+- Nästa Xcode-upload: build ≥ 4
+- Deep link-schemat vindkollen:// orört
+- Capacitor 8 + Xcode (inte Expo/EAS)
+
+Gör detta i artifacts/vindkraft-ar-katrineholm/:
+
+1) Verifiera och lås:
+   - capacitor.config.ts → appId "se.catchme.vindkollen", appName "Vindkollen"
+   - ios/.../project.pbxproj → PRODUCT_BUNDLE_IDENTIFIER = se.catchme.vindkollen (Debug+Release)
+   - ios/App/App/Info.plist → CFBundleDisplayName = Vindkollen (ALDRIG $(PRODUCT_BUNDLE_IDENTIFIER) eller "App")
+   - Info.plist måste ha ALLA:
+     NSCameraUsageDescription
+     NSLocationWhenInUseUsageDescription
+     NSLocationAlwaysAndWhenInUseUsageDescription
+     NSMicrophoneUsageDescription
+     NSMotionUsageDescription
+     NSPhotoLibraryUsageDescription
+     NSPhotoLibraryAddUsageDescription
+   - Valfritt men bra: ITSAppUsesNonExemptEncryption = false
+   - CFBundleURLSchemes = vindkollen (byt inte), CFBundleURLName = se.catchme.vindkollen
+
+2) scripts/ios-setup.sh:
+   - Måste skriva display-name Vindkollen + alla 7 privacy-keys ovan (så cap sync inte tappar dem)
+   - Ta inte bort photo/always-keys
+
+3) scripts/ios-verify.sh:
+   - Kräv se.catchme.vindkollen
+
+4) pnpm-workspace.yaml:
+   - core-js i both onlyBuiltDependencies och allowBuilds (annars rött pnpm install på Mac)
+
+5) Gör INTE:
+   - Byt inte tillbaka till se.vindkollen.app
+   - Byt inte app-namn
+   - Wipe/cap add ios från scratch
+   - Expo
+   - Höj MARKETING_VERSION till 1.1
+   - Ta bort privacy-strings
+   - Stor dist-native-churn utan behov
+
+6) Verifiera:
+   grep -n 'appId\|appName' capacitor.config.ts
+   grep PRODUCT_BUNDLE_IDENTIFIER ios/App/App.xcodeproj/project.pbxproj
+   grep -A1 CFBundleDisplayName ios/App/App/Info.plist
+   grep -E 'NSPhotoLibrary|NSLocationAlways' ios/App/App/Info.plist
+   bash scripts/ios-verify.sh
+   # Inget se.vindkollen.app i configs (utom node_modules)
+
+Commit (bara config/scripts/plist):
+fix(ios): lock App Store ground truth (se.catchme.vindkollen + Vindkollen)
+
+Keep bundle/display aligned with App Store Connect build 1.0 (3).
+Never revert to se.vindkollen.app.
+
+Push till main.
