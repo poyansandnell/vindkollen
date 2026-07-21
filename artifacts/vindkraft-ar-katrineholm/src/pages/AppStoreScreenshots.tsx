@@ -1,6 +1,13 @@
 import { useState, useRef, useCallback } from "react";
 
-type Device = "iphone" | "ipad";
+type Device = "iphone" | "ipad" | "watch";
+
+const WATCH_SLIDES = [
+  { id: 1, line1: "Se vindkraft", line2: "i AR", filename: "vindkollen-watch-1.png" },
+  { id: 2, line1: "Avstånd &", line2: "riktning", filename: "vindkollen-watch-2.png" },
+  { id: 3, line1: "Hela", line2: "Sverige", filename: "vindkollen-watch-3.png" },
+  { id: 4, line1: "Analysera", line2: "placering", filename: "vindkollen-watch-4.png" },
+];
 
 const SLIDES = [
   {
@@ -248,6 +255,102 @@ function Slide({
   );
 }
 
+function TurbineSVG() {
+  return (
+    <svg viewBox="0 0 80 120" width="80" height="120" xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}>
+      {/* Tower */}
+      <line x1="40" y1="60" x2="40" y2="115" stroke="#FF8B01" strokeWidth="3" strokeLinecap="round" opacity="0.9" />
+      {/* Base */}
+      <line x1="30" y1="115" x2="50" y2="115" stroke="#FF8B01" strokeWidth="3" strokeLinecap="round" opacity="0.6" />
+      {/* Blades */}
+      <line x1="40" y1="60" x2="40" y2="10" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
+      <line x1="40" y1="60" x2="6"  y2="82" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
+      <line x1="40" y1="60" x2="74" y2="82" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
+      {/* Hub */}
+      <circle cx="40" cy="60" r="4" fill="#FF8B01" />
+    </svg>
+  );
+}
+
+function WatchSlide({
+  slide,
+  slideRef,
+}: {
+  slide: (typeof WATCH_SLIDES)[0];
+  slideRef: React.RefObject<HTMLDivElement>;
+}) {
+  return (
+    <div
+      ref={slideRef}
+      style={{
+        width: "422px",
+        height: "514px",
+        background: "#0a0a0a",
+        position: "relative",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "space-between",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif",
+        flexShrink: 0,
+        boxSizing: "border-box",
+        padding: "48px 36px 44px",
+      }}
+    >
+      {/* Subtle topo background */}
+      <svg
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+        viewBox="0 0 422 514"
+        preserveAspectRatio="xMidYMid slice"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <radialGradient id="glow-watch" cx="50%" cy="40%" r="60%">
+            <stop offset="0%" stopColor="#FF8B01" stopOpacity="0.10" />
+            <stop offset="100%" stopColor="#FF8B01" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <rect width="422" height="514" fill="url(#glow-watch)" />
+        {TOPO_PATHS.slice(0, 6).map((d, i) => (
+          <path
+            key={i}
+            d={d.replace(/(\d+),(\d+)/g, (_, x, y) =>
+              `${(parseInt(x) * 422) / 1390},${parseInt(y) * 0.38}`
+            )}
+            fill="none"
+            stroke="#FF8B01"
+            strokeWidth="1"
+            strokeOpacity="0.07"
+          />
+        ))}
+      </svg>
+
+      {/* Brand label */}
+      <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
+        <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: "#FF8B01", opacity: 0.9 }}>
+          Vindkollen
+        </div>
+      </div>
+
+      {/* Turbine illustration */}
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <TurbineSVG />
+      </div>
+
+      {/* Text */}
+      <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
+        <div style={{ fontSize: "34px", fontWeight: 800, lineHeight: 1.1, color: "#ffffff", letterSpacing: "-0.02em" }}>
+          {slide.line1}
+        </div>
+        <div style={{ fontSize: "34px", fontWeight: 800, lineHeight: 1.1, color: "#FF8B01", letterSpacing: "-0.02em" }}>
+          {slide.line2}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function IPadSlide({
   slide,
   slideRef,
@@ -415,39 +518,39 @@ export default function AppStoreScreenshots() {
   const slideRef = useRef<HTMLDivElement>(null);
   const allSlideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const allIPadRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const allWatchRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  const scale = device === "ipad" ? 2 : 3;
+  const isWatch = device === "watch";
+  const slides = isWatch ? WATCH_SLIDES : SLIDES;
+  const scale = device === "ipad" ? 2 : 1;  // watch=1 (422×514 exact), ipad=2, iphone uses 3 below
+  const dlScale = device === "iphone" ? 3 : device === "ipad" ? 2 : 1;
 
-  const filenameFor = useCallback((slide: (typeof SLIDES)[0]) =>
-    device === "ipad"
-      ? slide.filename.replace(".png", "-ipad.png")
-      : slide.filename,
-  [device]);
+  const filenameFor = useCallback((slide: { filename: string }) => slide.filename, []);
 
   const handleDownload = useCallback(async () => {
     if (!slideRef.current) return;
     setDownloading(true);
     try {
-      await downloadSlide(slideRef.current, filenameFor(SLIDES[current]), scale);
+      await downloadSlide(slideRef.current, slides[current].filename, dlScale);
     } finally {
       setDownloading(false);
     }
-  }, [current, scale, filenameFor]);
+  }, [current, dlScale, slides]);
 
   const handleDownloadAll = useCallback(async () => {
     setDownloadingAll(true);
     try {
-      const refs = device === "ipad" ? allIPadRefs : allSlideRefs;
-      for (let i = 0; i < SLIDES.length; i++) {
+      const refs = device === "ipad" ? allIPadRefs : device === "watch" ? allWatchRefs : allSlideRefs;
+      for (let i = 0; i < slides.length; i++) {
         const el = refs.current[i];
         if (!el) continue;
-        await downloadSlide(el, filenameFor(SLIDES[i]), scale);
+        await downloadSlide(el, slides[i].filename, dlScale);
         await new Promise((r) => setTimeout(r, 600));
       }
     } finally {
       setDownloadingAll(false);
     }
-  }, [device, scale, filenameFor]);
+  }, [device, dlScale, slides]);
 
   return (
     <div
@@ -485,19 +588,21 @@ export default function AppStoreScreenshots() {
               App Store-skärmbilder
             </h2>
             <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px", margin: "4px 0 0" }}>
-              {current + 1} / {SLIDES.length} ·{" "}
+              {current + 1} / {slides.length} ·{" "}
               {device === "iphone"
                 ? "428 × 926 px (3× = 1284 × 2778)"
-                : "1024 × 1366 px (2× = 2048 × 2732)"}
+                : device === "ipad"
+                ? "1024 × 1366 px (2× = 2048 × 2732)"
+                : "422 × 514 px (Ultra 3)"}
             </p>
           </div>
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
             {/* Device toggle */}
             <div style={{ display: "flex", borderRadius: "20px", overflow: "hidden", border: "1px solid rgba(255,139,1,0.25)" }}>
-              {(["iphone", "ipad"] as Device[]).map((d) => (
+              {(["iphone", "ipad", "watch"] as Device[]).map((d) => (
                 <button
                   key={d}
-                  onClick={() => setDevice(d)}
+                  onClick={() => { setDevice(d); setCurrent(0); }}
                   style={{
                     background: device === d ? "#FF8B01" : "transparent",
                     color: device === d ? "#000" : "rgba(255,255,255,0.5)",
@@ -510,7 +615,7 @@ export default function AppStoreScreenshots() {
                     letterSpacing: "0.05em",
                   }}
                 >
-                  {d === "iphone" ? "📱 iPhone" : "🖥 iPad"}
+                  {d === "iphone" ? "📱 iPhone" : d === "ipad" ? "🖥 iPad" : "⌚ Watch"}
                 </button>
               ))}
             </div>
@@ -560,7 +665,7 @@ export default function AppStoreScreenshots() {
             flexWrap: "wrap",
           }}
         >
-          {SLIDES.map((s, i) => (
+          {slides.map((s, i) => (
             <button
               key={s.id}
               onClick={() => setCurrent(i)}
@@ -586,7 +691,7 @@ export default function AppStoreScreenshots() {
         style={{
           position: "relative",
           boxShadow: "0 0 80px rgba(255,139,1,0.08), 0 40px 120px rgba(0,0,0,0.8)",
-          borderRadius: device === "ipad" ? "24px" : "50px",
+          borderRadius: device === "ipad" ? "24px" : device === "watch" ? "60px" : "50px",
           transform: device === "ipad" ? "scale(0.55)" : "scale(1)",
           transformOrigin: "top center",
           marginBottom: device === "ipad" ? "-580px" : "0",
@@ -598,10 +703,16 @@ export default function AppStoreScreenshots() {
             slide={SLIDES[current]}
             slideRef={slideRef as React.RefObject<HTMLDivElement>}
           />
-        ) : (
+        ) : device === "ipad" ? (
           <IPadSlide
             key={`ipad-${current}`}
             slide={SLIDES[current]}
+            slideRef={slideRef as React.RefObject<HTMLDivElement>}
+          />
+        ) : (
+          <WatchSlide
+            key={`watch-${current}`}
+            slide={WATCH_SLIDES[current]}
             slideRef={slideRef as React.RefObject<HTMLDivElement>}
           />
         )}
@@ -633,20 +744,20 @@ export default function AppStoreScreenshots() {
           ←
         </button>
         <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>
-          Bild {current + 1} av {SLIDES.length}
+          Bild {current + 1} av {slides.length}
         </span>
         <button
-          onClick={() => setCurrent((c) => Math.min(SLIDES.length - 1, c + 1))}
-          disabled={current === SLIDES.length - 1}
+          onClick={() => setCurrent((c) => Math.min(slides.length - 1, c + 1))}
+          disabled={current === slides.length - 1}
           style={{
             background: "rgba(255,255,255,0.08)",
-            color: current === SLIDES.length - 1 ? "rgba(255,255,255,0.2)" : "#fff",
+            color: current === slides.length - 1 ? "rgba(255,255,255,0.2)" : "#fff",
             border: "none",
             borderRadius: "50%",
             width: "44px",
             height: "44px",
             fontSize: "18px",
-            cursor: current === SLIDES.length - 1 ? "default" : "pointer",
+            cursor: current === slides.length - 1 ? "default" : "pointer",
           }}
         >
           →
@@ -658,6 +769,18 @@ export default function AppStoreScreenshots() {
         {SLIDES.map((slide, i) => (
           <div key={`ipad-ref-${slide.id}`} ref={(el) => { allIPadRefs.current[i] = el?.firstElementChild as HTMLDivElement | null; }}>
             <IPadSlide
+              slide={slide}
+              slideRef={{ current: null } as unknown as React.RefObject<HTMLDivElement>}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Hidden Watch renders for "download all" */}
+      <div style={{ position: "absolute", left: "-9999px", top: 0, pointerEvents: "none" }}>
+        {WATCH_SLIDES.map((slide, i) => (
+          <div key={`watch-ref-${slide.id}`} ref={(el) => { allWatchRefs.current[i] = el?.firstElementChild as HTMLDivElement | null; }}>
+            <WatchSlide
               slide={slide}
               slideRef={{ current: null } as unknown as React.RefObject<HTMLDivElement>}
             />
@@ -720,7 +843,9 @@ export default function AppStoreScreenshots() {
       <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px", marginTop: "32px", textAlign: "center" }}>
         {device === "iphone"
           ? "Tryck \"Ladda ner\" för PNG i 1284×2778 px (iPhone 6.7\")"
-          : "Tryck \"Ladda ner\" för PNG i 2048×2732 px (iPad Pro 12.9\")"}
+          : device === "ipad"
+          ? "Tryck \"Ladda ner\" för PNG i 2048×2732 px (iPad Pro 12.9\")"
+          : "Tryck \"Ladda ner\" för PNG i 422×514 px (Apple Watch Ultra 3)"}
       </p>
     </div>
   );
