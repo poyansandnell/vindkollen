@@ -65,6 +65,15 @@ plist_set "NSMotionUsageDescription" \
 plist_set "NSMicrophoneUsageDescription" \
   "Vindkollen behöver mikrofonbehörighet för kamerafunktionen i AR-läget."
 
+plist_set "NSLocationAlwaysAndWhenInUseUsageDescription" \
+  "Vindkollen använder din position för att beräkna avstånd och riktning till vindkraftverken i AR och på kartan. Platsen används medan appen är öppen."
+
+plist_set "NSPhotoLibraryUsageDescription" \
+  "Vindkollen behöver tillgång till fotobiblioteket så att du kan spara och dela fotomontage av vindkraftverk i AR."
+
+plist_set "NSPhotoLibraryAddUsageDescription" \
+  "Vindkollen behöver spara fotomontage av vindkraftverk till ditt fotobibliotek."
+
 # ── Verifiering: läs tillbaka varje nyckel ────────────────────────────────────
 
 echo "🔍  Verifierar att nycklarna finns i filen …"
@@ -85,10 +94,13 @@ verify_key() {
   fi
 }
 
-verify_key "NSCameraUsageDescription"             "camera"
-verify_key "NSLocationWhenInUseUsageDescription"  "location"
-verify_key "NSMotionUsageDescription"             "motion"
-verify_key "NSMicrophoneUsageDescription"         "microphone"
+verify_key "NSCameraUsageDescription"                        "camera"
+verify_key "NSLocationWhenInUseUsageDescription"             "location"
+verify_key "NSLocationAlwaysAndWhenInUseUsageDescription"    "location (always)"
+verify_key "NSMotionUsageDescription"                        "motion"
+verify_key "NSMicrophoneUsageDescription"                    "microphone"
+verify_key "NSPhotoLibraryUsageDescription"                  "photo library"
+verify_key "NSPhotoLibraryAddUsageDescription"               "photo library add"
 
 echo ""
 
@@ -97,7 +109,7 @@ if [ "$ERRORS" -gt 0 ]; then
   exit 1
 fi
 
-echo "iOS privacy keys verified: camera, location, motion, microphone"
+echo "iOS privacy keys verified: camera, location, motion, microphone, photo"
 echo ""
 echo "   Verifiera i Xcode: App target → Info → Custom iOS Target Properties"
 echo ""
