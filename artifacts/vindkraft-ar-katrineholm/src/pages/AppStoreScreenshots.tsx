@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 
+type Device = "iphone" | "ipad";
+
 const SLIDES = [
   {
     id: 1,
@@ -246,6 +248,146 @@ function Slide({
   );
 }
 
+function IPadSlide({
+  slide,
+  slideRef,
+}: {
+  slide: (typeof SLIDES)[0];
+  slideRef: React.RefObject<HTMLDivElement>;
+}) {
+  return (
+    <div
+      ref={slideRef}
+      style={{
+        width: "1024px",
+        height: "1366px",
+        background: "#0a0a0a",
+        position: "relative",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "stretch",
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif",
+        flexShrink: 0,
+      }}
+    >
+      {/* Topo background – reuse same SVG, wider viewBox */}
+      <svg
+        className="absolute inset-0 w-full h-full"
+        viewBox="0 0 1024 1366"
+        preserveAspectRatio="xMidYMid slice"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <radialGradient id="glow-ipad" cx="50%" cy="35%" r="55%">
+            <stop offset="0%" stopColor="#FF8B01" stopOpacity="0.06" />
+            <stop offset="100%" stopColor="#FF8B01" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <rect width="1024" height="1366" fill="url(#glow-ipad)" />
+        {[0, 1].map((rep) =>
+          TOPO_PATHS.map((d, i) => (
+            <path
+              key={`${rep}-${i}`}
+              d={d.replace(/(\d+),(\d+)/g, (_, x, y) =>
+                `${(parseInt(x) * 1024) / 1390},${parseInt(y) + rep * 1100}`
+              )}
+              fill="none"
+              stroke="#FF8B01"
+              strokeWidth="1.5"
+              strokeOpacity="0.055"
+            />
+          ))
+        )}
+      </svg>
+
+      {/* Left column – text */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          width: "420px",
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          padding: "80px 56px 80px 72px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "13px",
+            fontWeight: 600,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase" as const,
+            color: "#FF8B01",
+            marginBottom: "24px",
+            opacity: 0.9,
+          }}
+        >
+          Vindkollen AR
+        </div>
+        <h1
+          style={{
+            fontSize: "52px",
+            fontWeight: 800,
+            lineHeight: 1.06,
+            color: "#ffffff",
+            margin: 0,
+            marginBottom: "20px",
+            whiteSpace: "pre-line",
+            letterSpacing: "-0.025em",
+          }}
+        >
+          {slide.headline}
+        </h1>
+        <div
+          style={{
+            width: "40px",
+            height: "3px",
+            background: "#FF8B01",
+            borderRadius: "2px",
+            marginBottom: "20px",
+            opacity: 0.8,
+          }}
+        />
+        <p
+          style={{
+            fontSize: "18px",
+            fontWeight: 400,
+            lineHeight: 1.55,
+            color: "rgba(255,255,255,0.55)",
+            margin: 0,
+          }}
+        >
+          {slide.subheadline}
+        </p>
+      </div>
+
+      {/* Right column – iPhone mockup */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "60px 72px 60px 24px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div style={{ width: "100%", maxWidth: "340px" }}>
+          <IPhoneFrame imageSrc={slide.image} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 async function downloadSlide(
   slideEl: HTMLDivElement,
   filename: string,
@@ -267,38 +409,45 @@ async function downloadSlide(
 
 export default function AppStoreScreenshots() {
   const [current, setCurrent] = useState(0);
+  const [device, setDevice] = useState<Device>("iphone");
   const [downloading, setDownloading] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const slideRef = useRef<HTMLDivElement>(null);
   const allSlideRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const allIPadRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const scale = device === "ipad" ? 2 : 3;
+
+  const filenameFor = useCallback((slide: (typeof SLIDES)[0]) =>
+    device === "ipad"
+      ? slide.filename.replace(".png", "-ipad.png")
+      : slide.filename,
+  [device]);
 
   const handleDownload = useCallback(async () => {
     if (!slideRef.current) return;
     setDownloading(true);
     try {
-      await downloadSlide(
-        slideRef.current,
-        SLIDES[current].filename,
-        3
-      );
+      await downloadSlide(slideRef.current, filenameFor(SLIDES[current]), scale);
     } finally {
       setDownloading(false);
     }
-  }, [current]);
+  }, [current, scale, filenameFor]);
 
   const handleDownloadAll = useCallback(async () => {
     setDownloadingAll(true);
     try {
+      const refs = device === "ipad" ? allIPadRefs : allSlideRefs;
       for (let i = 0; i < SLIDES.length; i++) {
-        const el = allSlideRefs.current[i];
+        const el = refs.current[i];
         if (!el) continue;
-        await downloadSlide(el, SLIDES[i].filename, 3);
+        await downloadSlide(el, filenameFor(SLIDES[i]), scale);
         await new Promise((r) => setTimeout(r, 600));
       }
     } finally {
       setDownloadingAll(false);
     }
-  }, []);
+  }, [device, scale, filenameFor]);
 
   return (
     <div
@@ -336,10 +485,35 @@ export default function AppStoreScreenshots() {
               App Store-skärmbilder
             </h2>
             <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px", margin: "4px 0 0" }}>
-              {current + 1} / {SLIDES.length} · 428 × 926 px (3× = 1284 × 2778)
+              {current + 1} / {SLIDES.length} ·{" "}
+              {device === "iphone"
+                ? "428 × 926 px (3× = 1284 × 2778)"
+                : "1024 × 1366 px (2× = 2048 × 2732)"}
             </p>
           </div>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+            {/* Device toggle */}
+            <div style={{ display: "flex", borderRadius: "20px", overflow: "hidden", border: "1px solid rgba(255,139,1,0.25)" }}>
+              {(["iphone", "ipad"] as Device[]).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDevice(d)}
+                  style={{
+                    background: device === d ? "#FF8B01" : "transparent",
+                    color: device === d ? "#000" : "rgba(255,255,255,0.5)",
+                    border: "none",
+                    padding: "8px 16px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    textTransform: "uppercase" as const,
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {d === "iphone" ? "📱 iPhone" : "🖥 iPad"}
+                </button>
+              ))}
+            </div>
             <button
               onClick={handleDownload}
               disabled={downloading}
@@ -412,14 +586,25 @@ export default function AppStoreScreenshots() {
         style={{
           position: "relative",
           boxShadow: "0 0 80px rgba(255,139,1,0.08), 0 40px 120px rgba(0,0,0,0.8)",
-          borderRadius: "50px",
+          borderRadius: device === "ipad" ? "24px" : "50px",
+          transform: device === "ipad" ? "scale(0.55)" : "scale(1)",
+          transformOrigin: "top center",
+          marginBottom: device === "ipad" ? "-580px" : "0",
         }}
       >
-        <Slide
-          key={current}
-          slide={SLIDES[current]}
-          slideRef={slideRef as React.RefObject<HTMLDivElement>}
-        />
+        {device === "iphone" ? (
+          <Slide
+            key={`iphone-${current}`}
+            slide={SLIDES[current]}
+            slideRef={slideRef as React.RefObject<HTMLDivElement>}
+          />
+        ) : (
+          <IPadSlide
+            key={`ipad-${current}`}
+            slide={SLIDES[current]}
+            slideRef={slideRef as React.RefObject<HTMLDivElement>}
+          />
+        )}
       </div>
 
       {/* Navigation */}
@@ -466,6 +651,18 @@ export default function AppStoreScreenshots() {
         >
           →
         </button>
+      </div>
+
+      {/* Hidden iPad renders for "download all" */}
+      <div style={{ position: "absolute", left: "-9999px", top: 0, pointerEvents: "none" }}>
+        {SLIDES.map((slide, i) => (
+          <div key={`ipad-ref-${slide.id}`} ref={(el) => { allIPadRefs.current[i] = el?.firstElementChild as HTMLDivElement | null; }}>
+            <IPadSlide
+              slide={slide}
+              slideRef={{ current: null } as unknown as React.RefObject<HTMLDivElement>}
+            />
+          </div>
+        ))}
       </div>
 
       {/* Hidden renders of all slides for "download all" */}
@@ -521,7 +718,9 @@ export default function AppStoreScreenshots() {
       </div>
 
       <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px", marginTop: "32px", textAlign: "center" }}>
-        Tryck "Ladda ner" för PNG i 1284×2778 px (Apples godkända format för App Store)
+        {device === "iphone"
+          ? "Tryck \"Ladda ner\" för PNG i 1284×2778 px (iPhone 6.7\")"
+          : "Tryck \"Ladda ner\" för PNG i 2048×2732 px (iPad Pro 12.9\")"}
       </p>
     </div>
   );
