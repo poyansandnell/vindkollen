@@ -62,9 +62,6 @@ plist_set "NSLocationWhenInUseUsageDescription" \
 plist_set "NSMotionUsageDescription" \
   "Vindkollen behöver använda rörelsesensorer och kompass för att visa rätt riktning i AR."
 
-plist_set "NSMicrophoneUsageDescription" \
-  "Vindkollen behöver mikrofonbehörighet för kamerafunktionen i AR-läget."
-
 plist_set "NSLocationAlwaysAndWhenInUseUsageDescription" \
   "Vindkollen använder din position för att beräkna avstånd och riktning till vindkraftverken i AR och på kartan. Platsen används medan appen är öppen."
 
@@ -98,7 +95,6 @@ verify_key "NSCameraUsageDescription"                        "camera"
 verify_key "NSLocationWhenInUseUsageDescription"             "location"
 verify_key "NSLocationAlwaysAndWhenInUseUsageDescription"    "location (always)"
 verify_key "NSMotionUsageDescription"                        "motion"
-verify_key "NSMicrophoneUsageDescription"                    "microphone"
 verify_key "NSPhotoLibraryUsageDescription"                  "photo library"
 verify_key "NSPhotoLibraryAddUsageDescription"               "photo library add"
 
@@ -109,7 +105,7 @@ if [ "$ERRORS" -gt 0 ]; then
   exit 1
 fi
 
-echo "iOS privacy keys verified: camera, location, motion, microphone, photo"
+echo "iOS privacy keys verified: camera, location, motion, photo"
 echo ""
 echo "   Verifiera i Xcode: App target → Info → Custom iOS Target Properties"
 echo ""
