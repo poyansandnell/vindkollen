@@ -15,6 +15,8 @@
     "native:sync": "pnpm native:build && cap sync && ([ ! -f ios/App/App/Info.plist ] || pnpm native:plist)",
     "native:ios": "pnpm native:build && ([ -d ios ] || cap add ios) && cap sync ios && pnpm native:fix-spm && pnpm native:plist && xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj && cap open ios",
     "native:android": "pnpm native:build && cap sync android && cap open android",
+    "ios:prepare": "bash scripts/ios-prepare.sh",
+    "ios:verify": "bash scripts/ios-verify-full.sh",
     "native:ios:verify": "bash scripts/ios-verify.sh",
     "capacitor:sync:after": "node scripts/fix-ios-package-swift.js"
   },
