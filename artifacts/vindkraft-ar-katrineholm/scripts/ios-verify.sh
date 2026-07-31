@@ -73,10 +73,16 @@ check_absent "INGET direkt Capacitor-produktberoende i pbxproj (ska gå via CapA
 
 echo ""
 echo "── CapApp-SPM/Package.swift ──"
+echo "  (Lokal vendor-design — inga remote SPM-beroenden, Package.resolved krävs inte)"
 check_file "Package.swift finns" "$PKG_SWIFT"
 if [ -f "$PKG_SWIFT" ]; then
-  check "capacitor-swift-pm exact 8.4.2" \
-    'capacitor-swift-pm.*exact.*8\.4\.2\|exact.*8\.4\.2.*capacitor-swift-pm' "$PKG_SWIFT"
+  # Lokal vendor-sökväg (inte remote exact)
+  check "capacitor-swift-pm som lokal path-dependency" \
+    'path:.*vendor/capacitor-swift-pm\|path: "vendor/capacitor-swift-pm"' "$PKG_SWIFT"
+  check "ion-ios-camera som lokal path-dependency" \
+    'path:.*vendor/ion-ios-camera\|path: "vendor/ion-ios-camera"' "$PKG_SWIFT"
+  check "ion-ios-geolocation som lokal path-dependency" \
+    'path:.*vendor/ion-ios-geolocation\|path: "vendor/ion-ios-geolocation"' "$PKG_SWIFT"
   check "Capacitor produkt-dependency i CapApp-SPM target" \
     'product(name: "Capacitor"' "$PKG_SWIFT"
   check "Cordova produkt-dependency i CapApp-SPM target" \
@@ -85,34 +91,30 @@ fi
 
 echo ""
 echo "── Package.resolved ──"
-check_file "Package.resolved finns" "$PKG_RESOLVED"
+echo "  (Krävs ej — alla beroenden är lokala vendor-sökvägar)"
 if [ -f "$PKG_RESOLVED" ]; then
-  check "capacitor-swift-pm pinnad" \
-    '"capacitor-swift-pm"' "$PKG_RESOLVED"
-  check "ion-ios-camera pinnad" \
-    '"ion-ios-camera"' "$PKG_RESOLVED"
-  check "ion-ios-geolocation pinnad" \
-    '"ion-ios-geolocation"' "$PKG_RESOLVED"
+  echo "  ℹ️   Package.resolved finns (ofarligt, genereras av Xcode vid öppning)"
+else
+  echo "  ✅  Package.resolved saknas — korrekt för lokal vendor-design"
+  PASS=$((PASS + 1))
 fi
 
 echo ""
-echo "── pnpm virtual store-sökvägar (Package.swift lokala paket) ──"
-if [ -f "$PKG_SWIFT" ]; then
-  while IFS= read -r path_line; do
-    rel_path=$(echo "$path_line" | grep -oE '"[^"]*node_modules[^"]*"' | tr -d '"' || true)
-    if [ -n "$rel_path" ]; then
-      real_path=$(cd "$ARTIFACT_DIR/ios/App/CapApp-SPM" && realpath "$rel_path" 2>/dev/null || echo "")
-      if [ -d "$real_path" ]; then
-        echo "  ✅  Lokal sökväg OK: $rel_path"
-        PASS=$((PASS + 1))
-      else
-        echo "  ❌  Lokal sökväg saknas: $rel_path"
-        echo "       → Kör: pnpm install (från monorepo-roten)"
-        FAIL=$((FAIL + 1))
-      fi
-    fi
-  done < <(grep 'path:' "$PKG_SWIFT")
-fi
+echo "── Lokala vendor-kataloger ──"
+CAPAPP_SPM_DIR="$ARTIFACT_DIR/ios/App/CapApp-SPM"
+for vendor_dir in \
+    "vendor/capacitor-swift-pm" \
+    "vendor/ion-ios-camera" \
+    "vendor/ion-ios-geolocation"; do
+  full_path="$CAPAPP_SPM_DIR/$vendor_dir"
+  if [ -d "$full_path" ]; then
+    echo "  ✅  $vendor_dir"
+    PASS=$((PASS + 1))
+  else
+    echo "  ❌  $vendor_dir saknas (kör: git pull)"
+    FAIL=$((FAIL + 1))
+  fi
+done
 
 echo ""
 echo "───────────────────────────────"
