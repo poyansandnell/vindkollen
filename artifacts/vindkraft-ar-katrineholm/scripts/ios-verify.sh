@@ -73,30 +73,76 @@ check_absent "INGET direkt Capacitor-produktberoende i pbxproj (ska gå via CapA
 
 echo ""
 echo "── CapApp-SPM/Package.swift ──"
-echo "  (Lokal vendor-design — inga remote SPM-beroenden, Package.resolved krävs inte)"
+echo "  (Genereras av fix-ios-package-swift.js efter cap sync)"
 check_file "Package.swift finns" "$PKG_SWIFT"
 if [ -f "$PKG_SWIFT" ]; then
-  # Lokal vendor-sökväg (inte remote exact)
-  check "capacitor-swift-pm som lokal path-dependency" \
-    'vendor/capacitor-swift-pm' "$PKG_SWIFT"
-  check "ion-ios-camera som lokal path-dependency" \
-    'vendor/ion-ios-camera' "$PKG_SWIFT"
-  check "ion-ios-geolocation som lokal path-dependency" \
-    'vendor/ion-ios-geolocation' "$PKG_SWIFT"
-  check "Capacitor produkt-dependency i CapApp-SPM target" \
-    'product(name: "Capacitor"' "$PKG_SWIFT"
-  check "Cordova produkt-dependency i CapApp-SPM target" \
-    'product(name: "Cordova"' "$PKG_SWIFT"
+  # capacitor-swift-pm: lokal vendor/ path (fast sträng, -F säker på BSD+GNU grep)
+  if grep -Fq 'path: "vendor/capacitor-swift-pm"' "$PKG_SWIFT"; then
+    echo "  ✅  capacitor-swift-pm som lokal path-dependency"
+    PASS=$((PASS + 1))
+  else
+    echo "  ❌  capacitor-swift-pm som lokal path-dependency"
+    FAIL=$((FAIL + 1))
+  fi
+
+  # ion-ios-camera: remote URL (fix-ios skriver url:, inte path:)
+  if grep -Fq 'ion-ios-camera' "$PKG_SWIFT"; then
+    echo "  ✅  ion-ios-camera dependency finns"
+    PASS=$((PASS + 1))
+  else
+    echo "  ❌  ion-ios-camera dependency saknas"
+    FAIL=$((FAIL + 1))
+  fi
+
+  # ion-ios-geolocation: remote URL
+  if grep -Fq 'ion-ios-geolocation' "$PKG_SWIFT"; then
+    echo "  ✅  ion-ios-geolocation dependency finns"
+    PASS=$((PASS + 1))
+  else
+    echo "  ❌  ion-ios-geolocation dependency saknas"
+    FAIL=$((FAIL + 1))
+  fi
+
+  # Produktanvändning i targets
+  if grep -Fq 'product(name: "Capacitor"' "$PKG_SWIFT"; then
+    echo "  ✅  Capacitor produkt-dependency"
+    PASS=$((PASS + 1))
+  else
+    echo "  ❌  Capacitor produkt-dependency saknas"
+    FAIL=$((FAIL + 1))
+  fi
+
+  if grep -Fq 'product(name: "Cordova"' "$PKG_SWIFT"; then
+    echo "  ✅  Cordova produkt-dependency"
+    PASS=$((PASS + 1))
+  else
+    echo "  ❌  Cordova produkt-dependency saknas"
+    FAIL=$((FAIL + 1))
+  fi
+
+  if grep -Fq 'product(name: "IONCameraLib"' "$PKG_SWIFT"; then
+    echo "  ✅  IONCameraLib produkt-dependency"
+    PASS=$((PASS + 1))
+  else
+    echo "  ❌  IONCameraLib produkt-dependency saknas"
+    FAIL=$((FAIL + 1))
+  fi
+
+  if grep -Fq 'product(name: "IONGeolocationLib"' "$PKG_SWIFT"; then
+    echo "  ✅  IONGeolocationLib produkt-dependency"
+    PASS=$((PASS + 1))
+  else
+    echo "  ❌  IONGeolocationLib produkt-dependency saknas"
+    FAIL=$((FAIL + 1))
+  fi
 fi
 
 echo ""
 echo "── Package.resolved ──"
-echo "  (Krävs ej — alla beroenden är lokala vendor-sökvägar)"
 if [ -f "$PKG_RESOLVED" ]; then
-  echo "  ℹ️   Package.resolved finns (ofarligt, genereras av Xcode vid öppning)"
+  echo "  ℹ️   Package.resolved finns (genereras av Xcode — ofarligt)"
 else
-  echo "  ✅  Package.resolved saknas — korrekt för lokal vendor-design"
-  PASS=$((PASS + 1))
+  echo "  ℹ️   Package.resolved saknas (skapas av Xcode vid första öppning)"
 fi
 
 echo ""
