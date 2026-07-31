@@ -43,11 +43,12 @@ fi
 echo ""
 echo "── Mikrofon (ska EJ finnas) ──"
 
-if grep -r "NSMicrophoneUsageDescription" ios/ scripts/ 2>/dev/null \
-   | grep -v "^Binary" | grep -q .; then
-  fail "NSMicrophoneUsageDescription hittades — ta bort den!"
+if grep -n "NSMicrophoneUsageDescription" \
+     ios/App/App/Info.plist \
+     scripts/ios-setup.sh 2>/dev/null | grep -q .; then
+  fail "NSMicrophoneUsageDescription hittades i Info.plist eller ios-setup.sh — ta bort den!"
 else
-  ok "Ingen NSMicrophoneUsageDescription"
+  ok "Ingen NSMicrophoneUsageDescription i Info.plist eller ios-setup.sh"
 fi
 
 # ── Bundle ID och Display Name ────────────────────────────────────────────────

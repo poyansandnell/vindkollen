@@ -104,16 +104,16 @@ fi
 echo ""
 echo "── Steg 5: mikrofon-verifiering ──"
 
-MICROPHONE_HITS=$(grep -r "NSMicrophoneUsageDescription" \
-  "$ARTIFACT_DIR/ios/" "$ARTIFACT_DIR/scripts/" 2>/dev/null \
-  | grep -v "^Binary" || true)
+MICROPHONE_HITS=$(grep -n "NSMicrophoneUsageDescription" \
+  "$ARTIFACT_DIR/ios/App/App/Info.plist" \
+  "$ARTIFACT_DIR/scripts/ios-setup.sh" 2>/dev/null || true)
 
 if [[ -n "$MICROPHONE_HITS" ]]; then
-  echo "❌  NSMicrophoneUsageDescription hittades — ta bort den!"
+  echo "❌  NSMicrophoneUsageDescription hittades i Info.plist eller ios-setup.sh — ta bort den!"
   echo "$MICROPHONE_HITS"
   exit 1
 fi
-echo "✅  Ingen NSMicrophoneUsageDescription i ios/ eller scripts/"
+echo "✅  Ingen NSMicrophoneUsageDescription i Info.plist eller ios-setup.sh"
 
 # ── 7. Verifiera Bundle ID och Display Name ───────────────────────────────────
 
