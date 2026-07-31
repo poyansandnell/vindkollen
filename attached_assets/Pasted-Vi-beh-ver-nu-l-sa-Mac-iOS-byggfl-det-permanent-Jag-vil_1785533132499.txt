@@ -1,0 +1,84 @@
+Vi behöver nu lösa Mac/iOS-byggflödet permanent. Jag vill inte behöva felsöka pnpm, optional dependencies och gamla dist-filer inför varje App Store-upload.
+
+Aktuellt fel på Apple Silicon Mac:
+
+pnpm native:build
+
+misslyckar med:
+
+Error: Cannot find native binding
+@tailwindcss/oxide@4.3.1
+
+Felet hänvisar till saknad optional native dependency. Trots att native-build misslyckar kan npx cap sync ios därefter fortsätta och kopiera en gammal dist-native, vilket är farligt eftersom ett gammalt bygge då kan hamna i Xcode.
+
+Gör en permanent och reproducerbar lösning för macOS arm64 med pnpm 11.
+
+Krav:
+
+1. Undersök varför @tailwindcss/oxide saknar sin Darwin ARM64-binding efter en ren pnpm-installation.
+
+2. Säkerställ att rätt macOS arm64 optional dependency installeras och finns i lockfil/workspace-konfigurationen. Kontrollera särskilt:
+   - @tailwindcss/oxide-darwin-arm64
+   - @esbuild/darwin-arm64
+   - övriga native optional dependencies som krävs av Vite/Tailwind
+
+3. Flytta pnpm-inställningar som pnpm 11 inte längre läser från package.json till korrekt plats i pnpm-workspace.yaml. Ta bort eller undvik duplicerade och inaktuella inställningar.
+
+4. Behåll kompatibilitet med:
+   - Replit/pnpm 10
+   - Apple Silicon Mac/pnpm 11
+
+5. Skapa ett enda script, exempelvis:
+
+pnpm ios:prepare
+
+Scriptet ska i korrekt ordning:
+   - verifiera macOS/arm64 och installerade native bindings
+   - köra installation vid behov
+   - bygga dist-native från aktuell src-kod
+   - avbryta direkt om builden misslyckas
+   - radera eller inte återanvända en gammal dist-native vid misslyckad build
+   - köra npx cap sync ios först efter lyckad native-build
+   - köra scripts/ios-setup.sh
+   - verifiera iOS-konfigurationen
+
+6. Scriptet måste använda strict failure, exempelvis set -euo pipefail, så att cap sync aldrig körs efter en misslyckad build.
+
+7. Lägg in verifieringar som stoppar processen om:
+   - disableAudio: true saknas i den byggda dist-native-koden
+   - NSMicrophoneUsageDescription finns i ios/ eller scripts/
+   - Bundle ID inte är se.catchme.vindkollen
+   - Display Name inte är Vindkollen
+   - privacy-nycklar som faktiskt används saknas
+
+8. Verifiera från en helt ren installation motsvarande Mac:
+
+rm -rf node_modules
+rm -rf artifacts/vindkraft-ar-katrineholm/dist-native
+pnpm install
+pnpm ios:prepare
+
+Det får inte förekomma:
+   - ERR_PNPM_IGNORED_BUILDS
+   - Cannot find native binding
+   - gammal dist-native efter misslyckad build
+
+9. Lägg gärna till ett separat kommando:
+
+pnpm ios:verify
+
+som endast verifierar att det som ska arkiveras är korrekt.
+
+10. Ändra inte:
+   - Bundle ID: se.catchme.vindkollen
+   - Appnamn: Vindkollen
+   - Marketing version: 1.0
+   - deep link: vindkollen://
+   - disableAudio: true
+   - appens funktioner eller design
+
+11. Pusha allt till main och rapportera:
+   - commit-hash
+   - exakt vilka filer som ändrades
+   - vilket enda kommando jag sedan ska köra på Mac
+   - resultatet från ren installation och ios:prepare
