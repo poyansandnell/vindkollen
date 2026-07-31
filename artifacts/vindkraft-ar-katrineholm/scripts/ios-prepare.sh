@@ -12,15 +12,15 @@
 #
 # Steg:
 #   1. Verifiera macOS-plattform
-#   2. Kontrollera att @tailwindcss/oxide laddar sin native binding
-#   3. Radera gammal dist-native
-#   4. Bygg dist-native — avbryt och håll dist-native raderad om det misslyckas
-#   5. Verifiera disableAudio:true i det byggda paketet
-#   6. Verifiera att NSMicrophoneUsageDescription INTE finns
-#   7. Verifiera Bundle ID och Display Name
-#   8. cap sync ios (bara om 3-7 lyckades)
-#   9. ios-setup.sh (privacy strings)
-#  10. ios-verify.sh (SPM + bundle-ID)
+#   2. Radera gammal dist-native
+#   3. Bygg dist-native — avbryt och håll dist-native raderad om det misslyckas
+#      (om @tailwindcss/oxide saknar sin native binding misslyckas Vite här)
+#   4. Verifiera disableAudio:true i det byggda paketet
+#   5. Verifiera att NSMicrophoneUsageDescription INTE finns
+#   6. Verifiera Bundle ID och Display Name
+#   7. cap sync ios (bara om 2-6 lyckades)
+#   8. ios-setup.sh (privacy strings)
+#   9. ios-verify.sh (SPM + bundle-ID)
 #
 # set -euo pipefail: varje fel avbryter omedelbart.
 # cap sync körs ALDRIG om dist-native-bygget misslyckades.
@@ -56,64 +56,38 @@ fi
 ARCH="$(uname -m)"
 echo "✅  Plattform: macOS $ARCH"
 
-# ── 2. Kontrollera @tailwindcss/oxide native binding ─────────────────────────
-#
-# Testar via node require() från artifact-katalogen så att pnpm:s
-# virtual store + workspace-hoisting hanteras korrekt.
-# Ingen katalogkontroll — det är om modulen faktiskt laddar som räknas.
+# ── 2. Radera gammal dist-native ─────────────────────────────────────────────
 
 echo ""
-echo "── Steg 2: native binding ──"
-
-oxide_loads() {
-  # Kör node från artifact-dir så att module resolution går via workspace
-  node -e "require('@tailwindcss/oxide')" 2>/dev/null
-}
-
-cd "$ARTIFACT_DIR"
-
-if ! oxide_loads; then
-  echo "⚠️   @tailwindcss/oxide kan inte laddas — kör pnpm install..."
-  cd "$MONOREPO_ROOT"
-  pnpm install
-  cd "$ARTIFACT_DIR"
-fi
-
-if ! oxide_loads; then
-  echo "❌  @tailwindcss/oxide kan inte laddas efter pnpm install."
-  echo "    Prova: rm -rf node_modules && pnpm install"
-  exit 1
-fi
-
-echo "✅  @tailwindcss/oxide laddar korrekt ($ARCH native binding)"
-
-# ── 3. Radera gammal dist-native ─────────────────────────────────────────────
-
-echo ""
-echo "── Steg 3: rensa dist-native ──"
+echo "── Steg 2: rensa dist-native ──"
 cd "$ARTIFACT_DIR"
 rm -rf dist-native
 echo "✅  dist-native raderad"
 
-# ── 4. Bygg dist-native ───────────────────────────────────────────────────────
+# ── 3. Bygg dist-native ───────────────────────────────────────────────────────
+#
+# Om @tailwindcss/oxide saknar sin darwin native binding misslyckas Vite här
+# med "Cannot find native binding" — det är den riktiga verifieringen.
+# cap sync körs ALDRIG om bygget misslyckas.
 
 echo ""
-echo "── Steg 4: pnpm native:build ──"
+echo "── Steg 3: pnpm native:build ──"
 
 if ! pnpm native:build; then
   echo ""
   echo "❌  native:build misslyckades."
   echo "    dist-native är raderad. cap sync körs INTE."
+  echo "    Om felet är 'Cannot find native binding': kör rm -rf node_modules && pnpm install"
   rm -rf dist-native
   exit 1
 fi
 
 echo "✅  dist-native byggd"
 
-# ── 5. Verifiera disableAudio:true i bygget ───────────────────────────────────
+# ── 4. Verifiera disableAudio:true i bygget ───────────────────────────────────
 
 echo ""
-echo "── Steg 5: verifiera disableAudio ──"
+echo "── Steg 4: verifiera disableAudio ──"
 
 # Vite minifierar true → !0, söker båda formaten
 if grep -rq 'disableAudio[: ]*!0\|disableAudio[: ]*true' "$ARTIFACT_DIR/dist-native/assets/"*.js 2>/dev/null; then
@@ -128,7 +102,7 @@ fi
 # ── 6. Verifiera att NSMicrophoneUsageDescription inte finns ──────────────────
 
 echo ""
-echo "── Steg 6: mikrofon-verifiering ──"
+echo "── Steg 5: mikrofon-verifiering ──"
 
 MICROPHONE_HITS=$(grep -r "NSMicrophoneUsageDescription" \
   "$ARTIFACT_DIR/ios/" "$ARTIFACT_DIR/scripts/" 2>/dev/null \
@@ -144,7 +118,7 @@ echo "✅  Ingen NSMicrophoneUsageDescription i ios/ eller scripts/"
 # ── 7. Verifiera Bundle ID och Display Name ───────────────────────────────────
 
 echo ""
-echo "── Steg 7: Bundle ID och Display Name ──"
+echo "── Steg 6: Bundle ID och Display Name ──"
 
 PBXPROJ="$ARTIFACT_DIR/ios/App/App.xcodeproj/project.pbxproj"
 PLIST="$ARTIFACT_DIR/ios/App/App/Info.plist"
@@ -173,7 +147,7 @@ echo "✅  Privacy-nycklar: kamera, plats, rörelse, fotobibliotek"
 # ── 8. cap sync ios ───────────────────────────────────────────────────────────
 
 echo ""
-echo "── Steg 8: cap sync ios ──"
+echo "── Steg 7: cap sync ios ──"
 cd "$ARTIFACT_DIR"
 
 if ! npx cap sync ios; then
@@ -185,13 +159,13 @@ echo "✅  cap sync ios klar"
 # ── 9. ios-setup.sh (privacy strings) ────────────────────────────────────────
 
 echo ""
-echo "── Steg 9: ios-setup.sh ──"
+echo "── Steg 8: ios-setup.sh ──"
 bash "$SCRIPT_DIR/ios-setup.sh"
 
 # ── 10. ios-verify.sh (SPM + bundle-ID) ──────────────────────────────────────
 
 echo ""
-echo "── Steg 10: ios-verify.sh ──"
+echo "── Steg 9: ios-verify.sh ──"
 bash "$SCRIPT_DIR/ios-verify.sh"
 
 # ── Klart ────────────────────────────────────────────────────────────────────
