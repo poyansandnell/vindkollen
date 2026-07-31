@@ -194,6 +194,9 @@ export async function startNativeCameraPreview(): Promise<boolean> {
       x: 0,
       y: 0,
       enableZoom: false,
+      disableAudio: true, // Förhindrar att AVCaptureAudioDeviceInput läggs till AVCaptureSession.
+      // Utan detta lägger pluginen automatiskt till mikrofoninput som kraschar
+      // under TCC om NSMicrophoneUsageDescription saknas i Info.plist.
     });
     _cameraPreviewActive = true;
     // Gör hela DOM-stacken transparent så att native CameraPreview-lagret syns.
