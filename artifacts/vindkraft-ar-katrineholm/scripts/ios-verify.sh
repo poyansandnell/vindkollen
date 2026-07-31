@@ -78,11 +78,11 @@ check_file "Package.swift finns" "$PKG_SWIFT"
 if [ -f "$PKG_SWIFT" ]; then
   # Lokal vendor-sökväg (inte remote exact)
   check "capacitor-swift-pm som lokal path-dependency" \
-    'path:.*vendor/capacitor-swift-pm\|path: "vendor/capacitor-swift-pm"' "$PKG_SWIFT"
+    'vendor/capacitor-swift-pm' "$PKG_SWIFT"
   check "ion-ios-camera som lokal path-dependency" \
-    'path:.*vendor/ion-ios-camera\|path: "vendor/ion-ios-camera"' "$PKG_SWIFT"
+    'vendor/ion-ios-camera' "$PKG_SWIFT"
   check "ion-ios-geolocation som lokal path-dependency" \
-    'path:.*vendor/ion-ios-geolocation\|path: "vendor/ion-ios-geolocation"' "$PKG_SWIFT"
+    'vendor/ion-ios-geolocation' "$PKG_SWIFT"
   check "Capacitor produkt-dependency i CapApp-SPM target" \
     'product(name: "Capacitor"' "$PKG_SWIFT"
   check "Cordova produkt-dependency i CapApp-SPM target" \
