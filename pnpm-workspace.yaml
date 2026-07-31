@@ -43,12 +43,14 @@ onlyBuiltDependencies:
   - msw
   - unrs-resolver
 
+# pnpm 11+: allowBuilds måste vara ett objekt (nyckel: true), inte en array.
+# onlyBuiltDependencies (ovan) täcker pnpm 9/10; allowBuilds täcker pnpm 11+.
 allowBuilds:
-  - '@swc/core'
-  - core-js
-  - esbuild
-  - msw
-  - unrs-resolver
+  '@swc/core': true
+  core-js: true
+  esbuild: true
+  msw: true
+  unrs-resolver: true
 
 overrides:
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
