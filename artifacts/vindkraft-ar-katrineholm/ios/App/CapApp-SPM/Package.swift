@@ -1,20 +1,14 @@
 // swift-tools-version: 5.9
 import PackageDescription
 
-// IMPORTANT: This file is the SOURCE OF TRUTH committed to git.
-// `cap sync ios` would overwrite it; scripts/fix-ios-package-swift.js
-// (run by `pnpm native:fix-spm` / the `capacitor:sync:after` hook) restores it.
+// IMPORTANT: This file is restored by scripts/fix-ios-package-swift.js after
+// every `cap sync ios` (which overwrites it). Do not edit by hand.
 //
-// Design: ALL dependencies are LOCAL — no network access needed at all.
-//   • Capacitor.xcframework + Cordova.xcframework: vendor/capacitor-swift-pm/
-//   • IONCameraLib Swift sources:    vendor/ion-ios-camera/    (tag 1.0.4)
-//   • IONGeolocationLib Swift sources: vendor/ion-ios-geolocation/ (tag 2.1.1)
-//   • Plugin Swift sources: symlinks/<Name>/ios/Sources/<TargetDir>/
-//
-// Prerequisites for Xcode to build:
-//   1. git pull (gets all vendored sources committed to git)
-//   2. pnpm install (creates node_modules so symlinks/ resolve to plugin sources)
-//   3. Open App.xcodeproj — no other steps needed, no network required.
+// Plugin Swift sources are compiled as INLINE targets so that Xcode never needs
+// to download the remote capacitor-swift-pm binary package. Capacitor.xcframework
+// and Cordova.xcframework are vendored in vendor/capacitor-swift-pm/ (committed
+// to git). Only ion-ios-camera + ion-ios-geolocation (small Swift source packages)
+// are fetched remotely.
 let package = Package(
     name: "CapApp-SPM",
     platforms: [.iOS(.v15)],
@@ -24,18 +18,18 @@ let package = Package(
             targets: ["CapApp-SPM"])
     ],
     dependencies: [
-        // ALL LOCAL — committed to git; zero network access needed.
+        // LOCAL — XCFrameworks committed to git; no network access needed.
         .package(name: "capacitor-swift-pm", path: "vendor/capacitor-swift-pm"),
-        .package(name: "ion-ios-camera",     path: "vendor/ion-ios-camera"),
-        .package(name: "ion-ios-geolocation", path: "vendor/ion-ios-geolocation"),
+        // REMOTE — Swift source packages only; fast to clone.
+        .package(url: "https://github.com/ionic-team/ion-ios-camera.git", exact: "1.0.4"),
+        .package(url: "https://github.com/ionic-team/ion-ios-geolocation.git", exact: "2.1.1"),
     ],
     targets: [
-        // Plugin sources compiled inline — no separate Swift package needed.
         .target(
             name: "CameraPlugin",
             dependencies: [
-                .product(name: "Capacitor", package: "capacitor-swift-pm"),
-                .product(name: "Cordova",   package: "capacitor-swift-pm"),
+                .product(name: "Capacitor",    package: "capacitor-swift-pm"),
+                .product(name: "Cordova",      package: "capacitor-swift-pm"),
                 .product(name: "IONCameraLib", package: "ion-ios-camera"),
             ],
             path: "symlinks/CapacitorCamera/ios/Sources/CameraPlugin"
@@ -57,7 +51,6 @@ let package = Package(
             ],
             path: "symlinks/CapacitorCommunityCameraPreview/ios/Sources/CameraPreviewPlugin"
         ),
-        // Main umbrella target that the app links against.
         .target(
             name: "CapApp-SPM",
             dependencies: [

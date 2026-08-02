@@ -1,0 +1,138 @@
+Vi ska nu förbereda Vindkollen för första publicering på Google Play.
+
+Utgångsläge:
+- Appnamn: Vindkollen
+- Android package/applicationId: se.catchme.vindkollen
+- Kodbas: artifacts/vindkraft-ar-katrineholm
+- Teknik: Capacitor 8
+- iOS-versionen är redan publicerad
+- Mikrofon används inte
+- AR använder kamera, GPS, kompass/rörelsesensorer och syntetiskt ljud
+- CameraPreview måste fortsätta startas med disableAudio: true
+
+Mål:
+Skapa ett robust Android-byggflöde som producerar en signerbar Android App Bundle (.aab) för Google Play.
+
+Gör följande:
+
+1. Kontrollera om android/-projektet redan finns.
+   - Om det saknas: skapa det med Capacitor på korrekt sätt.
+   - Radera eller återskapa inte befintliga native-filer i onödan.
+
+2. Lås Android-identiteten:
+   - applicationId/package name: se.catchme.vindkollen
+   - app name/display name: Vindkollen
+   - versionName: 1.0
+   - versionCode: 1
+
+3. Target SDK:
+   - Använd targetSdk 36 om nuvarande Capacitor/Gradle/Android-plugin stöder det stabilt.
+   - Annars minst targetSdk 35.
+   - compileSdk ska vara kompatibelt med vald targetSdk.
+   - Rapportera exakt compileSdk, targetSdk och minSdk.
+
+4. Behörigheter:
+   Behåll endast det appen faktiskt behöver:
+   - CAMERA
+   - ACCESS_FINE_LOCATION
+   - ACCESS_COARSE_LOCATION
+   - eventuellt INTERNET
+   - eventuella sensorer som Android faktiskt kräver deklaration för
+
+   Ta inte med:
+   - RECORD_AUDIO
+   - bakgrundsplats
+   - onödiga lagringsbehörigheter
+   - READ_MEDIA_AUDIO
+   - annonserings-ID om inget SDK kräver det
+
+5. Kontrollera alla manifests, plugins och merged manifest så att:
+   - RECORD_AUDIO inte finns
+   - mikrofon inte begärs av camera-preview
+   - disableAudio: true finns i den byggda webbkoden
+   - appen inte begär bakgrundsplats
+   - inga onödiga dangerous permissions återinförs av plugins
+
+6. Kamera och AR:
+   - Verifiera att CameraPreview fungerar på Android.
+   - Verifiera att Starta AR inte kraschar vid första start.
+   - Hantera korrekt:
+     - nekad kamerabehörighet
+     - nekad platsbehörighet
+     - GPS avstängd
+     - svag/ingen kompass
+     - återgång från bakgrunden
+   - Appen ska visa ett begripligt felmeddelande i stället för att krascha.
+
+7. Skapa ett robust script:
+   pnpm android:prepare
+
+   Scriptet ska:
+   - använda set -euo pipefail
+   - rensa och bygga aktuell dist-native
+   - avbryta om native-build misslyckas
+   - verifiera disableAudio: true i dist-native
+   - köra npx cap sync android
+   - verifiera package name och appnamn
+   - verifiera targetSdk/compileSdk
+   - verifiera att RECORD_AUDIO och bakgrundsplats saknas
+   - kontrollera merged manifest om möjligt
+   - avbryta om något är fel
+
+8. Skapa även:
+   pnpm android:verify
+
+   Det ska kontrollera den färdiga Android-konfigurationen utan att ändra filer.
+
+9. Release-signering:
+   - Förbered Gradle för release signing via miljövariabler eller en lokal, gitignorerad keystore.properties.
+   - Committa aldrig keystore, lösenord eller privata nycklar.
+   - Skapa tydliga instruktioner för hur jag på Mac skapar en upload keystore.
+   - Använd Google Play App Signing.
+   - Release-builden ska kunna skapas som .aab.
+
+10. Skapa buildkommando:
+    pnpm android:bundle
+
+    Det ska efter lyckad android:prepare skapa:
+    android/app/build/outputs/bundle/release/app-release.aab
+
+11. Google Play-kontroller:
+    - 64-bitarsstöd
+    - ingen debug-signering i release
+    - android:debuggable=false i release
+    - korrekt launcher icon och adaptive icon
+    - korrekt splash screen
+    - appens svenska namn Vindkollen
+    - inga test-/beta-/debugtexter i release
+    - inga cleartext HTTP-anrop; använd HTTPS
+    - verifiera att API-adressen för produktion är korrekt
+
+12. Testning:
+    - Bygg en debugversion och verifiera installation på fysisk Android.
+    - Testa särskilt:
+      - Starta AR
+      - Sverigekartan
+      - öppna projekt
+      - flytta vindkraftverk
+      - Se härifrån/simulerad AR
+      - fotomontage
+      - avbrutna behörigheter
+    - Rapportera vad som inte kan verifieras utan fysisk Android-enhet.
+
+13. Ändra inte:
+    - Bundle/package ID: se.catchme.vindkollen
+    - Appnamn: Vindkollen
+    - deep link: vindkollen://
+    - disableAudio: true
+    - appens design eller funktioner
+    - iOS-konfigurationen
+
+14. Pusha till main och rapportera:
+    - commit-hash
+    - ändrade filer
+    - compileSdk, targetSdk, minSdk
+    - Android-behörigheter i merged manifest
+    - exakt kommando jag ska köra på Mac
+    - exakt sökväg till den färdiga .aab-filen
+    - eventuella steg jag själv måste göra för keystore/signering
