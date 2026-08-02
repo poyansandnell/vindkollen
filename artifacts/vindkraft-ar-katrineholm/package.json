@@ -17,6 +17,9 @@
     "native:android": "pnpm native:build && cap sync android && cap open android",
     "ios:prepare": "bash scripts/ios-prepare.sh",
     "ios:verify": "bash scripts/ios-verify-full.sh",
+    "android:prepare": "bash scripts/android-prepare.sh",
+    "android:verify": "bash scripts/android-verify.sh",
+    "android:bundle": "bash scripts/android-bundle.sh",
     "native:ios:verify": "bash scripts/ios-verify.sh",
     "capacitor:sync:after": "node scripts/fix-ios-package-swift.js"
   },
