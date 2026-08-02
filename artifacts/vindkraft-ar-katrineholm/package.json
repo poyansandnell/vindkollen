@@ -20,6 +20,7 @@
     "android:prepare": "bash scripts/android-prepare.sh",
     "android:verify": "bash scripts/android-verify.sh",
     "android:bundle": "bash scripts/android-bundle.sh",
+    "android:release": "bash scripts/android-release.sh",
     "native:ios:verify": "bash scripts/ios-verify.sh",
     "capacitor:sync:after": "node scripts/fix-ios-package-swift.js"
   },
