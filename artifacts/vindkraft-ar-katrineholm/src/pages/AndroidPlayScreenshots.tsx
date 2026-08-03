@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 
-type Mode = "phone" | "feature";
+type Mode = "phone" | "tablet" | "feature";
 
 const SLIDES = [
   {
@@ -251,6 +251,99 @@ function PhoneSlide({
   );
 }
 
+// ── Tablet slide — landscape 16:9, 960×540 @ 2x = 1920×1080 ────────────────
+
+function TabletSlide({
+  slide,
+  slideRef,
+}: {
+  slide: (typeof SLIDES)[0];
+  slideRef: React.RefObject<HTMLDivElement>;
+}) {
+  return (
+    <div
+      ref={slideRef}
+      style={{
+        width: "960px",
+        height: "540px",
+        background: "#0a0a0a",
+        position: "relative",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "stretch",
+        fontFamily: "'Google Sans', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
+        flexShrink: 0,
+      }}
+    >
+      <TopoBackground w={960} h={540} gradientId="glow-tablet" />
+
+      {/* Left — text */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          width: "400px",
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          padding: "52px 48px 52px 60px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: "#FF8B01", marginBottom: "16px", opacity: 0.9 }}>
+          Vindkollen AR
+        </div>
+        <h1 style={{ fontSize: "42px", fontWeight: 800, lineHeight: 1.07, color: "#ffffff", margin: 0, marginBottom: "14px", whiteSpace: "pre-line", letterSpacing: "-0.025em" }}>
+          {slide.headline}
+        </h1>
+        <div style={{ width: "32px", height: "2px", background: "#FF8B01", borderRadius: "1px", marginBottom: "14px", opacity: 0.8 }} />
+        <p style={{ fontSize: "14px", fontWeight: 400, lineHeight: 1.55, color: "rgba(255,255,255,0.55)", margin: 0 }}>
+          {slide.subheadline}
+        </p>
+      </div>
+
+      {/* Right — Android tablet frame */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "36px 56px 36px 20px",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* Android tablet frame — landscape */}
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "380px",
+            aspectRatio: "4/3",
+            borderRadius: "16px",
+            border: "5px solid #2a2a2a",
+            boxShadow: "0 0 0 1px #3a3a3a, inset 0 0 0 1px #1a1a1a, 0 20px 60px rgba(0,0,0,0.9)",
+            overflow: "hidden",
+            position: "relative",
+            background: "#000",
+          }}
+        >
+          {/* Punch-hole camera — right side when landscape */}
+          <div style={{ position: "absolute", top: "50%", right: "10px", transform: "translateY(-50%)", width: "10px", height: "10px", background: "#000", borderRadius: "50%", zIndex: 10 }} />
+          <img
+            src={slide.image}
+            alt="App screenshot"
+            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", display: "block" }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Feature graphic — 1024×500 ───────────────────────────────────────────────
 
 function FeatureGraphic({ graphicRef }: { graphicRef: React.RefObject<HTMLDivElement> }) {
@@ -401,39 +494,61 @@ export default function AndroidPlayScreenshots() {
   const [downloading, setDownloading] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
 
-  const slideRef = useRef<HTMLDivElement>(null);
-  const featureRef = useRef<HTMLDivElement>(null);
-  const allPhoneRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const slideRef    = useRef<HTMLDivElement>(null);
+  const featureRef  = useRef<HTMLDivElement>(null);
+  const allPhoneRefs  = useRef<(HTMLDivElement | null)[]>([]);
+  const allTabletRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const isFeature = mode === "feature";
+  const isTablet  = mode === "tablet";
+  const isPhone   = mode === "phone";
+
+  const dimLabel = isFeature
+    ? "1024 × 500 px"
+    : isTablet
+    ? "960 × 540 px (2× = 1920 × 1080, 16:9)"
+    : "540 × 960 px (2× = 1080 × 1920, 9:16)";
+
+  const tabletFilename = (s: (typeof SLIDES)[0]) =>
+    s.filename.replace("android-", "android-tablet-");
 
   const handleDownload = useCallback(async () => {
     setDownloading(true);
     try {
-      if (mode === "feature" && featureRef.current) {
+      if (isFeature && featureRef.current) {
         await downloadEl(featureRef.current, "vindkollen-feature-graphic-1024x500.png", 1);
       } else if (slideRef.current) {
-        await downloadEl(slideRef.current, SLIDES[current].filename, 2);
+        const fn = isTablet
+          ? tabletFilename(SLIDES[current])
+          : SLIDES[current].filename;
+        await downloadEl(slideRef.current, fn, 2);
       }
     } finally {
       setDownloading(false);
     }
-  }, [mode, current]);
+  }, [mode, current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDownloadAll = useCallback(async () => {
     setDownloadingAll(true);
     try {
+      const refs = isTablet ? allTabletRefs : allPhoneRefs;
       for (let i = 0; i < SLIDES.length; i++) {
-        const el = allPhoneRefs.current[i];
+        const el = refs.current[i];
         if (!el) continue;
-        await downloadEl(el, SLIDES[i].filename, 2);
+        const fn = isTablet ? tabletFilename(SLIDES[i]) : SLIDES[i].filename;
+        await downloadEl(el, fn, 2);
         await new Promise((r) => setTimeout(r, 600));
       }
     } finally {
       setDownloadingAll(false);
     }
-  }, []);
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isFeature = mode === "feature";
-  const dimLabel = isFeature ? "1024 × 500 px" : "540 × 960 px (2× = 1080 × 1920)";
+  const MODES: { id: Mode; label: string }[] = [
+    { id: "phone",   label: "📱 Telefon" },
+    { id: "tablet",  label: "📟 Surfplatta 7\"" },
+    { id: "feature", label: "🖼 Feature graphic" },
+  ];
 
   return (
     <div
@@ -449,15 +564,7 @@ export default function AndroidPlayScreenshots() {
     >
       {/* Header */}
       <div style={{ width: "100%", maxWidth: "960px", marginBottom: "32px" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "12px",
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
           <div>
             <h2 style={{ color: "#fff", fontSize: "20px", fontWeight: 700, margin: 0 }}>
               Google Play — marknadsföringsbilder
@@ -469,31 +576,23 @@ export default function AndroidPlayScreenshots() {
 
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
             {/* Mode toggle */}
-            <div
-              style={{
-                display: "flex",
-                borderRadius: "20px",
-                overflow: "hidden",
-                border: "1px solid rgba(255,139,1,0.25)",
-              }}
-            >
-              {(["phone", "feature"] as Mode[]).map((m) => (
+            <div style={{ display: "flex", borderRadius: "20px", overflow: "hidden", border: "1px solid rgba(255,139,1,0.25)" }}>
+              {MODES.map(({ id, label }) => (
                 <button
-                  key={m}
-                  onClick={() => setMode(m)}
+                  key={id}
+                  onClick={() => { setMode(id); setCurrent(0); }}
                   style={{
-                    background: mode === m ? "#FF8B01" : "transparent",
-                    color: mode === m ? "#000" : "rgba(255,255,255,0.5)",
+                    background: mode === id ? "#FF8B01" : "transparent",
+                    color: mode === id ? "#000" : "rgba(255,255,255,0.5)",
                     border: "none",
-                    padding: "8px 18px",
+                    padding: "8px 16px",
                     fontSize: "12px",
                     fontWeight: 600,
                     cursor: "pointer",
-                    textTransform: "uppercase" as const,
-                    letterSpacing: "0.05em",
+                    whiteSpace: "nowrap" as const,
                   }}
                 >
-                  {m === "phone" ? "📱 Skärmbilder" : "🖼 Feature graphic"}
+                  {label}
                 </button>
               ))}
             </div>
@@ -501,64 +600,31 @@ export default function AndroidPlayScreenshots() {
             <button
               onClick={handleDownload}
               disabled={downloading}
-              style={{
-                background: "#FF8B01",
-                color: "#000",
-                border: "none",
-                borderRadius: "20px",
-                padding: "10px 20px",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: downloading ? "wait" : "pointer",
-                opacity: downloading ? 0.6 : 1,
-              }}
+              style={{ background: "#FF8B01", color: "#000", border: "none", borderRadius: "20px", padding: "10px 20px", fontSize: "13px", fontWeight: 600, cursor: downloading ? "wait" : "pointer", opacity: downloading ? 0.6 : 1 }}
             >
-              {downloading
-                ? "Exporterar…"
-                : isFeature
-                ? "⬇ Ladda ner feature graphic"
-                : `⬇ Ladda ner bild ${current + 1}`}
+              {downloading ? "Exporterar…" : isFeature ? "⬇ Feature graphic" : `⬇ Bild ${current + 1}`}
             </button>
 
             {!isFeature && (
               <button
                 onClick={handleDownloadAll}
                 disabled={downloadingAll}
-                style={{
-                  background: "rgba(255,139,1,0.15)",
-                  color: "#FF8B01",
-                  border: "1px solid rgba(255,139,1,0.3)",
-                  borderRadius: "20px",
-                  padding: "10px 20px",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  cursor: downloadingAll ? "wait" : "pointer",
-                  opacity: downloadingAll ? 0.6 : 1,
-                }}
+                style={{ background: "rgba(255,139,1,0.15)", color: "#FF8B01", border: "1px solid rgba(255,139,1,0.3)", borderRadius: "20px", padding: "10px 20px", fontSize: "13px", fontWeight: 600, cursor: downloadingAll ? "wait" : "pointer", opacity: downloadingAll ? 0.6 : 1 }}
               >
-                {downloadingAll ? "Exporterar alla…" : "⬇ Ladda ner alla 6"}
+                {downloadingAll ? "Exporterar alla…" : "⬇ Alla 6"}
               </button>
             )}
           </div>
         </div>
 
-        {/* Slide dots — only in phone mode */}
+        {/* Slide dots */}
         {!isFeature && (
           <div style={{ display: "flex", gap: "8px", marginTop: "20px", flexWrap: "wrap" }}>
             {SLIDES.map((s, i) => (
               <button
                 key={s.id}
                 onClick={() => setCurrent(i)}
-                style={{
-                  background: i === current ? "#FF8B01" : "rgba(255,255,255,0.12)",
-                  color: i === current ? "#000" : "rgba(255,255,255,0.5)",
-                  border: "none",
-                  borderRadius: "12px",
-                  padding: "6px 14px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
+                style={{ background: i === current ? "#FF8B01" : "rgba(255,255,255,0.12)", color: i === current ? "#000" : "rgba(255,255,255,0.5)", border: "none", borderRadius: "12px", padding: "6px 14px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
               >
                 {s.id}
               </button>
@@ -571,15 +637,21 @@ export default function AndroidPlayScreenshots() {
       <div
         style={{
           boxShadow: "0 0 80px rgba(255,139,1,0.08), 0 40px 120px rgba(0,0,0,0.8)",
-          borderRadius: isFeature ? "12px" : "46px",
+          borderRadius: isFeature ? "12px" : isTablet ? "20px" : "46px",
           overflow: "hidden",
-          transform: isFeature ? "scale(0.75)" : "scale(0.85)",
+          transform: isFeature ? "scale(0.75)" : isTablet ? "scale(0.72)" : "scale(0.85)",
           transformOrigin: "top center",
-          marginBottom: isFeature ? "-125px" : "-80px",
+          marginBottom: isFeature ? "-125px" : isTablet ? "-150px" : "-80px",
         }}
       >
         {isFeature ? (
           <FeatureGraphic graphicRef={featureRef as React.RefObject<HTMLDivElement>} />
+        ) : isTablet ? (
+          <TabletSlide
+            key={`tablet-${current}`}
+            slide={SLIDES[current]}
+            slideRef={slideRef as React.RefObject<HTMLDivElement>}
+          />
         ) : (
           <PhoneSlide
             key={`phone-${current}`}
@@ -589,93 +661,56 @@ export default function AndroidPlayScreenshots() {
         )}
       </div>
 
-      {/* Navigation — phone mode only */}
+      {/* Navigation */}
       {!isFeature && (
         <div style={{ display: "flex", gap: "16px", marginTop: "28px", alignItems: "center" }}>
-          <button
-            onClick={() => setCurrent((c) => Math.max(0, c - 1))}
-            disabled={current === 0}
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              color: current === 0 ? "rgba(255,255,255,0.2)" : "#fff",
-              border: "none",
-              borderRadius: "50%",
-              width: "44px",
-              height: "44px",
-              fontSize: "18px",
-              cursor: current === 0 ? "default" : "pointer",
-            }}
-          >
+          <button onClick={() => setCurrent((c) => Math.max(0, c - 1))} disabled={current === 0}
+            style={{ background: "rgba(255,255,255,0.08)", color: current === 0 ? "rgba(255,255,255,0.2)" : "#fff", border: "none", borderRadius: "50%", width: "44px", height: "44px", fontSize: "18px", cursor: current === 0 ? "default" : "pointer" }}>
             ←
           </button>
-          <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>
-            Bild {current + 1} av {SLIDES.length}
-          </span>
-          <button
-            onClick={() => setCurrent((c) => Math.min(SLIDES.length - 1, c + 1))}
-            disabled={current === SLIDES.length - 1}
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              color: current === SLIDES.length - 1 ? "rgba(255,255,255,0.2)" : "#fff",
-              border: "none",
-              borderRadius: "50%",
-              width: "44px",
-              height: "44px",
-              fontSize: "18px",
-              cursor: current === SLIDES.length - 1 ? "default" : "pointer",
-            }}
-          >
+          <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>Bild {current + 1} av {SLIDES.length}</span>
+          <button onClick={() => setCurrent((c) => Math.min(SLIDES.length - 1, c + 1))} disabled={current === SLIDES.length - 1}
+            style={{ background: "rgba(255,255,255,0.08)", color: current === SLIDES.length - 1 ? "rgba(255,255,255,0.2)" : "#fff", border: "none", borderRadius: "50%", width: "44px", height: "44px", fontSize: "18px", cursor: current === SLIDES.length - 1 ? "default" : "pointer" }}>
             →
           </button>
         </div>
       )}
 
-      {/* Hidden off-screen renders for "download all" */}
+      {/* Hidden phone renders */}
       <div style={{ position: "absolute", left: "-9999px", top: 0, pointerEvents: "none" }}>
         {SLIDES.map((slide, i) => (
-          <div
-            key={slide.id}
-            ref={(el) => { allPhoneRefs.current[i] = el; }}
-            style={{
-              width: "540px",
-              height: "960px",
-              background: "#0a0a0a",
-              position: "relative",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              fontFamily: "'Google Sans', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
-              flexShrink: 0,
-            }}
-          >
-            <TopoBackground w={540} h={960} gradientId={`glow-hidden-${i}`} />
-            <div
-              style={{
-                position: "relative",
-                zIndex: 1,
-                width: "100%",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                padding: "52px 36px 40px",
-                boxSizing: "border-box",
-              }}
-            >
-              <div style={{ fontSize: "12px", fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "#FF8B01", marginBottom: "18px", opacity: 0.9 }}>
-                Vindkollen AR
-              </div>
-              <h1 style={{ fontSize: "40px", fontWeight: 800, lineHeight: 1.08, color: "#ffffff", margin: 0, marginBottom: "14px", whiteSpace: "pre-line", letterSpacing: "-0.02em" }}>
-                {slide.headline}
-              </h1>
-              <p style={{ fontSize: "14px", fontWeight: 400, lineHeight: 1.55, color: "rgba(255,255,255,0.55)", margin: 0, marginBottom: "24px", maxWidth: "340px" }}>
-                {slide.subheadline}
-              </p>
+          <div key={`hp-${slide.id}`} ref={(el) => { allPhoneRefs.current[i] = el; }}
+            style={{ width: "540px", height: "960px", background: "#0a0a0a", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", fontFamily: "'Google Sans','Roboto',sans-serif", flexShrink: 0 }}>
+            <TopoBackground w={540} h={960} gradientId={`glow-hp-${i}`} />
+            <div style={{ position: "relative", zIndex: 1, width: "100%", height: "100%", display: "flex", flexDirection: "column", padding: "52px 36px 40px", boxSizing: "border-box" }}>
+              <div style={{ fontSize: "12px", fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "#FF8B01", marginBottom: "18px", opacity: 0.9 }}>Vindkollen AR</div>
+              <h1 style={{ fontSize: "40px", fontWeight: 800, lineHeight: 1.08, color: "#fff", margin: 0, marginBottom: "14px", whiteSpace: "pre-line", letterSpacing: "-0.02em" }}>{slide.headline}</h1>
+              <p style={{ fontSize: "14px", lineHeight: 1.55, color: "rgba(255,255,255,0.55)", margin: 0, marginBottom: "24px", maxWidth: "340px" }}>{slide.subheadline}</p>
               <div style={{ width: "36px", height: "2px", background: "#FF8B01", borderRadius: "1px", marginBottom: "24px", opacity: 0.8 }} />
               <div style={{ flex: 1, display: "flex", alignItems: "flex-end" }}>
-                <div style={{ width: "100%", maxWidth: "300px", margin: "0 auto" }}>
-                  <AndroidFrame imageSrc={slide.image} />
-                </div>
+                <div style={{ width: "100%", maxWidth: "300px", margin: "0 auto" }}><AndroidFrame imageSrc={slide.image} /></div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Hidden tablet renders */}
+      <div style={{ position: "absolute", left: "-9999px", top: 0, pointerEvents: "none" }}>
+        {SLIDES.map((slide, i) => (
+          <div key={`ht-${slide.id}`} ref={(el) => { allTabletRefs.current[i] = el; }}
+            style={{ width: "960px", height: "540px", background: "#0a0a0a", position: "relative", overflow: "hidden", display: "flex", flexDirection: "row", alignItems: "stretch", fontFamily: "'Google Sans','Roboto',sans-serif", flexShrink: 0 }}>
+            <TopoBackground w={960} h={540} gradientId={`glow-ht-${i}`} />
+            <div style={{ position: "relative", zIndex: 1, width: "400px", flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", padding: "52px 48px 52px 60px", boxSizing: "border-box" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#FF8B01", marginBottom: "16px", opacity: 0.9 }}>Vindkollen AR</div>
+              <h1 style={{ fontSize: "42px", fontWeight: 800, lineHeight: 1.07, color: "#fff", margin: 0, marginBottom: "14px", whiteSpace: "pre-line", letterSpacing: "-0.025em" }}>{slide.headline}</h1>
+              <div style={{ width: "32px", height: "2px", background: "#FF8B01", borderRadius: "1px", marginBottom: "14px", opacity: 0.8 }} />
+              <p style={{ fontSize: "14px", lineHeight: 1.55, color: "rgba(255,255,255,0.55)", margin: 0 }}>{slide.subheadline}</p>
+            </div>
+            <div style={{ position: "relative", zIndex: 1, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "36px 56px 36px 20px", boxSizing: "border-box" }}>
+              <div style={{ width: "100%", maxWidth: "380px", aspectRatio: "4/3", borderRadius: "16px", border: "5px solid #2a2a2a", boxShadow: "0 0 0 1px #3a3a3a, 0 20px 60px rgba(0,0,0,0.9)", overflow: "hidden", position: "relative", background: "#000" }}>
+                <div style={{ position: "absolute", top: "50%", right: "10px", transform: "translateY(-50%)", width: "10px", height: "10px", background: "#000", borderRadius: "50%", zIndex: 10 }} />
+                <img src={slide.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", display: "block" }} />
               </div>
             </div>
           </div>
@@ -683,29 +718,16 @@ export default function AndroidPlayScreenshots() {
       </div>
 
       <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px", marginTop: "32px", textAlign: "center" }}>
-        {isFeature
-          ? "Feature graphic exporteras som PNG 1024×500 px"
-          : "Skärmbilder exporteras som PNG 1080×1920 px (9:16, uppfyller Google Play minimikrav)"}
+        {isFeature ? "Feature graphic — PNG 1024×500 px"
+          : isTablet ? "Surfplatta 7\" — PNG 1920×1080 px (16:9, uppfyller Google Play minimikrav)"
+          : "Telefon — PNG 1080×1920 px (9:16, uppfyller Google Play minimikrav)"}
       </p>
 
-      {/* App icon download info */}
-      <div
-        style={{
-          marginTop: "24px",
-          padding: "16px 24px",
-          borderRadius: "12px",
-          border: "1px solid rgba(255,255,255,0.08)",
-          background: "rgba(255,255,255,0.03)",
-          maxWidth: "500px",
-          textAlign: "center",
-        }}
-      >
+      <div style={{ marginTop: "24px", padding: "16px 24px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", maxWidth: "500px", textAlign: "center" }}>
         <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "12px", margin: 0 }}>
           <strong style={{ color: "rgba(255,255,255,0.8)" }}>App-ikon (512×512 px)</strong>
           {" "}— finns under{" "}
-          <code style={{ color: "#FF8B01", fontSize: "11px" }}>
-            public/android/icon-512.png
-          </code>
+          <code style={{ color: "#FF8B01", fontSize: "11px" }}>public/android/icon-512.png</code>
           {" "}i projektet
         </p>
       </div>
