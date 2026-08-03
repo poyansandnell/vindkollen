@@ -1,0 +1,45 @@
+Marknadsför din app på Google Play genom att hantera appens ikon, skärmbilder och videor. Läs igenom riktlinjerna för innehåll innan du laddar upp ny grafik. Om du lägger till översatta butiksuppgifter utan lokaliserad grafik använder vi standardspråkets grafik.
+
+Appikon
+ 
+*
+Appikonen måste vara en PNG- eller JPEG-bild, upp till 1 MB stor, som har måtten 512 × 512 px och följer våra riktlinjer för utformningen och vår metadatapolicy
+Funktionsbild
+ 
+*
+Your featured graphic must be a PNG or JPEG, up to 15 MB, and 1,024 px by 500 px. This graphic will be used when you choose to feature your app. Learn more
+Video
+Lägg till en video genom att ange en webbadress på YouTube. Videon måste vara offentlig eller olistad, annonser måste ha inaktiverats och den får inte ha åldersgräns.
+
+ 
+Telefontillgångar
+*
+Skärmbilder för mobiler
+ 
+*
+Ladda upp 2–8 skärmbilder i telefonformat. Skärmbilderna måste vara i PNG- eller JPEG-format, upp till 8 MB stora, med bildproportionerna 16:9 eller 9:16 samt bredd och höjd mellan 320 och 3 840 px
+Om spelet ska uppfylla villkoren för att tas med i en kampanj måste du ladda upp minst fyra skärmbilder med 1 080 px som minsta mått på både bredden och höjden.
+Surfplattetillgångar
+*
+Skärmbilder från surfplatta med 7-tumsskärm
+ 
+*
+Ladda upp högst åtta skärmbilder från en surfplatta med 7-tumsskärm Skärmbilderna måste vara i PNG- eller JPEG-format, upp till 8 MB stora, med bildproportionerna 16:9 eller 9:16 samt bredd och höjd mellan 320 och 3 840 px
+Skärmbilder för surfplattor med 10-tumsskärm
+ 
+*
+Ladda upp högst åtta skärmbilder från en surfplatta med 10-tumsskärm Skärmbilderna måste vara i PNG- eller JPEG-format, upp till 8 MB stora, med bildproportionerna 16:9 eller 9:16 samt bredd och höjd inom intervallet 1 080 till 7 680 px
+Chromebook-tillgångar
+Skärmbilder från Chromebook
+Ladda upp 4–8 skärmbilder. Skärmbilderna måste vara i PNG- eller JPEG-format, upp till 8 MB stora, med bildproportionerna 16:9 eller 9:16 samt bredd och höjd inom intervallet 1 080 till 7 680 px
+Android XR-tillgångar
+Skärmbilder från Android XR
+Ladda upp 4–8 skärmbilder. Skärmbilderna måste vara i PNG- eller JPEG-format, upp till 15 MB stora, med bildproportionerna 16:9 eller 9:16 samt bredd och höjd inom intervallet 720 till 7 680 px
+Rumslig XR-video
+Lägg till en rumslig XR-video med en uppslukande förhandstitt på dina funktioner genom att ange en YouTube-webbadress. Videon måste vara i 360°, 180° eller 3D, vara offentlig eller olistad, annonser måste ha inaktiverats och den får inte ha någon åldersgräns.
+
+ 
+Icke-rumslig XR-video
+Lägg till en icke-rumslig XR-video genom att ange en YouTube-webbadress. Videon måste vara offentlig eller olistad, annonser måste ha inaktiverats och den får inte ha en åldersgräns.
+
+ 
