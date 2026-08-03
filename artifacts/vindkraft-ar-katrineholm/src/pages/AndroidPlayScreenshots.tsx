@@ -251,7 +251,54 @@ function PhoneSlide({
   );
 }
 
-// ── Tablet slide — landscape 16:9, 960×540 @ 2x = 1920×1080 ────────────────
+// ── Tablet frame — portrait 9:16, thicker bezels than phone ─────────────────
+
+function TabletFrame({ imageSrc }: { imageSrc: string }) {
+  return (
+    <div
+      style={{
+        width: "100%",
+        aspectRatio: "9/16",
+        borderRadius: "28px",           // squarer corners than phone
+        border: "8px solid #252525",    // thicker bezel
+        boxShadow:
+          "0 0 0 2px #333, inset 0 0 0 1px #1a1a1a, 0 40px 120px rgba(0,0,0,0.9), 0 8px 32px rgba(0,0,0,0.6)",
+        overflow: "hidden",
+        position: "relative",
+        background: "#000",
+      }}
+    >
+      {/* Front camera — centred top, no Dynamic Island */}
+      <div
+        style={{
+          position: "absolute",
+          top: "10px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "10px",
+          height: "10px",
+          background: "#111",
+          borderRadius: "50%",
+          zIndex: 10,
+          border: "1px solid #333",
+        }}
+      />
+      <img
+        src={imageSrc}
+        alt="App screenshot"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "top center",
+          display: "block",
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Tablet slide — portrait 9:16, 540×960 @ 2x = 1080×1920 ─────────────────
 
 function TabletSlide({
   slide,
@@ -264,80 +311,47 @@ function TabletSlide({
     <div
       ref={slideRef}
       style={{
-        width: "960px",
-        height: "540px",
+        width: "540px",
+        height: "960px",
         background: "#0a0a0a",
         position: "relative",
         overflow: "hidden",
         display: "flex",
-        flexDirection: "row",
-        alignItems: "stretch",
+        flexDirection: "column",
+        alignItems: "center",
         fontFamily: "'Google Sans', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
         flexShrink: 0,
       }}
     >
-      <TopoBackground w={960} h={540} gradientId="glow-tablet" />
+      <TopoBackground w={540} h={960} gradientId="glow-tablet" />
 
-      {/* Left — text */}
       <div
         style={{
           position: "relative",
           zIndex: 1,
-          width: "400px",
-          flexShrink: 0,
+          width: "100%",
+          height: "100%",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "center",
-          padding: "52px 48px 52px 60px",
+          padding: "52px 36px 40px",
           boxSizing: "border-box",
         }}
       >
-        <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: "#FF8B01", marginBottom: "16px", opacity: 0.9 }}>
+        <div style={{ fontSize: "12px", fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: "#FF8B01", marginBottom: "18px", opacity: 0.9 }}>
           Vindkollen AR
         </div>
-        <h1 style={{ fontSize: "42px", fontWeight: 800, lineHeight: 1.07, color: "#ffffff", margin: 0, marginBottom: "14px", whiteSpace: "pre-line", letterSpacing: "-0.025em" }}>
+        <h1 style={{ fontSize: "40px", fontWeight: 800, lineHeight: 1.08, color: "#ffffff", margin: 0, marginBottom: "14px", whiteSpace: "pre-line", letterSpacing: "-0.02em" }}>
           {slide.headline}
         </h1>
-        <div style={{ width: "32px", height: "2px", background: "#FF8B01", borderRadius: "1px", marginBottom: "14px", opacity: 0.8 }} />
-        <p style={{ fontSize: "14px", fontWeight: 400, lineHeight: 1.55, color: "rgba(255,255,255,0.55)", margin: 0 }}>
+        <p style={{ fontSize: "14px", fontWeight: 400, lineHeight: 1.55, color: "rgba(255,255,255,0.55)", margin: 0, marginBottom: "24px", maxWidth: "340px" }}>
           {slide.subheadline}
         </p>
-      </div>
+        <div style={{ width: "36px", height: "2px", background: "#FF8B01", borderRadius: "1px", marginBottom: "24px", opacity: 0.8 }} />
 
-      {/* Right — Android tablet frame */}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "36px 56px 36px 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        {/* Android tablet frame — landscape */}
-        <div
-          style={{
-            width: "100%",
-            maxWidth: "380px",
-            aspectRatio: "4/3",
-            borderRadius: "16px",
-            border: "5px solid #2a2a2a",
-            boxShadow: "0 0 0 1px #3a3a3a, inset 0 0 0 1px #1a1a1a, 0 20px 60px rgba(0,0,0,0.9)",
-            overflow: "hidden",
-            position: "relative",
-            background: "#000",
-          }}
-        >
-          {/* Punch-hole camera — right side when landscape */}
-          <div style={{ position: "absolute", top: "50%", right: "10px", transform: "translateY(-50%)", width: "10px", height: "10px", background: "#000", borderRadius: "50%", zIndex: 10 }} />
-          <img
-            src={slide.image}
-            alt="App screenshot"
-            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", display: "block" }}
-          />
+        <div style={{ flex: 1, display: "flex", alignItems: "flex-end" }}>
+          <div style={{ width: "100%", maxWidth: "310px", margin: "0 auto" }}>
+            <TabletFrame imageSrc={slide.image} />
+          </div>
         </div>
       </div>
     </div>
@@ -505,8 +519,6 @@ export default function AndroidPlayScreenshots() {
 
   const dimLabel = isFeature
     ? "1024 × 500 px"
-    : isTablet
-    ? "960 × 540 px (2× = 1920 × 1080, 16:9)"
     : "540 × 960 px (2× = 1080 × 1920, 9:16)";
 
   const tabletFilename = (s: (typeof SLIDES)[0]) =>
@@ -695,22 +707,21 @@ export default function AndroidPlayScreenshots() {
         ))}
       </div>
 
-      {/* Hidden tablet renders */}
+      {/* Hidden tablet renders — portrait 9:16, same layout as TabletSlide */}
       <div style={{ position: "absolute", left: "-9999px", top: 0, pointerEvents: "none" }}>
         {SLIDES.map((slide, i) => (
           <div key={`ht-${slide.id}`} ref={(el) => { allTabletRefs.current[i] = el; }}
-            style={{ width: "960px", height: "540px", background: "#0a0a0a", position: "relative", overflow: "hidden", display: "flex", flexDirection: "row", alignItems: "stretch", fontFamily: "'Google Sans','Roboto',sans-serif", flexShrink: 0 }}>
-            <TopoBackground w={960} h={540} gradientId={`glow-ht-${i}`} />
-            <div style={{ position: "relative", zIndex: 1, width: "400px", flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", padding: "52px 48px 52px 60px", boxSizing: "border-box" }}>
-              <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#FF8B01", marginBottom: "16px", opacity: 0.9 }}>Vindkollen AR</div>
-              <h1 style={{ fontSize: "42px", fontWeight: 800, lineHeight: 1.07, color: "#fff", margin: 0, marginBottom: "14px", whiteSpace: "pre-line", letterSpacing: "-0.025em" }}>{slide.headline}</h1>
-              <div style={{ width: "32px", height: "2px", background: "#FF8B01", borderRadius: "1px", marginBottom: "14px", opacity: 0.8 }} />
-              <p style={{ fontSize: "14px", lineHeight: 1.55, color: "rgba(255,255,255,0.55)", margin: 0 }}>{slide.subheadline}</p>
-            </div>
-            <div style={{ position: "relative", zIndex: 1, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "36px 56px 36px 20px", boxSizing: "border-box" }}>
-              <div style={{ width: "100%", maxWidth: "380px", aspectRatio: "4/3", borderRadius: "16px", border: "5px solid #2a2a2a", boxShadow: "0 0 0 1px #3a3a3a, 0 20px 60px rgba(0,0,0,0.9)", overflow: "hidden", position: "relative", background: "#000" }}>
-                <div style={{ position: "absolute", top: "50%", right: "10px", transform: "translateY(-50%)", width: "10px", height: "10px", background: "#000", borderRadius: "50%", zIndex: 10 }} />
-                <img src={slide.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", display: "block" }} />
+            style={{ width: "540px", height: "960px", background: "#0a0a0a", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", fontFamily: "'Google Sans','Roboto',sans-serif", flexShrink: 0 }}>
+            <TopoBackground w={540} h={960} gradientId={`glow-ht-${i}`} />
+            <div style={{ position: "relative", zIndex: 1, width: "100%", height: "100%", display: "flex", flexDirection: "column", padding: "52px 36px 40px", boxSizing: "border-box" }}>
+              <div style={{ fontSize: "12px", fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "#FF8B01", marginBottom: "18px", opacity: 0.9 }}>Vindkollen AR</div>
+              <h1 style={{ fontSize: "40px", fontWeight: 800, lineHeight: 1.08, color: "#fff", margin: 0, marginBottom: "14px", whiteSpace: "pre-line", letterSpacing: "-0.02em" }}>{slide.headline}</h1>
+              <p style={{ fontSize: "14px", lineHeight: 1.55, color: "rgba(255,255,255,0.55)", margin: 0, marginBottom: "24px", maxWidth: "340px" }}>{slide.subheadline}</p>
+              <div style={{ width: "36px", height: "2px", background: "#FF8B01", borderRadius: "1px", marginBottom: "24px", opacity: 0.8 }} />
+              <div style={{ flex: 1, display: "flex", alignItems: "flex-end" }}>
+                <div style={{ width: "100%", maxWidth: "310px", margin: "0 auto" }}>
+                  <TabletFrame imageSrc={slide.image} />
+                </div>
               </div>
             </div>
           </div>
