@@ -15,6 +15,7 @@ import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
 import Contact from "@/pages/Contact";
 import AppStoreScreenshots from "@/pages/AppStoreScreenshots";
+import DeleteAccount from "@/pages/DeleteAccount";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,8 @@ function Router() {
       <Route path="/integritetspolicy" component={Privacy} />
       <Route path="/villkor" component={Terms} />
       <Route path="/kontakt" component={Contact} />
+      <Route path="/radera-konto" component={DeleteAccount} />
+      <Route path="/delete-account" component={DeleteAccount} />
       <Route path="/appstore-screenshots" component={AppStoreScreenshots} />
       <Route component={NotFound} />
     </Switch>
