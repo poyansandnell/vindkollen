@@ -16,6 +16,7 @@ import Terms from "@/pages/Terms";
 import Contact from "@/pages/Contact";
 import AppStoreScreenshots from "@/pages/AppStoreScreenshots";
 import DeleteAccount from "@/pages/DeleteAccount";
+import AndroidPlayScreenshots from "@/pages/AndroidPlayScreenshots";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/kontakt" component={Contact} />
       <Route path="/radera-konto" component={DeleteAccount} />
       <Route path="/delete-account" component={DeleteAccount} />
+      <Route path="/android-screenshots" component={AndroidPlayScreenshots} />
       <Route path="/appstore-screenshots" component={AppStoreScreenshots} />
       <Route component={NotFound} />
     </Switch>
