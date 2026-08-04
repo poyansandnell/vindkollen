@@ -5,3 +5,4 @@ export * from "./windProjectAreas";
 export * from "./windTurbines";
 export * from "./localityImpactScores";
 export * from "./projects";
+export * from "./pushSubscriptions";

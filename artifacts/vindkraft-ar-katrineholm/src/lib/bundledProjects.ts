@@ -31,26 +31,6 @@ export interface ApiProjectArea {
 }
 
 export const BUNDLED_PROJECTS: ApiProjectArea[] = [
-  // ── Ericsberg (special — campaign config) ──────────────────────────────
-  {
-    id: 10001,
-    name: "Ericsbergs planer",
-    status: "consultation",
-    kommun: "Katrineholm",
-    region: "Södermanland",
-    turbineCountPlannedMin: 29,
-    turbineCountPlannedMax: 29,
-    centerLat: 58.97,
-    centerLng: 16.27,
-    polygon: null,
-    campaign: {
-      enabled: true,
-      type: "referendum-interest" as const,
-      title: "Folkomröstning om vindkraft 2026",
-      description: "Skriv under för att kräva en kommunal folkomröstning om vindkraftsetableringen norr om Katrineholm.",
-      municipality: "Katrineholm",
-    },
-  },
   // ── Live-data från Vindbrukskollen (3587 projekt, 2026-08-04) ───────────────
   { id: 2200, name: "Ryssberget", status: "cancelled", kommun: "Bromölla", region: "Skåne län", turbineCountPlannedMin: 0, turbineCountPlannedMax: 0, centerLat: 56.135597, centerLng: 14.550135 },
   { id: 5, name: "Björkö", status: "planned", kommun: "Norrtälje", region: "Stockholms län", turbineCountPlannedMin: 1, turbineCountPlannedMax: 1, centerLat: 59.906483, centerLng: 18.928816 },
@@ -3641,5 +3621,17 @@ export const BUNDLED_PROJECTS: ApiProjectArea[] = [
   { id: 3537, name: "Kapheira", status: "consultation", kommun: "Sveriges ekonomiska zon", region: "Sveriges ekonomiska zon", turbineCountPlannedMin: null, turbineCountPlannedMax: 143, centerLat: 58.020293, centerLng: 18.007983 },
 ];
 
-/** Katrineholms/Ericsberg-projektet — används av InfoPanel för kampanjvisning. */
-export const KATRINEHOLM_PROJECT = BUNDLED_PROJECTS[0];
+// Injektera kampanjkonfiguration på det riktiga Länsstyrelseregistrerade projektet.
+const _ericsberg = BUNDLED_PROJECTS.find(p => p.id === 32);
+if (_ericsberg) {
+  _ericsberg.campaign = {
+    enabled: true,
+    type: "referendum-interest" as const,
+    title: "Folkomröstning om vindkraft 2026",
+    description: "Skriv under för att kräva en kommunal folkomröstning om vindkraftsetableringen norr om Katrineholm.",
+    municipality: "Katrineholm",
+  };
+}
+
+/** Katrineholms/Ericsberg-projektet (id 32) — används av InfoPanel för kampanjvisning. */
+export const KATRINEHOLM_PROJECT = BUNDLED_PROJECTS.find(p => p.id === 32)!;

@@ -50,6 +50,8 @@ import {
   unlockOrientation,
 } from "@/lib/capacitorBridge";
 import { NativeDiagnostics } from "@/components/NativeDiagnostics";
+import { OutdoorConfirmDialog } from "@/components/OutdoorConfirmDialog";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 const PHOTO_DISCLAIMER_TEXT = "Fotomontage/visualisering. GPS, kompass, terräng, väder och sikt kan påverka precisionen.";
 
@@ -599,6 +601,9 @@ export default function Home() {
       console.info("[AR][pipeline] Visible=true (GPS+kompass+kamera redo, AR-scenen visas)");
     }
   }, [arSessionVisible]);
+
+  // Push-prenumeration (tyst bakgrundsjobb — PWA-only, ingen effekt på native).
+  usePushSubscription();
 
   const wind = useWindSound();
   // Juli 2026-fix (produktfeedback, ny omgång): "info om ljudet dök upp lite
@@ -2607,6 +2612,14 @@ export default function Home() {
           onClose={() => setShowSensorDebug(false)}
         />
       )}
+
+      {/* Utomhus-bekräftelse: visas en gång per 12h när AR-läget startas. */}
+      <OutdoorConfirmDialog
+        started={started}
+        onEnvironment={(outdoors) => {
+          if (!outdoors) setSoundEnvironment("inne");
+        }}
+      />
 
       {/* Diagnostikpanel — bara synlig i lokalt dev-läge, ej i producerade byggen */}
       {import.meta.env.DEV && <NativeDiagnostics />}

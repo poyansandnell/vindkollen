@@ -17,6 +17,7 @@ import Contact from "@/pages/Contact";
 import AppStoreScreenshots from "@/pages/AppStoreScreenshots";
 import DeleteAccount from "@/pages/DeleteAccount";
 import AndroidPlayScreenshots from "@/pages/AndroidPlayScreenshots";
+import PushAdmin from "@/pages/PushAdmin";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/delete-account" component={DeleteAccount} />
       <Route path="/android-screenshots" component={AndroidPlayScreenshots} />
       <Route path="/appstore-screenshots" component={AppStoreScreenshots} />
+      <Route path="/push-admin" component={PushAdmin} />
       <Route component={NotFound} />
     </Switch>
   );

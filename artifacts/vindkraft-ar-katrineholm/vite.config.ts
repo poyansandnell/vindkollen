@@ -75,6 +75,8 @@ export default defineConfig({
         // TensorFlow.js (för himmel-segmenteringen i useSkyDetection) gör
         // huvudbundeln större än standardgränsen på 2 MiB.
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        // Lägg till push-hanteraren (push-sw.js) i den genererade service workern.
+        importScripts: ["push-sw.js"],
       },
       devOptions: {
         enabled: false,

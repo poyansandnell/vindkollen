@@ -185,11 +185,16 @@ export function useWindSound() {
   useEffect(() => {
     const handleVisibility = () => {
       const ctx = ctxRef.current;
+      const audioEl = audioElRef.current;
       if (!ctx) return;
       if (document.hidden) {
         void ctx.suspend();
+        // Pausa <audio>-elementet explicit — AudioContext.suspend() räcker inte
+        // alltid på iOS/Capacitor för att stoppa streamen i högtalaren.
+        audioEl?.pause();
       } else if (ctx.state === "suspended") {
         void ctx.resume();
+        if (audioEl?.paused) void audioEl.play().catch(() => {});
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);

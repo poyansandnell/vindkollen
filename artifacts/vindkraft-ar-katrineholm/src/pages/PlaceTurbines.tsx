@@ -522,7 +522,7 @@ export default function PlaceTurbines() {
   // MÅSTE definieras före if(showWelcome)-returnstatementen (React hooks-regeln).
   const handleEnterEditorDirect = useCallback((project: ApiProjectArea) => {
     const boundary = apiPolygonToLatLon(project.polygon ?? null);
-    const isBundledKatrineholm = project.id === 10001;
+    const isBundledKatrineholm = project.id === 32;
     const turbineCount = project.turbineCountPlannedMin ?? project.turbineCountPlannedMax ?? 8;
     const hasCoords = typeof project.centerLat === 'number' && typeof project.centerLng === 'number';
 

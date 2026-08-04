@@ -19,8 +19,8 @@ import { wgs84ToSweref } from "./sweref";
 /** Max-radien (km) för GPS-baserat automatiskt projektval. */
 export const MAX_AUTO_RADIUS_KM = 100;
 
-/** Länsterberget/Katrineholms projekt-ID i BUNDLED_PROJECTS. */
-const LANSTERBERGET_ID = 10001;
+/** Katrineholm Vind by Ericsberg — projekt-ID i BUNDLED_PROJECTS (Länsstyrelsen id 32). */
+const LANSTERBERGET_ID = 32;
 
 /**
  * Aktivt projekts metadata och turbindata.
