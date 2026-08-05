@@ -379,9 +379,25 @@ export function scorePlacement(turbines: PlacedTurbine[], ctx?: LocationContext)
       }))
     : HOUSEHOLD_CLUSTERS;
 
+  // Välj den NÄRMASTE tätorten (med ≥ 1 000 inv) till turbincentroiden,
+  // INTE den mest befolkade. Det gamla reduce(max population)-valet gav
+  // Norrköping (~140k) som "närmaste tätort" fast Katrineholm (~24k) ligger
+  // direkt intill — eftersom alla 1 000+ orter i Sverige ingick i listan.
+  const turbineCentroid =
+    turbines.length > 0
+      ? {
+          lat: turbines.reduce((s, t) => s + t.lat, 0) / turbines.length,
+          lon: turbines.reduce((s, t) => s + t.lon, 0) / turbines.length,
+        }
+      : null;
+  const meaningfulSettlements = ctx ? ctx.settlements.filter((s) => s.population >= 1000) : [];
   const effUrbanSettlement = ctx
-    ? ctx.settlements.length > 0
-      ? ctx.settlements.reduce((a, b) => (a.population > b.population ? a : b))
+    ? meaningfulSettlements.length > 0 && turbineCentroid
+      ? meaningfulSettlements.reduce((best, s) => {
+          const dBest = distanceMeters(turbineCentroid.lat, turbineCentroid.lon, best.lat, best.lng);
+          const dS = distanceMeters(turbineCentroid.lat, turbineCentroid.lon, s.lat, s.lng);
+          return dS < dBest ? s : best;
+        })
       : null
     : null;
   const effUrbanCenter: { lat: number; lon: number } | null = ctx
