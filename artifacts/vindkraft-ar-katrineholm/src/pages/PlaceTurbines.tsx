@@ -941,7 +941,7 @@ export default function PlaceTurbines() {
         result={result}
         minimized={scoreMinimized}
         onToggleMinimized={() => setScoreMinimized((v) => !v)}
-        showEricsbergFeatures={!editHandoff}
+        showEricsbergFeatures={false}
         loading={editHandoff !== null && contextLoading && locationContext === null}
       />
       </div>

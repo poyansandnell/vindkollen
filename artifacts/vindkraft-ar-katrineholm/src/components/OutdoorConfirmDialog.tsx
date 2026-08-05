@@ -16,15 +16,14 @@
 
 import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "vindkollen:outdoorConfirmedAt";
-const TTL_MS = 12 * 60 * 60 * 1000; // 12 timmar
+// Frågan visas en gång per webbläsarsession (inte per dag) — sessionStorage
+// nollställs automatiskt när appen stängs eller fliken laddas om. Så varje
+// nytt AR-sessionsstart ger användaren möjlighet att bekräfta om de är ute.
+const STORAGE_KEY = "vindkollen:outdoorConfirmedThisSession";
 
 function needsConfirmation(): boolean {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return true;
-    const ts = parseInt(raw, 10);
-    return Date.now() - ts > TTL_MS;
+    return !sessionStorage.getItem(STORAGE_KEY);
   } catch {
     return true;
   }
@@ -32,7 +31,7 @@ function needsConfirmation(): boolean {
 
 function markConfirmed() {
   try {
-    localStorage.setItem(STORAGE_KEY, String(Date.now()));
+    sessionStorage.setItem(STORAGE_KEY, "1");
   } catch {}
 }
 

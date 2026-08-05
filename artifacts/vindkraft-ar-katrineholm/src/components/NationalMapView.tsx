@@ -328,6 +328,11 @@ export function NationalMapView({
     let nearestDist = Infinity;
     for (const p of projects) {
       if (typeof p.centerLat !== 'number' || typeof p.centerLng !== 'number') continue;
+      // Hoppa över avbrutna projekt och projekt utan planerade verk — de är inte
+      // relevanta för AR-visning och ska inte visas som "Närmast dig".
+      const planned = p.turbineCountPlannedMin ?? p.turbineCountPlannedMax ?? 0;
+      if (planned <= 0) continue;
+      if (p.status === 'cancelled' || p.status === 'avbrutet') continue;
       const dlat = p.centerLat - loc.lat;
       const dlng = p.centerLng - loc.lng;
       const dist = dlat * dlat + dlng * dlng;
@@ -511,15 +516,20 @@ export function NationalMapView({
   );
 
   // ── Räknaranimation — räknar snabbt upp verk när data laddats ───────────────
+  // Obs: resetta INTE animatedCount till 0 innan intervallet startar — det ger
+  // en synlig blixt av "0 verk" i progress-baren. Starta direkt från ett
+  // litet värde (1% av målet) så att baren är synlig från första render.
   useEffect(() => {
     if (turbineTotal === 0) { setAnimatedCount(0); return; }
-    setAnimatedCount(0);
     const duration = 1200; // ms
     const steps = Math.min(turbineTotal, 80);
     const interval = duration / steps;
-    let current = 0;
+    const step = Math.ceil(turbineTotal / steps);
+    // Börja på ett litet initialt värde (≥1) så att progress-baren syns direkt.
+    let current = step;
+    setAnimatedCount(current);
     const id = setInterval(() => {
-      current += Math.ceil(turbineTotal / steps);
+      current += step;
       if (current >= turbineTotal) {
         setAnimatedCount(turbineTotal);
         clearInterval(id);
