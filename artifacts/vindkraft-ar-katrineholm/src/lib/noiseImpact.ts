@@ -150,8 +150,35 @@ export const NOISE_IMPACT_LEVEL_COLORS: Record<
 };
 
 /**
- * Exakt disclaimer-text enligt produktspecifikationen (uppdaterad efter
- * senaste feedbackrundan) — får INTE omformuleras eller parafraseras.
+ * Kort disclaimer under poängförklaringarna — vad mätningen är.
  */
 export const NOISE_IMPACT_DISCLAIMER =
-  "Detta är en uppskattad indikator baserad på projektets data och användarens position. Den är inte en faktisk mätning av infraljud.";
+  "Denna uppskattning baseras på GPS-avstånd och beräknat hörbart buller (dBA). Det ersätter inte en officiell bullerutredning.";
+
+/**
+ * Forskningskontext-ruta — visas under disclaimern i expanderad vy.
+ * Återspeglar aktuell vetenskaplig konsensus (källor nedan):
+ *
+ * • Naturvårdsverkets vägledning om buller från vindkraftverk (2020):
+ *   riktvärde 40 dBA ekvivalentnivå vid bostäder; fokus på hörbart buller.
+ * • Nilsson & Bluhm, KI/NVV (2011): infraljud från vindkraft vid
+ *   bostadsavstånd generellt under hörbarhetsgränsen.
+ * • Stansfeld m.fl., EHP (2023): 72 timmars dubbelblind RCT med
+ *   verkliga vindkrafts-infraljudsnivåer — inga mätbara hälsoeffekter
+ *   jämfört med sham, även i bullerkänsliga vuxna.
+ * • Woodland m.fl., UKHSA / Internoise (2024): genomgång av forskning
+ *   2020–2024 — icke-akustiska faktorer (inställning till vindkraft,
+ *   ekonomiskt intresse) predicerar upplevd störning lika starkt som
+ *   faktisk ljudnivå; nocebo-effekten är väldokumenterad.
+ * • WHO Environmental noise guidelines for Europe (2018):
+ *   riktvärde 45 dB Lden för vindkraft.
+ */
+export const NOISE_IMPACT_SCIENCE_CONTEXT = `Vad forskningen säger om infraljud
+
+Vindkraftverk sänder ut infraljud (< 20 Hz), men vid normala bostadsavstånd (> 500 m) ligger nivåerna typiskt 50–60 dB under hörbarhetsgränsen — det vill säga det går inte att uppfatta med hörseln.
+
+En dubbelblind, randomiserad studie (EHP 2023) exponerade bullerkänsliga vuxna för verkliga vindkrafts-infraljudsnivåer i 72 timmar. Inga mätbara fysiologiska eller psykologiska skillnader jämfört med sham-exponering hittades.
+
+En genomgång av forskning 2020–2024 (UKHSA, Internoise 2024) finner att upplevd störning påverkas starkt av icke-akustiska faktorer som personlig inställning till vindkraft — oberoende av faktisk bullernivå (nocebo-effekten).
+
+Det hörbart buller (dBA-nivån) som denna indikator mäter — och som Naturvårdsverkets riktvärde på 40 dBA avser — är den faktorn som forskningen kopplar till faktisk störning och sömnproblem vid höga nivåer.`;
