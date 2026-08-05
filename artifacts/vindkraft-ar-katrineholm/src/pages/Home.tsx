@@ -101,7 +101,7 @@ function ArStartBanner({
 
   return (
     <div
-      className="pointer-events-none absolute inset-x-4 z-[48] flex items-center justify-center"
+      className="pointer-events-none absolute inset-x-4 z-[57] flex items-center justify-center"
       style={{ top: `${Math.max(topOffsetPx, 8) + 10}px` }}
     >
       <div className="animate-pulse rounded-2xl border border-[#FF8B01]/50 bg-[#FF8B01]/20 px-5 py-3 text-center shadow-xl backdrop-blur-sm">
@@ -2359,6 +2359,18 @@ export default function Home() {
                 <div className={`rounded-full px-3 py-1.5 text-center text-xs font-medium shadow-md ${statusBannerToneClasses[statusBanner.tone]}`}>
                   {statusBanner.message}
                 </div>
+              )}
+              {/* "Gå ut"-nudge: visas när användaren manuellt valt "Inne" men
+                  kameran/sensorn detekterar att de faktiskt är utomhus.
+                  Tryck → byter direkt till utomhusläge. */}
+              {soundEnvironment === "inne" && sky.ready && !sky.indoors && !indoorsGracePassed && (
+                <button
+                  onClick={() => setSoundEnvironment("ute")}
+                  className="flex items-center justify-between gap-2 rounded-full border border-emerald-400/40 bg-emerald-900/50 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-800/60"
+                >
+                  <span>🌤 Det verkar som att du är ute — byt till utomhusläge?</span>
+                  <span className="shrink-0 font-semibold text-emerald-300">Byt →</span>
+                </button>
               )}
               {positionOverride && (
                 <div className="flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-900/50 px-3 py-1.5 text-xs text-blue-200">
