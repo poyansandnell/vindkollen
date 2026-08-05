@@ -9,7 +9,9 @@ import maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BUNDLED_PROJECTS, type ApiProjectArea } from '@/lib/bundledProjects';
+// Endast type-import — BUNDLED_PROJECTS laddas inte statiskt här.
+// All data kommer via useProjectAreas() (cache → API → lazy-reserv).
+import type { ApiProjectArea } from '@/lib/bundledProjects';
 import { useProjectAreas } from '@/context/ProjectAreasContext';
 import { apiUrl } from '@/lib/apiUrl';
 import { isNative } from '@/lib/capacitorBridge';
@@ -360,8 +362,8 @@ export function NationalMapView({
     // apiUrl() sätter absolut bas om VITE_API_BASE_URL är definierad, annars relativ.
     const url = apiUrl(apiPath);
 
-    // 1. Visa cachad/bundlad data omedelbart (utan nätverksfördröjning).
-    const bundled = (cachedAreasRef.current.length > 0 ? cachedAreasRef.current : BUNDLED_PROJECTS).filter(
+    // 1. Visa cachad data omedelbart (från kontext: cache → API → lazy-reserv).
+    const bundled = cachedAreasRef.current.filter(
       p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number'
     );
     setProjects(bundled);
@@ -636,7 +638,7 @@ export function NationalMapView({
       // through a re-render (the projects effect and ref-sync effect run after paint).
       const initData = filteredProjectsRef.current.length > 0
         ? filteredProjectsRef.current
-        : (cachedAreasRef.current.length > 0 ? cachedAreasRef.current : BUNDLED_PROJECTS).filter(
+        : cachedAreasRef.current.filter(
             p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number',
           );
       const geoJson = buildGeoJSON(initData);

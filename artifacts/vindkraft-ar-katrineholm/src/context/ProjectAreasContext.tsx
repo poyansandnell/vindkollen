@@ -8,13 +8,19 @@
  *   1. localStorage-cache (omedelbar — ingen nätverksfördröjning)
  *   2. GET /api/project-areas (bakgrundsuppdatering)
  *      - Lyckas → uppdaterar state + skriver ny cache
- *      - Misslyckas → behåller cache/fallback; inga synliga fel för användaren
- *   3. Om varken cache eller API → BUNDLED_PROJECTS (inbyggd reserv)
+ *      - Misslyckas → behåller cache; om cachen också saknas → steg 3
+ *   3. Dynamisk import av bundledProjects.ts (sista reserv, ~700 KB eget chunk)
+ *      Laddas BARA om varken cache eller API fungerar.
  *
- * `source` berättar varifrån datan kom:
- *   "cache"    = läst från localStorage (kan vara upp till 24h gammal)
+ * Bundelstrategi:
+ *   bundledProjects.ts importeras ALDRIG statiskt från denna fil.
+ *   Vite placerar den i ett separat async-chunk som aldrig laddas
+ *   om användaren har nätverksåtkomst eller en lokal cache.
+ *
+ * `source` berättar varifrån datan kom senast:
+ *   "cache"    = läst från localStorage
  *   "api"      = live från /api/project-areas
- *   "fallback" = inbyggd bundled-lista (inget nätverk, ingen cache)
+ *   "fallback" = inbyggd bundled-lista (sista reserv)
  */
 
 import {
@@ -25,18 +31,20 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { BUNDLED_PROJECTS, type ApiProjectArea } from "@/lib/bundledProjects";
+// VIKTIGT: endast type-import — ingen runtime-referens till bundledProjects.ts.
+// Vite tree-shakar bort type-imports helt; filen hamnar inte i main-chunk.
+import type { ApiProjectArea } from "@/lib/bundledProjects";
 import { readProjectAreaCache, writeProjectAreaCache } from "@/lib/projectAreaCache";
 import { apiUrl } from "@/lib/apiUrl";
 
 export type ProjectAreasSource = "cache" | "api" | "fallback";
 
 interface ProjectAreasContextValue {
-  /** Hela projektregistret. Alltid ett icke-tomt array (cache/bundled som reserv). */
+  /** Hela projektregistret. Tomt array enbart under den allra första async-laddningen. */
   areas: ApiProjectArea[];
   /** Varifrån datan kom senast. */
   source: ProjectAreasSource;
-  /** true medan bakgrundsuppdatering pågår. */
+  /** true medan bakgrundsuppdatering från API pågår. */
   refreshing: boolean;
   /** Katrineholm-projektet (id=32) om det finns i listan — med kampanjdata. */
   katrineholmProject: ApiProjectArea | null;
@@ -50,22 +58,37 @@ function findKatrineholm(areas: ApiProjectArea[]): ApiProjectArea | null {
   return areas.find((p) => p.id === KATRINEHOLM_ID) ?? null;
 }
 
-export function ProjectAreasProvider({ children }: { children: ReactNode }) {
-  // Ladda cache synkront vid första render för omedelbar data.
-  const initialCache = readProjectAreaCache();
-  const initial: ApiProjectArea[] =
-    initialCache?.areas.length ? initialCache.areas : BUNDLED_PROJECTS;
-  const initialSource: ProjectAreasSource = initialCache?.areas.length
-    ? "cache"
-    : "fallback";
+/**
+ * Lazy-laddar BUNDLED_PROJECTS som sista reserv.
+ * Returnerar ett tomt array om importen misslyckas (bör aldrig inträffa).
+ */
+async function loadFallback(): Promise<ApiProjectArea[]> {
+  try {
+    const mod = await import("@/lib/bundledProjects");
+    console.info(
+      `[ProjectAreas] Inbyggd reserv laddad: ${mod.BUNDLED_PROJECTS.length} projekt`,
+    );
+    return mod.BUNDLED_PROJECTS;
+  } catch (err) {
+    console.error("[ProjectAreas] Kunde inte ladda inbyggd reserv:", err);
+    return [];
+  }
+}
 
-  const [areas, setAreas] = useState<ApiProjectArea[]>(initial);
-  const [source, setSource] = useState<ProjectAreasSource>(initialSource);
+export function ProjectAreasProvider({ children }: { children: ReactNode }) {
+  // Läs cache synkront vid första render (omedelbar data, ingen flimmer).
+  const initialCache = readProjectAreaCache();
+
+  const [areas, setAreas] = useState<ApiProjectArea[]>(
+    initialCache?.areas ?? [],
+  );
+  const [source, setSource] = useState<ProjectAreasSource>(
+    initialCache?.areas.length ? "cache" : "fallback",
+  );
   const [refreshing, setRefreshing] = useState(false);
   const fetchedRef = useRef(false);
 
   useEffect(() => {
-    // Kör max en gång per mount.
     if (fetchedRef.current) return;
     fetchedRef.current = true;
 
@@ -73,6 +96,7 @@ export function ProjectAreasProvider({ children }: { children: ReactNode }) {
     setRefreshing(true);
 
     const controller = new AbortController();
+
     fetch(url, { signal: controller.signal })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -84,21 +108,31 @@ export function ProjectAreasProvider({ children }: { children: ReactNode }) {
         setSource("api");
         writeProjectAreaCache(data);
         console.info(
-          `[ProjectAreas] Live-data laddad: ${data.length} projekt från ${url}`,
+          `[ProjectAreas] Live-data laddad: ${data.length} projekt`,
         );
       })
-      .catch((err) => {
+      .catch(async (err) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
         console.warn(
-          "[ProjectAreas] Kunde inte hämta live-data — använder cache/bundled:",
+          "[ProjectAreas] API inte nåbar — försöker cache/reserv:",
           err,
         );
+        // Om cachen redan har data, behåller vi den (state är redan satt ovan).
+        // Om cachen är tom, lazy-ladda reserven som sista utväg.
+        if (!initialCache?.areas.length) {
+          const fallback = await loadFallback();
+          if (fallback.length > 0) {
+            setAreas(fallback);
+            setSource("fallback");
+          }
+        }
       })
       .finally(() => {
         setRefreshing(false);
       });
 
     return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const katrineholmProject = findKatrineholm(areas);

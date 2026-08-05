@@ -22,7 +22,8 @@ import {
   setCustomBoundary,
   type LatLon,
 } from "@/lib/ericsbergArea";
-import { KATRINEHOLM_PROJECT, type ApiProjectArea } from "@/lib/bundledProjects";
+import type { ApiProjectArea } from "@/lib/bundledProjects";
+import { useProjectAreas } from "@/context/ProjectAreasContext";
 import { generateProjectGrid, translateDefaultTurbines } from "@/lib/projectGridLayout";
 import { NationalMapView } from "@/components/NationalMapView";
 import { generatePlacementPdf } from "@/lib/projectPdfExport";
@@ -140,6 +141,7 @@ const RECOMPUTE_DELAY_MS = 700;
 
 export default function PlaceTurbines() {
   const [, navigate] = useLocation();
+  const { katrineholmProject } = useProjectAreas();
   const [editHandoff, setEditHandoff] = useState<ActiveEditHandoff | null>(consumeEditHandoff);
   // Välkomstläge: sant när användaren navigerade hit "fresh" från hemvyn via
   // openSverigekartan() på native — inte via AR-handoff. Flaggan konsumeras
@@ -1020,7 +1022,8 @@ export default function PlaceTurbines() {
           </button>
         )}
         {editHandoff &&
-          editHandoff.projectId === String(KATRINEHOLM_PROJECT.id) && (
+          katrineholmProject != null &&
+          editHandoff.projectId === String(katrineholmProject.id) && (
             <button
               onClick={() => {
                 const url =

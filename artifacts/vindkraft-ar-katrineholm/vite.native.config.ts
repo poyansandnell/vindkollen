@@ -17,7 +17,8 @@
  *   VITE_API_BASE_URL    — absolut HTTPS-adress till API:et (krävs för Capacitor)
  *   VITE_PUBLIC_APP_URL  — publik delningslänk-bas
  */
-import { defineConfig, loadEnv, type Plugin } from "vite";
+import { defineConfig, type Plugin } from "vite";
+import fs from "fs";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
@@ -53,13 +54,39 @@ function getGitHash(): string {
   }
 }
 
-export default defineConfig(({ mode }) => {
-  // Laddar .env, .env.local, .env.[mode], .env.[mode].local
-  // Eftersom scriptet kör med --mode native läses .env.native automatiskt.
-  const env = loadEnv(mode, process.cwd(), "");
+/**
+ * Parsar en .env-fil direkt från disk utan att blanda in process.env.
+ * Vites loadEnv med prefix="" inkluderar process.env, vilket gör att
+ * Repliets shell-variabel VITE_API_BASE_URL (dev-tunnel) annars åsidosätter
+ * .env.native vid native-byggen.
+ */
+function parseEnvFile(filePath: string): Record<string, string> {
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const result: Record<string, string> = {};
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq < 0) continue;
+      result[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
 
-  const apiBase = process.env.VITE_API_BASE_URL ?? env.VITE_API_BASE_URL ?? "";
-  const publicBase = process.env.VITE_PUBLIC_APP_URL ?? env.VITE_PUBLIC_APP_URL ?? "";
+export default defineConfig(({ mode }) => {
+  // Läs .env.native direkt — utan loadEnv som blandar in process.env.
+  // Filvärden har alltid prioritet; process.env används som CI-fallback
+  // (Xcode Cloud, GitHub Actions) där .env.native inte finns.
+  const fileEnv = parseEnvFile(
+    path.resolve(import.meta.dirname, `.env.${mode}`),
+  );
+
+  const apiBase = fileEnv.VITE_API_BASE_URL || process.env.VITE_API_BASE_URL || "";
+  const publicBase = fileEnv.VITE_PUBLIC_APP_URL || process.env.VITE_PUBLIC_APP_URL || "";
   const gitHash = getGitHash();
   const buildTime = new Date().toISOString().replace("T", " ").slice(0, 16);
   const buildId = `${gitHash}@${buildTime}`;
