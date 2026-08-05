@@ -161,7 +161,18 @@ export default function PlaceTurbines() {
     if (isNative() && !hasHandoff) return true;
     return fresh && !hasHandoff;
   });
-  const initialTurbines = (editHandoff?.turbines?.length ? editHandoff.turbines : null) ?? (showWelcome ? [] : DEFAULT_TURBINES);
+  // Om handoffen saknar projectId kan turbinfetch-effekten nedan inte
+  // expandera antalet verk (den hoppar över utan projectId). I det läget är
+  // handoffens turbiner "definitiva" — om de är för få (< 4, t.ex. när
+  // AR-vyn bara skickade med närmaste verk) faller vi tillbaka på
+  // DEFAULT_TURBINES (de 8 officiella Ericsberg-verken) istället för att
+  // visa en tom eller minimal karta.
+  const canFetchExpand = !!(editHandoff?.projectId);
+  const handoffTurbines =
+    editHandoff?.turbines?.length && (editHandoff.turbines.length >= 4 || canFetchExpand)
+      ? editHandoff.turbines
+      : null;
+  const initialTurbines = handoffTurbines ?? (showWelcome ? [] : DEFAULT_TURBINES);
   const [turbines, setTurbines] = useState<PlacedTurbine[]>(initialTurbines);
   const [committedTurbines, setCommittedTurbines] = useState<PlacedTurbine[]>(initialTurbines);
   const { isAuthenticated, login } = useAuth();
