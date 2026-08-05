@@ -41,6 +41,7 @@ import {
 import { ProjectPickerSheet } from "@/components/ProjectPickerSheet";
 import { distanceMeters, bearingDegrees, isNightTime, normalizeAngle, formatDistance } from "@/lib/geo";
 import { swerefToWgs84, wgs84ToSweref } from "@/lib/sweref";
+import { apiUrl } from "@/lib/apiUrl";
 import { getBladeRpm } from "@/lib/turbineAnimation";
 import { estimateSoundLevel, dbaToVolume, applyIndoorAttenuation, applyIndoorGain } from "@/lib/soundLevel";
 import { estimateNoiseImpact } from "@/lib/noiseImpact";
@@ -213,7 +214,72 @@ export default function Home() {
   );
 
   const activeProject = projectState.status === "project" ? projectState.project : null;
-  const activeTurbines = activeProject?.turbines ?? [];
+
+  /**
+   * Riktiga turbinpositioner från Vindbrukskollen (VBK) FeatureServer.
+   * Null = ej laddat än ELLER projektet har egna exakta koordinater (Ericsberg).
+   * Sätts asynkront när ett nytt projekt väljs; återställs till null vid projektbyte.
+   */
+  const [vbkTurbines, setVbkTurbines] = useState<TurbineSweref[] | null>(null);
+
+  // VBK-fetch ersätter rutnät-genererade positioner med riktiga koordinater
+  // från Vindbrukskollen — men INTE för Ericsberg som redan har exakta koordinater.
+  const activeProjectId = activeProject?.projectId;
+  const activeProjectLat = activeProject?.projectCenterLat;
+  const activeProjectLon = activeProject?.projectCenterLon;
+  useEffect(() => {
+    // Ericsberg och editor-placeringar har redan exakta koordinater — hoppa över.
+    if (!activeProject || activeProject.hasPreciseTurbines || activeProject.source === "editor") {
+      setVbkTurbines(null);
+      return;
+    }
+    if (activeProjectLat == null || activeProjectLon == null) return;
+
+    setVbkTurbines(null); // återställ under laddning
+    let cancelled = false;
+
+    fetch(apiUrl(`/api/vbk-turbines?lat=${activeProjectLat}&lon=${activeProjectLon}&radiusKm=8`))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((result: { turbines: { verkid: string; lat: number; lon: number; totalhojd: number | null; navhojd: number | null; rotdiamete: number | null }[]; projnamn: string } | null) => {
+        if (cancelled || !result || result.turbines.length === 0) return;
+
+        // Konvertera WGS84 → SWEREF99 TM och bygg TurbineSweref[].
+        const converted: TurbineSweref[] = result.turbines.map((t, i) => {
+          const { easting, northing } = wgs84ToSweref(t.lat, t.lon);
+          // Använd VBK-värden om de finns, annars typiska standardvärden.
+          const hubH = t.navhojd ?? 130;
+          const rotorD = t.rotdiamete ?? 130;
+          const totalH = t.totalhojd ?? 200;
+          return {
+            id: t.verkid || `vbk-${i + 1}`,
+            name: `V${i + 1}`,
+            easting,
+            northing,
+            heightMeters: totalH,
+            groundHeightMeters: 50, // VBK saknar markhöjd — schablonvärde
+            hubHeightMeters: hubH,
+            rotorDiameterMeters: rotorD,
+            totalHeightAboveSeaMeters: totalH + 50,
+          };
+        });
+
+        console.info(
+          `[AR][vbk] Hämtade ${converted.length} riktiga positioner för "${result.projnamn}" från Vindbrukskollen`,
+        );
+        setVbkTurbines(converted);
+      })
+      .catch(() => {
+        // Tyst fallback — behåll rutnät-genererade positioner.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId, activeProjectLat, activeProjectLon]);
+
+  // Riktiga VBK-koordinater har företräde framför genererat rutnät.
+  const activeTurbines = vbkTurbines ?? activeProject?.turbines ?? [];
   // "usingCustomPlacement" = turbinerna kom från /placera-verktyget (inte
   // standardprojektets koordinater). Styr "din placering"-texten och
   // Återgå-knappen i menyn.
@@ -2145,7 +2211,7 @@ export default function Home() {
               <div className="min-w-0 shrink">
                 <p className="text-xs font-semibold tracking-wide text-[#FFB347]">VINDKOLLEN AR</p>
                 <p className="text-sm text-white/90">
-                  {activeProject?.projectName ?? "Vindkollen"} · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}{activeProject && !activeProject.hasPreciseTurbines && <span className="ml-1 opacity-60">≈</span>}
+                  {activeProject?.projectName ?? "Vindkollen"} · {activeTurbines.length} verk{usingCustomPlacement && " · din placering"}{activeProject && !activeProject.hasPreciseTurbines && vbkTurbines === null && <span className="ml-1 opacity-60">≈</span>}
                 </p>
               </div>
               {/* Höger sida: dBA + Infraljud (alltid synliga) + Nattläge-indikator */}

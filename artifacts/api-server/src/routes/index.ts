@@ -6,6 +6,7 @@ import authRouter from "./auth";
 import projectsRouter from "./projects";
 import pushRouter from "./push";
 import projectAreasRouter from "./projectAreas";
+import vbkTurbinesRouter from "./vbkTurbines";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(windRouter);
 router.use(locationContextRouter);
 router.use(pushRouter);
 router.use(projectAreasRouter);
+router.use(vbkTurbinesRouter);
 
 export default router;
