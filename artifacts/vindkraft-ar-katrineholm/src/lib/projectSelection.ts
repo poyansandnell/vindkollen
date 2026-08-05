@@ -65,6 +65,10 @@ export function findNearestProject(
 
   for (const project of projects) {
     if (project.centerLat == null || project.centerLng == null) continue;
+    // Hoppa över projekt utan planerade verk — de kan inte visas i AR.
+    const plannedCount =
+      project.turbineCountPlannedMin ?? project.turbineCountPlannedMax ?? 0;
+    if (plannedCount <= 0) continue;
     const distM = distanceMeters(userLat, userLon, project.centerLat, project.centerLng);
     if (distM < nearestDistM) {
       nearestDistM = distM;

@@ -29,7 +29,8 @@ import { NationalMapView } from "@/components/NationalMapView";
 import { generatePlacementPdf } from "@/lib/projectPdfExport";
 
 const SAVED_KEY = "vindkraft-ar-katrineholm:savedPlacements";
-const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
+// v2: bumpad 2026-08 för att rensa gamla 29-turbine-handoffs.
+const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement:v2";
 const EDIT_HANDOFF_KEY = "vindkraft:editHandoff";
 
 // ─── API-typer och hjälpfunktioner för nationellt projektläge ─────────────

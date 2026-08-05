@@ -61,7 +61,8 @@ const AVG_RPM = TURBINES.reduce((sum, t) => sum + getBladeRpm(t.name), 0) / TURB
 // Skrivs av: DetailPanel.tsx i vindkraft-karta (handoff från Sverigekartan)
 //            och PlaceTurbines.tsx (handoff från /placera-verktyget).
 // Läses av: loadStoredProject() nedan vid AR-start.
-const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement";
+// v2: bumpad 2026-08 för att rensa gamla 29-turbine-handoffs.
+const AR_HANDOFF_KEY = "vindkraft-ar-katrineholm:customPlacement:v2";
 
 // ---------------------------------------------------------------------------
 // AR-startbanner
