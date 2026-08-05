@@ -361,7 +361,7 @@ const IN_VIEW_HALF_ANGLE_DEG = FOV_DEGREES / 2;
 // övergång från IN_VIEW_HALF_ANGLE_DEG (synlig) till FORCE_FADE_OUT_DEG
 // (osynlig) så verken inte "sitter fast" när kameran vrids bort.
 const FORCE_FADE_OUT_DEG = IN_VIEW_HALF_ANGLE_DEG + 18; // ~50.5°
-export const MAX_RENDER_DISTANCE_M = 9000;
+export const MAX_RENDER_DISTANCE_M = 20_000;
 
 // Juli 2026-fix (kritisk buggrapport: "inga verk visas alls"): `hideAll`
 // (den kamera-heuristikbaserade inomhus-/fri sikt-detekteringen, se
