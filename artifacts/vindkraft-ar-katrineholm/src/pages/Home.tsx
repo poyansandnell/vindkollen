@@ -30,7 +30,15 @@ import { PhotoMontageModal } from "@/components/PhotoMontageModal";
 import { InAppBrowserNotice } from "@/components/InAppBrowserNotice";
 import { inAppBrowserName, isInAppBrowser } from "@/lib/browserDetection";
 import { TURBINES, type TurbineSweref } from "@/lib/turbines";
-import { findNearestProject, MAX_AUTO_RADIUS_KM, type ActiveProject } from "@/lib/projectSelection";
+import {
+  findNearestProject,
+  findNearbyProjects,
+  buildActiveProject,
+  MAX_AUTO_RADIUS_KM,
+  type ActiveProject,
+  type NearbyProjectEntry,
+} from "@/lib/projectSelection";
+import { ProjectPickerSheet } from "@/components/ProjectPickerSheet";
 import { distanceMeters, bearingDegrees, isNightTime, normalizeAngle, formatDistance } from "@/lib/geo";
 import { swerefToWgs84, wgs84ToSweref } from "@/lib/sweref";
 import { getBladeRpm } from "@/lib/turbineAnimation";
@@ -310,6 +318,8 @@ export default function Home() {
   // förblir direkt synliga.
   const [showMenu, setShowMenu] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [nearbyProjects, setNearbyProjects] = useState<NearbyProjectEntry[]>([]);
   // Juli 2026-fix (kritisk buggrapport punkt 5: "felsökningsraden överlappar
   // loggan/statustexten i topp-baren"): `LiveDebugStrip` låg tidigare fast på
   // `top-0` (z-[60]) rakt ovanpå topp-baren (z-[45]), som själv har en
@@ -571,13 +581,24 @@ export default function Home() {
   }, [geo.lat, geo.lon, geo.accuracy]);
 
   // GPS-baserat projektval: körs när GPS-position är tillgänglig och vi
-  // fortfarande är i "loading"-läge (ingen localStorage-handoff lästs in).
-  // Triggas aldrig om projektet redan valts via handoff (handoff/editor-källan
-  // har högre prioritet och sätter status="project" synkront vid init).
+  // inte redan har ett handoff/editor-projekt.
+  //
+  // Race-condition-fix (2026-08): effekten tillåts köras även från
+  // "no-project"-status — annars sätter ett tidigt GPS-svar (innan `areas`
+  // laddats) status="no-project", och när areas SEDAN laddas hindras omförsöket
+  // av den gamla `status !== "loading"`-vakten.
   useEffect(() => {
-    if (activeProject?.source === "editor") return; // handoff vinner alltid
-    if (projectState.status !== "loading") return;
+    if (activeProject?.source === "editor") return;   // handoff vinner alltid
+    if (activeProject?.source === "handoff") return;  // kart-handoff vinner alltid
     if (geo.lat === null || geo.lon === null) return;
+    if (areas.length === 0) return; // vänta tills areas faktiskt laddats
+
+    const nearby = findNearbyProjects(geo.lat, geo.lon, areas);
+    setNearbyProjects(nearby);
+
+    // Om projektet redan är GPS-valt och areas inte ändrats: behåll.
+    if (projectState.status === "project" && activeProject?.source === "gps") return;
+
     const nearest = findNearestProject(geo.lat, geo.lon, areas);
     if (nearest) {
       console.info(
@@ -591,7 +612,7 @@ export default function Home() {
       );
       setProjectState({ status: "no-project" });
     }
-  }, [geo.lat, geo.lon, projectState.status, areas]);
+  }, [geo.lat, geo.lon, areas]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (orientation.hasFix && !loggedCompassOkRef.current) {
       loggedCompassOkRef.current = true;
@@ -2419,6 +2440,17 @@ export default function Home() {
                 >
                   🗺️ Sverigekartan – Öppna kartverktyg
                 </button>
+                {nearbyProjects.length > 1 && (
+                  <button
+                    onClick={() => {
+                      setShowProjectPicker(true);
+                      setShowMenu(false);
+                    }}
+                    className="w-full rounded-full border border-white/20 bg-white/5 py-3 text-sm font-medium text-white hover:bg-white/10"
+                  >
+                    🏗️ Byt projekt ({nearbyProjects.length} nära dig)
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     localStorage.removeItem(AR_HANDOFF_KEY);
@@ -2546,6 +2578,18 @@ export default function Home() {
 
       {showPetition && <PetitionModal onClose={() => setShowPetition(false)} />}
       {showInfo && <InfoPanel onClose={() => setShowInfo(false)} projectId={activeProject?.projectId} />}
+
+      {showProjectPicker && (
+        <ProjectPickerSheet
+          entries={nearbyProjects}
+          currentProjectId={activeProject?.projectId}
+          onSelect={(entry) => {
+            const project = buildActiveProject(entry.projectArea, "gps");
+            setProjectState({ status: "project", project });
+          }}
+          onClose={() => setShowProjectPicker(false)}
+        />
+      )}
       {capturedPhoto && (
         <PhotoMontageModal
           imageDataUrl={capturedPhoto}

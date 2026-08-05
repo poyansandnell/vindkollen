@@ -21,6 +21,9 @@ import { wgs84ToSweref } from "./sweref";
 /** Max-radien (km) för GPS-baserat automatiskt projektval. */
 export const MAX_AUTO_RADIUS_KM = 100;
 
+/** Radien (km) för "visa nära projekt"-listan i projektväljar-sheeten. */
+export const NEARBY_LIST_RADIUS_KM = 80;
+
 /** Katrineholm Vind by Ericsberg — projekt-ID i BUNDLED_PROJECTS (Länsstyrelsen id 32). */
 const LANSTERBERGET_ID = 32;
 
@@ -47,6 +50,64 @@ export interface ActiveProject {
    * false = approximerade/genererade positioner (för projekt utan exakta koordinater).
    */
   hasPreciseTurbines: boolean;
+}
+
+/**
+ * Bygg ett ActiveProject från en ApiProjectArea.
+ * Extraherad hjälpare så att findNearestProject och findNearbyProjects
+ * alltid skapar projekt på exakt samma sätt.
+ */
+export function buildActiveProject(
+  project: ApiProjectArea,
+  source: "gps" | "handoff" | "editor" = "gps",
+): ActiveProject {
+  const turbines = getProjectTurbinesById(
+    project.id,
+    project.centerLat!,
+    project.centerLng!,
+    project.turbineCountPlannedMin ?? project.turbineCountPlannedMax ?? 10,
+    String(project.id),
+  );
+  return {
+    turbines,
+    projectName: project.name,
+    municipality: project.kommun ?? "",
+    projectId: project.id,
+    projectCenterLat: project.centerLat,
+    projectCenterLon: project.centerLng,
+    source,
+    hasPreciseTurbines: project.id === LANSTERBERGET_ID,
+  };
+}
+
+/** Metadata om ett nära projekt (utan att ladda turbiner). */
+export interface NearbyProjectEntry {
+  projectArea: ApiProjectArea;
+  distanceM: number;
+  turbineCount: number;
+}
+
+/**
+ * Returnerar alla projekt inom NEARBY_LIST_RADIUS_KM km, sorterade på avstånd,
+ * filtrerade på minst ett planerat verk.
+ */
+export function findNearbyProjects(
+  userLat: number,
+  userLon: number,
+  projects: ApiProjectArea[],
+): NearbyProjectEntry[] {
+  const result: NearbyProjectEntry[] = [];
+  for (const project of projects) {
+    if (project.centerLat == null || project.centerLng == null) continue;
+    const planned = project.turbineCountPlannedMin ?? project.turbineCountPlannedMax ?? 0;
+    if (planned <= 0) continue;
+    const distM = distanceMeters(userLat, userLon, project.centerLat, project.centerLng);
+    if (distM <= NEARBY_LIST_RADIUS_KM * 1000) {
+      result.push({ projectArea: project, distanceM: distM, turbineCount: planned });
+    }
+  }
+  result.sort((a, b) => a.distanceM - b.distanceM);
+  return result;
 }
 
 /**
@@ -78,24 +139,7 @@ export function findNearestProject(
 
   if (!nearest || nearestDistM > MAX_AUTO_RADIUS_KM * 1000) return null;
 
-  const turbines = getProjectTurbinesById(
-    nearest.id,
-    nearest.centerLat!,
-    nearest.centerLng!,
-    nearest.turbineCountPlannedMin ?? nearest.turbineCountPlannedMax ?? 10,
-    String(nearest.id),
-  );
-
-  return {
-    turbines,
-    projectName: nearest.name,
-    municipality: nearest.kommun ?? "",
-    projectId: nearest.id,
-    projectCenterLat: nearest.centerLat,
-    projectCenterLon: nearest.centerLng,
-    source: "gps",
-    hasPreciseTurbines: nearest.id === LANSTERBERGET_ID,
-  };
+  return buildActiveProject(nearest, "gps");
 }
 
 /**
