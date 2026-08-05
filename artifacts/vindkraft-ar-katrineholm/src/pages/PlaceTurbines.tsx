@@ -101,9 +101,8 @@ function consumeEditHandoff(): ActiveEditHandoff | null {
   }
 }
 
-// Alla 29 bundlade Ericsberg-turbiner (SWEREF99 TM → WGS84) som fallback när
-// inget editHandoff finns. Tidigare var detta bara 8 verk; nu används alla 29
-// så att redigeringsläget alltid speglar det fullständiga OX2-projektet.
+// De 8 officiella Ericsberg-turbinerna (SWEREF99 TM → WGS84) som fallback när
+// inget editHandoff finns. Koordinater från officiellt samrådsunderlag (OX2/Renewable Sweden).
 const DEFAULT_TURBINES: PlacedTurbine[] = TURBINES.map((t) => {
   const wgs = swerefToWgs84(t.easting, t.northing);
   return { id: t.id, lat: wgs.lat, lon: wgs.lon };
@@ -179,6 +178,18 @@ export default function PlaceTurbines() {
   const [editableBoundary, setEditableBoundary] = useState<LatLon[]>(() => getActiveBoundary());
   const [boundaryVersion, setBoundaryVersion] = useState(0);
   const [nationalTurbinesLoading, setNationalTurbinesLoading] = useState(false);
+  // Live GPS-position — visas som "Du är här"-markör i redigeringskartan.
+  const [gpsPos, setGpsPos] = useState<{ lat: number; lon: number } | null>(null);
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => setGpsPos({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => { /* tyst fel — markören visas bara om tillstånd ges */ },
+      { enableHighAccuracy: false, timeout: 10_000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
+
   // Betraktarposition — sätts manuellt av användaren för att simulera AR-vy
   // från en viss plats utan att behöva befinna sig där fysiskt.
   const [viewerPos, setViewerPos] = useState<{ lat: number; lon: number } | null>(null);
@@ -756,6 +767,7 @@ export default function PlaceTurbines() {
         <PlacementMap
           turbines={turbines}
           colorTurbines={committedTurbines}
+          userGpsPos={gpsPos}
           isGenericMode={!!editHandoff}
           initialView={
             editHandoff ? (() => {

@@ -74,6 +74,8 @@ interface PlacementMapProps {
   viewerPos?: { lat: number; lon: number } | null;
   /** Visar ett hårkors i mitten av kartan (för att välja visningsposition). */
   showViewerCrosshair?: boolean;
+  /** Live GPS-position — visas som en pulserande blå prick (Googlemaps-stil). */
+  userGpsPos?: { lat: number; lon: number } | null;
 }
 
 const MAX_TILES = 48;
@@ -199,6 +201,7 @@ export function PlacementMap({
   onCenterChange,
   viewerPos = null,
   showViewerCrosshair = false,
+  userGpsPos = null,
 }: PlacementMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 1, height: 1 });
@@ -891,6 +894,24 @@ export function PlacementMap({
             </div>
           </div>
         )}
+
+        {/* Live GPS-markör — "Du är här" */}
+        {userGpsPos && (() => {
+          const p = project(userGpsPos.lat, userGpsPos.lon);
+          if (p.x < -5 || p.x > 105 || p.y < -5 || p.y > 105) return null;
+          return (
+            <div
+              key="gps-pos"
+              className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2"
+              style={{ left: `${p.x}%`, top: `${p.y}%` }}
+            >
+              {/* Pulserande ring */}
+              <div className="absolute -inset-3 animate-ping rounded-full bg-blue-400/30" />
+              {/* Blå prick */}
+              <div className="relative h-4 w-4 rounded-full border-2 border-white bg-blue-500 shadow-lg" />
+            </div>
+          );
+        })()}
 
         {/* Betraktarpositions-markör */}
         {viewerPos && (() => {
