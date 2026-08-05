@@ -225,7 +225,12 @@ const HEADING_TURN_DELTA_DEG = 12;
 // `DEADZONE_DEG`), men en riktig, om än långsam, vridning känns nu klart
 // snabbare även UTAN gyro (t.ex. på skrivbord/desktop-test där devicemotion
 // saknas).
-const HEADING_STILL_TAU = 0.45;
+// Sänkt från 0.45 → 0.28 (användartester: "verken fastnar när man svänger
+// långsamt"). Med gyro-bypass (GYRO_TURN_RATE_THRESHOLD_DEG_PER_SEC) och
+// bekräftelsekravet (HEADING_TURN_CONFIRM_SAMPLES) skyddar vi fortfarande mot
+// magnetometerbrus vid avsiktliga rörelser — still-tau behöver inte vara
+// lika lång som tidigare för att uppnå detta.
+const HEADING_STILL_TAU = 0.28;
 const HEADING_TURN_TAU = 0.08;
 // Sjunde kritiska buggrapporten (punkt 3, "gyroskopet ska styra snabba
 // rörelser, magnetometern bara långsam drift-korrigering"): en uppmätt

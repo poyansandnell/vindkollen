@@ -1751,8 +1751,8 @@ export default function Home() {
               onComplete={handleLoadingSequenceComplete}
               calibrationPhase={orientation.calibrationPhase}
               calibrationProgress={orientation.calibrationProgress}
-              skipCalibration={hasOnboarded || !orientation.supported || Boolean(orientation.error)}
-              skipEntireSequence={hasOnboarded}
+              skipCalibration={true}
+              skipEntireSequence={true}
             />
           )}
 
