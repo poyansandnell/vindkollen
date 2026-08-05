@@ -68,7 +68,9 @@ export function usePushSubscription(): void {
 
         const sub = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
+          // Casta bort den generiska TypeScript-parameteriseringen av Uint8Array
+          // som kolliderar med den äldre BufferSource-signaturen i lib.dom.d.ts.
+          applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as ArrayBuffer,
         });
 
         await syncWithServer(sub);

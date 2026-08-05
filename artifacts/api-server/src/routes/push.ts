@@ -9,9 +9,11 @@
 
 import { Router, type IRouter } from "express";
 import webpush from "web-push";
-import { db } from "../lib/db";
-import { pushSubscriptionsTable } from "@workspace/db";
+import { db, pushSubscriptionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import type { InferSelectModel } from "drizzle-orm";
+
+type PushSub = InferSelectModel<typeof pushSubscriptionsTable>;
 
 // Konfigurera VAPID vid uppstart om nycklarna finns.
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY ?? "";
@@ -26,7 +28,7 @@ const router: IRouter = Router();
 
 /** VAPID public key — behövs av frontenden för att anropa subscribe(). */
 router.get("/push/vapid-public-key", (_req, res) => {
-  if (!VAPID_PUBLIC) return res.status(503).json({ error: "Push-notiser är inte konfigurerade." });
+  if (!VAPID_PUBLIC) { res.status(503).json({ error: "Push-notiser är inte konfigurerade." }); return; }
   res.json({ publicKey: VAPID_PUBLIC });
 });
 
@@ -38,7 +40,8 @@ router.post("/push/subscribe", async (req, res) => {
   };
 
   if (!endpoint || !keys?.p256dh || !keys?.auth) {
-    return res.status(400).json({ error: "Ogiltig prenumeration (saknar endpoint eller nycklar)." });
+    res.status(400).json({ error: "Ogiltig prenumeration (saknar endpoint eller nycklar)." });
+    return;
   }
 
   try {
@@ -63,32 +66,20 @@ router.post("/push/subscribe", async (req, res) => {
 /** Ta bort en prenumeration (t.ex. om användaren väljer att avprenumerera). */
 router.delete("/push/subscribe", async (req, res) => {
   const { endpoint } = req.body as { endpoint?: string };
-  if (!endpoint) return res.status(400).json({ error: "Saknar endpoint." });
-
-  await db
-    .delete(pushSubscriptionsTable)
-    .where(eq(pushSubscriptionsTable.endpoint, endpoint));
-
+  if (!endpoint) { res.status(400).json({ error: "Saknar endpoint." }); return; }
+  await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.endpoint, endpoint));
   res.json({ ok: true });
 });
 
 /** Skicka notis till alla prenumeranter. Kräver rätt PUSH_ADMIN_SECRET i x-admin-secret-headern. */
 router.post("/push/send", async (req, res) => {
   const adminSecret = process.env.PUSH_ADMIN_SECRET;
-  if (!adminSecret) return res.status(503).json({ error: "Push-admin är inte konfigurerat." });
-  if (req.headers["x-admin-secret"] !== adminSecret) {
-    return res.status(401).json({ error: "Fel lösenord." });
-  }
-  if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
-    return res.status(503).json({ error: "VAPID-nycklar saknas — kan inte skicka." });
-  }
+  if (!adminSecret) { res.status(503).json({ error: "Push-admin är inte konfigurerat." }); return; }
+  if (req.headers["x-admin-secret"] !== adminSecret) { res.status(401).json({ error: "Fel lösenord." }); return; }
+  if (!VAPID_PUBLIC || !VAPID_PRIVATE) { res.status(503).json({ error: "VAPID-nycklar saknas — kan inte skicka." }); return; }
 
-  const { title, body, url } = req.body as {
-    title?: string;
-    body?: string;
-    url?: string;
-  };
-  if (!title || !body) return res.status(400).json({ error: "title och body krävs." });
+  const { title, body, url } = req.body as { title?: string; body?: string; url?: string };
+  if (!title || !body) { res.status(400).json({ error: "title och body krävs." }); return; }
 
   const subs = await db.select().from(pushSubscriptionsTable);
   const payload = JSON.stringify({ title, body, url: url ?? "/" });
@@ -96,23 +87,17 @@ router.post("/push/send", async (req, res) => {
   let sent = 0, failed = 0, removed = 0;
 
   await Promise.allSettled(
-    subs.map(async (sub) => {
+    subs.map(async (sub: PushSub) => {
       try {
         await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: sub.keys as { p256dh: string; auth: string },
-          },
+          { endpoint: sub.endpoint, keys: sub.keys as { p256dh: string; auth: string } },
           payload,
         );
         sent++;
       } catch (e) {
         const status = (e as { statusCode?: number })?.statusCode;
         if (status === 410 || status === 404) {
-          // Prenumeration utgången — rensa bort den.
-          await db
-            .delete(pushSubscriptionsTable)
-            .where(eq(pushSubscriptionsTable.endpoint, sub.endpoint));
+          await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.endpoint, sub.endpoint));
           removed++;
         } else {
           failed++;
