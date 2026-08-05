@@ -39,7 +39,7 @@ import { estimateNoiseImpact } from "@/lib/noiseImpact";
 import { useWindDirection } from "@/hooks/useWindDirection";
 import type { SunMode, VisibilityLevel } from "@/lib/visualizationTypes";
 import { KATRINEHOLM_CENTER } from "@/lib/ericsbergArea";
-import { KATRINEHOLM_PROJECT } from "@/lib/bundledProjects";
+import { useProjectAreas } from "@/context/ProjectAreasContext";
 import {
   captureNativeCameraPhoto,
   isNative,
@@ -187,6 +187,8 @@ type ProjectState =
 
 export default function Home() {
   const [, navigate] = useLocation();
+  // Live-projektregister från server (med bundled som reserv).
+  const { areas, katrineholmProject } = useProjectAreas();
   // Projektval — diskriminerat fack (se ProjectState ovan).
   // Synkron init: om localStorage-handoff finns laddas den direkt (undviker
   // ett render utan turbiner). Annars väntar vi på GPS (status "loading").
@@ -575,7 +577,7 @@ export default function Home() {
     if (activeProject?.source === "editor") return; // handoff vinner alltid
     if (projectState.status !== "loading") return;
     if (geo.lat === null || geo.lon === null) return;
-    const nearest = findNearestProject(geo.lat, geo.lon);
+    const nearest = findNearestProject(geo.lat, geo.lon, areas);
     if (nearest) {
       console.info(
         `[AR][pipeline] GPS-automatval: "${nearest.projectName}" (${nearest.municipality}),` +
@@ -588,7 +590,7 @@ export default function Home() {
       );
       setProjectState({ status: "no-project" });
     }
-  }, [geo.lat, geo.lon, projectState.status]);
+  }, [geo.lat, geo.lon, projectState.status, areas]);
   useEffect(() => {
     if (orientation.hasFix && !loggedCompassOkRef.current) {
       loggedCompassOkRef.current = true;
@@ -2293,7 +2295,7 @@ export default function Home() {
               {ready && showNoiseImpact && (
                 <NoiseImpactPanel result={noiseImpact} onClose={() => setShowNoiseImpact(false)} />
               )}
-              {KATRINEHOLM_PROJECT.campaign?.enabled && activeProject?.projectId === KATRINEHOLM_PROJECT.id && (
+              {katrineholmProject?.campaign?.enabled && activeProject?.projectId === katrineholmProject?.id && (
                 <button
                   onClick={() => setShowPetition(true)}
                   className="w-full rounded-full bg-[#FF8B01] py-3.5 text-sm font-semibold text-[#090909] shadow-lg shadow-[#FF8B01]/30 hover:bg-[#FFB347]"

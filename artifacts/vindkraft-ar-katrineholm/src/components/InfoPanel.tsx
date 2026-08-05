@@ -1,10 +1,13 @@
-import { KATRINEHOLM_PROJECT } from "@/lib/bundledProjects";
 import { isNative } from "@/lib/capacitorBridge";
 import { openPdfRoute } from "@/pages/PdfViewer";
+import { useProjectAreas } from "@/context/ProjectAreasContext";
 
 export function InfoPanel({ onClose, projectId }: { onClose: () => void; projectId?: number | string }) {
+  const { katrineholmProject } = useProjectAreas();
   const showEricsberg =
-    projectId != null && String(projectId) === String(KATRINEHOLM_PROJECT.id);
+    projectId != null &&
+    katrineholmProject != null &&
+    String(projectId) === String(katrineholmProject.id);
 
   function handleOpenPdf() {
     const url =

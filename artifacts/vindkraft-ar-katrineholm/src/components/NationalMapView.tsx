@@ -10,6 +10,7 @@ import type { GeoJSONSource, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BUNDLED_PROJECTS, type ApiProjectArea } from '@/lib/bundledProjects';
+import { useProjectAreas } from '@/context/ProjectAreasContext';
 import { apiUrl } from '@/lib/apiUrl';
 import { isNative } from '@/lib/capacitorBridge';
 
@@ -269,6 +270,12 @@ export function NationalMapView({
   const mapReadyRef = useRef(false);
 
   // Refs for stale-closure-safe access inside map event handlers
+  // Live-projektregister (cache → API → bundled-reserv) via kontext.
+  const { areas: cachedAreas } = useProjectAreas();
+  // Ref för att ge map-init-callbacken tillgång till areas utan stale closure.
+  const cachedAreasRef = useRef<ApiProjectArea[]>(cachedAreas);
+  useEffect(() => { cachedAreasRef.current = cachedAreas; }, [cachedAreas]);
+
   const projectsRef = useRef<ApiProjectArea[]>([]);
   const filteredProjectsRef = useRef<ApiProjectArea[]>([]);
 
@@ -353,8 +360,8 @@ export function NationalMapView({
     // apiUrl() sätter absolut bas om VITE_API_BASE_URL är definierad, annars relativ.
     const url = apiUrl(apiPath);
 
-    // 1. Visa bundlad data omedelbart
-    const bundled = BUNDLED_PROJECTS.filter(
+    // 1. Visa cachad/bundlad data omedelbart (utan nätverksfördröjning).
+    const bundled = (cachedAreasRef.current.length > 0 ? cachedAreasRef.current : BUNDLED_PROJECTS).filter(
       p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number'
     );
     setProjects(bundled);
@@ -624,12 +631,14 @@ export function NationalMapView({
       if (layersAdded) return;
       layersAdded = true;
 
-      // Use bundled projects as eager fallback — filteredProjectsRef may still be []
+      // Use cached/bundled projects as eager fallback — filteredProjectsRef may still be []
       // when the load event fires because React state updates haven't yet propagated
       // through a re-render (the projects effect and ref-sync effect run after paint).
       const initData = filteredProjectsRef.current.length > 0
         ? filteredProjectsRef.current
-        : BUNDLED_PROJECTS.filter(p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number');
+        : (cachedAreasRef.current.length > 0 ? cachedAreasRef.current : BUNDLED_PROJECTS).filter(
+            p => typeof p.centerLat === 'number' && typeof p.centerLng === 'number',
+          );
       const geoJson = buildGeoJSON(initData);
       console.info('[NationalMap] GeoJSON features:', geoJson.features.length, '(', initData.length, 'proj)');
       map.addSource(SOURCE_ID, {

@@ -12,7 +12,7 @@
  */
 
 import { TURBINES, type TurbineSweref } from "./turbines";
-import { BUNDLED_PROJECTS } from "./bundledProjects";
+import { BUNDLED_PROJECTS, type ApiProjectArea } from "./bundledProjects";
 import { distanceMeters } from "./geo";
 import { wgs84ToSweref } from "./sweref";
 
@@ -48,14 +48,21 @@ export interface ActiveProject {
 }
 
 /**
- * Hitta närmaste projekt i BUNDLED_PROJECTS inom MAX_AUTO_RADIUS_KM km från
- * användarens GPS-position. Returnerar null om inget projekt hittas inom radien.
+ * Hitta närmaste projekt inom MAX_AUTO_RADIUS_KM km från användarens GPS-position.
+ *
+ * @param projects - Projektregistret att söka i. Standardvärde: BUNDLED_PROJECTS
+ *                   (reserv för bakåtkompatibilitet; ge helst live-data från
+ *                   ProjectAreasContext).
  */
-export function findNearestProject(userLat: number, userLon: number): ActiveProject | null {
-  let nearest = null as (typeof BUNDLED_PROJECTS)[0] | null;
+export function findNearestProject(
+  userLat: number,
+  userLon: number,
+  projects: ApiProjectArea[] = BUNDLED_PROJECTS,
+): ActiveProject | null {
+  let nearest = null as ApiProjectArea | null;
   let nearestDistM = Infinity;
 
-  for (const project of BUNDLED_PROJECTS) {
+  for (const project of projects) {
     if (project.centerLat == null || project.centerLng == null) continue;
     const distM = distanceMeters(userLat, userLon, project.centerLat, project.centerLng);
     if (distM < nearestDistM) {
