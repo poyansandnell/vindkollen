@@ -27,14 +27,20 @@ export function PhotoMontageModal({ imageDataUrl, onRetake, onClose }: PhotoMont
   }
 
   function handleSave() {
-    const link = document.createElement("a");
-    link.href = imageDataUrl;
-    link.download = `vindkollen-${Date.now()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setStatus("Bilden sparades.");
-    window.setTimeout(() => setStatus(null), 2500);
+    try {
+      const link = document.createElement("a");
+      link.href = imageDataUrl;
+      link.download = `vindkollen-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setStatus("Bilden sparades.");
+      window.setTimeout(() => setStatus(null), 2500);
+    } catch (err) {
+      console.warn("[PhotoMontageModal] handleSave failed:", err);
+      setStatus("Kunde inte spara bilden — prova Dela istället.");
+      window.setTimeout(() => setStatus(null), 3000);
+    }
   }
 
   async function handleShare() {

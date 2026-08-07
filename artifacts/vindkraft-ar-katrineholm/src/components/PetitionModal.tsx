@@ -116,7 +116,11 @@ export function PetitionModal({ onClose }: { onClose: () => void }) {
     const next = [...signatures, entry];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setSignatures(next);
-    window.location.href = buildMailto(entry, campaign);
+    try {
+      window.location.href = buildMailto(entry, campaign);
+    } catch (err) {
+      console.warn("[PetitionModal] buildMailto navigate failed:", err);
+    }
     setSubmitted(true);
     setError(null);
   }

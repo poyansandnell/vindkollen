@@ -10,12 +10,16 @@ export function InfoPanel({ onClose, projectId }: { onClose: () => void; project
     String(projectId) === String(katrineholmProject.id);
 
   function handleOpenPdf() {
-    const url =
-      window.location.origin + import.meta.env.BASE_URL + "samradsyttrande-forsvarsmakten.pdf";
-    if (isNative()) {
-      openPdfRoute(url, "Försvarsmaktens samrådsyttrande");
-    } else {
-      window.open(url, "_blank", "noopener,noreferrer");
+    try {
+      const url =
+        window.location.origin + import.meta.env.BASE_URL + "samradsyttrande-forsvarsmakten.pdf";
+      if (isNative()) {
+        openPdfRoute(url, "Försvarsmaktens samrådsyttrande");
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      console.warn("[InfoPanel] handleOpenPdf failed:", err);
     }
   }
 

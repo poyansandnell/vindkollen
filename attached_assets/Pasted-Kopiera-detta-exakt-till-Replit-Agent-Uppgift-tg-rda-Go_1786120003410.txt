@@ -1,0 +1,113 @@
+Kopiera detta exakt till Replit Agent:
+
+---
+
+**Uppgift: Åtgärda Google Play-policyavslag för Vindkollen innan ny inskickning**
+
+Google Play har nekat appen på grund av tre saker. Åtgärda alla punkter nedan och skapa en ny Android-build.
+
+### 1. Lägg till tydlig ansvarsfriskrivning i appen
+
+Vindkollen är INTE en myndighetsapp.
+
+Lägg till en tydlig och lättläst sektion i appen, exempelvis under "Om appen" eller på startsidan:
+
+```
+Ansvarsfriskrivning
+
+Vindkollen är en fristående app utvecklad av Catch Me AB.
+Appen är inte kopplad till, godkänd av eller representerar någon myndighet, kommun eller offentlig organisation.
+
+Informationen i appen används för visualisering och analys av vindkraftsprojekt.
+Användaren bör alltid kontrollera aktuella uppgifter hos ansvariga myndigheter och officiella källor.
+```
+
+---
+
+### 2. Uppdatera Google Play-beskrivningen
+
+Lägg till en sektion i butikstexten:
+
+```
+Källor och information
+
+Vindkollen använder offentligt tillgängliga underlag för att visualisera vindkraftsprojekt.
+
+Informationen kan förändras över tid och ska ses som ett visualiserings- och analysverktyg, inte som ett officiellt myndighetsbesked.
+
+Användaren rekommenderas att kontrollera aktuella uppgifter hos ansvariga myndigheter och officiella källor.
+```
+
+Lägg även till relevanta officiella länkar där det passar.
+
+---
+
+### 3. Kontrollera Android appnamn och ikon
+
+Google rapporterar:
+
+"Appens installerade ikon eller namn skiljer sig från butiksuppgifterna."
+
+Kontrollera Android-projektet:
+
+- App label ska vara exakt:
+```
+Vindkollen
+```
+
+- Launcher icon ska vara Vindkollen-logotypen.
+- Ta bort eventuella gamla namn som:
+```
+Vindkraft AR
+Vindkraft AR Katrineholm
+```
+
+Kontrollera:
+```
+android/app/src/main/res/values/strings.xml
+android/app/src/main/AndroidManifest.xml
+```
+
+---
+
+### 4. Undersök Android-krasch
+
+Google rapporterar:
+
+"UI-element orsakar krascher när knappar eller ikoner trycks."
+
+Analysera Android-versionen och hitta vilken knapp som kraschar.
+
+Kontrollera särskilt:
+- Starta AR-knappen
+- Kartknappar
+- Spara plats
+- Projektval
+- Menyknappar
+
+Testa Android-builden och fixa eventuella exceptions.
+
+---
+
+### 5. Skapa ny release
+
+Efter ändringarna:
+
+- Kör TypeScript/build-kontroll
+- Kör Android build
+- Skapa ny `.aab`
+- Verifiera att appnamn och ikon matchar Google Play
+- Commit och pusha ändringarna
+
+Rapportera:
+1. Vilka filer som ändrades
+2. Vilken krasch som hittades och fixades
+3. Ny commit-hash
+
+---
+
+**Målet är en ny Google Play-version som uppfyller policy för vilseledande påståenden och fungerar stabilt vid granskning.**
+
+---
+
+Det här borde ge Replit tillräckligt tydliga instruktioner utan att den börjar ändra fel saker.

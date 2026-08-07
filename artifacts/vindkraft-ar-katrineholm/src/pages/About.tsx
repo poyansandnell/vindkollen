@@ -73,6 +73,18 @@ export default function About() {
             </p>
           </section>
 
+          <section className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <h2 className="mb-2 text-base font-semibold text-white">Ansvarsfriskrivning</h2>
+            <p className="leading-relaxed text-white/70">
+              Vindkollen är en fristående app utvecklad av Catch Me AB. Appen är inte kopplad till, godkänd av
+              eller representerar någon myndighet, kommun eller offentlig organisation.
+            </p>
+            <p className="mt-2 leading-relaxed text-white/70">
+              Informationen i appen används för visualisering och analys av vindkraftsprojekt. Användaren bör
+              alltid kontrollera aktuella uppgifter hos ansvariga myndigheter och officiella källor.
+            </p>
+          </section>
+
           <p className="text-xs text-white/40">Version 1.0 · 2026</p>
 
         </div>
