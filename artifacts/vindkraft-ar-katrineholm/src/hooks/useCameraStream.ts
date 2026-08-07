@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   areNativePermissionsGranted,
+  isIosNative,
   isNative,
   requestNativeCameraPermission,
   startNativeCameraPreview,
@@ -44,9 +45,12 @@ export function useCameraStream(enabled: boolean): CameraState {
     setState((s) => ({ ...s, loading: true }));
 
     // ------------------------------------------------------------------
-    // Native: CameraPreview plugin (renderas bakom WKWebView)
+    // Native iOS: CameraPreview plugin (renderas bakom WKWebView).
+    // Android använder getUserMedia() via WebView nedan — se kommentaren
+    // i capacitorBridge.ts::startNativeCameraPreview för detaljer om
+    // varför plugin:en inte används på Android (Camera1 + deprecated Fragment).
     // ------------------------------------------------------------------
-    if (isNative()) {
+    if (isIosNative()) {
       async function startNative() {
         // 1. Begär kamerabehörighet — hoppa över om redan beviljad av
         //    requestAllPermissionsSequentially() i handleStart.

@@ -13,6 +13,24 @@ export function isNative(): boolean {
   return Capacitor.isNativePlatform();
 }
 
+/**
+ * True ENBART på iOS Capacitor.
+ *
+ * Används för att avgränsa logik som kräver @capacitor-community/camera-preview
+ * (CameraPreview-plugin). Den plugin:en använder Camera1 API + deprecated
+ * android.app.Fragment, vilket kraschar med targetSdkVersion 34+ på Android.
+ * På Android används getUserMedia() via WebView istället — fullt stöds av
+ * Capacitors Android WebView utan plugin-krav.
+ */
+export function isIosNative(): boolean {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+}
+
+/** True ENBART på Android Capacitor. */
+export function isAndroidNative(): boolean {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+}
+
 // ---------------------------------------------------------------------------
 // Navigation
 // ---------------------------------------------------------------------------
@@ -183,7 +201,10 @@ export function areNativePermissionsGranted(): boolean {
  * No-op på webb.
  */
 export async function startNativeCameraPreview(): Promise<boolean> {
-  if (!isNative()) return false;
+  // CameraPreview-plugin används ENBART på iOS. Plugin:en använder Camera1 API
+  // + deprecated android.app.Fragment — det kraschar med targetSdkVersion 34+
+  // på Android. Android-appen använder getUserMedia() via WebView istället.
+  if (!isIosNative()) return false;
   try {
     const { CameraPreview } = await import("@capacitor-community/camera-preview");
     await CameraPreview.start({
