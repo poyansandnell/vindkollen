@@ -13,3 +13,10 @@ uri = "file://vindkollen-google-play-assets.zip"
 type = "unspecified"
 title = "Vindkollen — Google Play marketing assets"
 description = "icon-512.png + feature-graphic-1024x500.png"
+
+[[outputs]]
+id = "Pc5lVq7p45YmcTgUcLq2W"
+uri = "file://artifacts/vindkraft-ar-katrineholm/vindkollen-launcher-512.png"
+type = "image"
+title = "Vindkollen launcher-ikon 512×512"
+description = "Ladda upp denna i Google Play Console → Butikslista → Grafik → Appikon"
