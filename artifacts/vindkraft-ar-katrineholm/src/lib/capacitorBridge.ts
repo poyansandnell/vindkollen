@@ -274,12 +274,25 @@ export async function captureNativeCameraPhoto(): Promise<string | null> {
 // ---------------------------------------------------------------------------
 
 /**
- * Begär kamerabehörighet via Capacitor-plugin på iOS/Android.
- * Loggar alla utfall — kastar INTE fel tyst.
- * Returnerar false om nekad, true om beviljad eller om vi kör i webbläsare.
+ * Begär kamerabehörighet via Capacitor-plugin ENBART på iOS.
+ *
+ * På Android kraschar Camera.checkPermissions() med NullPointerException i
+ * Capacitors plugin-tråd (CapacitorPlugins thread). Orsaken är en känd bugg i
+ * @capacitor/camera på Android 13+ / targetSdkVersion 34+.
+ * På Android hanteras permission istället av getUserMedia() — OS:et visar
+ * permission-dialogen automatiskt eftersom CAMERA är deklarerad i
+ * AndroidManifest.xml. Vi returnerar true och låter useCameraStream.ts sköta resten.
  */
 export async function requestNativeCameraPermission(): Promise<boolean> {
   if (!isNative()) return true;
+
+  // Android: använd inte @capacitor/camera — kraschar. getUserMedia() hanterar det.
+  if (isAndroidNative()) {
+    console.log("[Vindkollen] Android: hoppar över Camera.checkPermissions, getUserMedia hanterar permission");
+    return true;
+  }
+
+  // iOS: Camera-plugin krävs för att trigga permission-dialogen i WKWebView.
   try {
     const { Camera } = await import("@capacitor/camera");
     const current = await Camera.checkPermissions();
@@ -520,12 +533,18 @@ export async function getNativeDiagnostics(): Promise<NativeDiagnosticsData> {
   let locationPermission = "n/a (webb)";
 
   if (native) {
-    try {
-      const { Camera } = await import("@capacitor/camera");
-      const cs = await Camera.checkPermissions();
-      cameraPermission = cs.camera;
-    } catch (e) {
-      cameraPermission = `fel: ${e instanceof Error ? e.message : String(e)}`;
+    // Android: Camera.checkPermissions() kraschar (NullPointerException i
+    // CapacitorPlugins-tråden). Rapportera "getUserMedia" som status istället.
+    if (isAndroidNative()) {
+      cameraPermission = "getUserMedia (Android)";
+    } else {
+      try {
+        const { Camera } = await import("@capacitor/camera");
+        const cs = await Camera.checkPermissions();
+        cameraPermission = cs.camera;
+      } catch (e) {
+        cameraPermission = `fel: ${e instanceof Error ? e.message : String(e)}`;
+      }
     }
     try {
       const { Geolocation } = await import("@capacitor/geolocation");

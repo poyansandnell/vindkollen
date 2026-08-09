@@ -1,0 +1,58 @@
+Ja — **nu har vi den riktiga kraschen**. Det här är mycket bättre än att gissa.
+
+Stacktracen visar tydligt:
+
+```text
+FATAL EXCEPTION: CapacitorPlugins
+Process: se.catchme.vindkollen
+
+Caused by: java.lang.NullPointerException
+at com.getcapacitor.d0.getPermissionStates(...)
+at com.capacitorjs.plugins.camera.CameraPlugin.getPermissionStates(...)
+at com.getcapacitor.d0.checkPermissions(...)
+```
+
+Alltså: **det är `@capacitor/camera` som kraschar när appen kontrollerar kamerabehörighet.** Den tidigare analysen om `camera-preview` var alltså inte den faktiska kraschen på din telefon.
+
+Det händer sannolikt precis när AR-startflödet kör något i stil med `Camera.checkPermissions()`.
+
+### Skicka exakt detta till Replit
+
+> **Vi har nu den riktiga Android logcat-stacktracen. Sluta gissa kring CameraPreview — kraschen kommer från `@capacitor/camera` permission check.**
+>
+> Android logcat:
+>
+> ```text
+> FATAL EXCEPTION: CapacitorPlugins
+> Process: se.catchme.vindkollen
+> java.lang.RuntimeException: java.lang.reflect.InvocationTargetException
+> Caused by: java.lang.NullPointerException
+>     at com.getcapacitor.d0.getPermissionStates(...)
+>     at com.capacitorjs.plugins.camera.CameraPlugin.getPermissionStates(...)
+>     at com.getcapacitor.d0.checkPermissions(...)
+> ```
+>
+> Detta sker direkt när jag trycker **Starta AR** på en Samsung Galaxy Z Fold.
+>
+> Gör följande:
+>
+> 1. Spåra exakt var AR-startflödet anropar `Camera.checkPermissions()`, `Camera.requestPermissions()` eller motsvarande från `@capacitor/camera`.
+> 2. På Android ska AR-flödet **inte använda `@capacitor/camera` alls** om kameran ändå körs via `navigator.mediaDevices.getUserMedia()`.
+> 3. Behåll `CAMERA`-permission korrekt deklarerad i AndroidManifest.
+> 4. Implementera Android-flödet så att:
+>    - ingen `Camera.checkPermissions()` från Capacitor Camera anropas,
+>    - kameran startas med `getUserMedia()`,
+>    - permission denial hanteras utan process-crash,
+>    - användaren får ett begripligt felmeddelande om kameran inte kan startas.
+> 5. Kontrollera även `requestAllPermissionsSequentially` och alla andra gemensamma permission-funktioner så att de inte indirekt anropar Capacitor Camera på Android.
+> 6. iOS-flödet får inte förstöras — ändringen ska vara Android-specifik.
+> 7. Kör TypeScript/native build och `cap sync android`.
+> 8. Rapportera exakt vilken fil/rad som gjorde `Camera.checkPermissions()`-anropet, vilka filer som ändrats och commit-hash.
+>
+> **Viktigt:** Förra fixen som undvek `CameraPreview.start()` på Android löste inte kraschen. Logcat visar nu att den faktiska kraschen sker i `@capacitor/camera` under `checkPermissions()`.
+
+Det är precis detta vi behövde få fram.
+
+Och din **Fold är inte problemet** enligt den här loggen. Kraschen sker i Capacitors plugintråd vid permission-kontrollen. Det kan mycket väl inträffa även på andra Androidtelefoner.
+
+Efter Replits nästa fix bygger vi **versionCode 4**, installerar den i Google Play-testkanalen och provar igen. Om den fortfarande kraschar kör vi samma `adb logcat` en gång till — men nu har vi en fungerande metod för att få fram den verkliga orsaken.
