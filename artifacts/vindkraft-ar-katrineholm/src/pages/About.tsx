@@ -37,10 +37,42 @@ export default function About() {
           <section>
             <h2 className="mb-3 text-base font-semibold text-white">Datakällor</h2>
             <ul className="space-y-1.5 pl-4 list-disc">
-              <li>Vindbrukskollen (Energimyndigheten) — nationellt vindkraftsregister</li>
+              <li>
+                <a
+                  href="https://www.vindbrukskollen.se"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#FF8B01] underline hover:text-[#FFB347]"
+                >
+                  Vindbrukskollen
+                </a>
+                {" "}(
+                <a
+                  href="https://www.energimyndigheten.se"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#FF8B01] underline hover:text-[#FFB347]"
+                >
+                  Energimyndigheten
+                </a>
+                ) — nationellt vindkraftsregister
+              </li>
               <li>Esri World Imagery — satellitbilder i kartverktyget</li>
-              <li>SMHI — meteorologiska vindriktningar</li>
+              <li>
+                <a
+                  href="https://www.smhi.se"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#FF8B01] underline hover:text-[#FFB347]"
+                >
+                  SMHI
+                </a>
+                {" "}— meteorologiska vindriktningar
+              </li>
             </ul>
+            <p className="mt-3 text-xs text-white/40">
+              Kontrollera alltid aktuella uppgifter direkt hos respektive officiell källa.
+            </p>
           </section>
 
           <section>

@@ -13,19 +13,46 @@ export default function Terms() {
         </button>
         <h1 className="mb-4 text-2xl font-bold">Användarvillkor</h1>
         <div className="prose prose-invert prose-sm max-w-none space-y-4 text-white/80">
-          <p className="text-xs text-white/40">Senast uppdaterad: januari 2025</p>
+          <p className="text-xs text-white/40">Senast uppdaterad: juli 2026</p>
+
+          <h2 className="mt-6 text-base font-semibold text-white">Om appen och ansvarig part</h2>
+          <p className="text-sm">
+            Vindkollen AR är en fristående app utvecklad och utgiven av <strong className="text-white">Catch Me AB</strong>.
+            Appen är inte kopplad till, godkänd av eller representerar någon myndighet, kommun
+            eller offentlig organisation. Catch Me AB är inte en myndighet och ger inga officiella
+            beslut eller utlåtanden.
+          </p>
 
           <h2 className="mt-6 text-base font-semibold text-white">Användning</h2>
           <p className="text-sm">
             Appen är kostnadsfri för privatpersoner. Du får inte använda appen för kommersiellt
-            syfte utan skriftligt tillstånd.
+            syfte utan skriftligt tillstånd från Catch Me AB.
           </p>
 
           <h2 className="mt-6 text-base font-semibold text-white">Ansvarsfriskrivning</h2>
           <p className="text-sm">
             AR-visualiseringarna och påverkansberäkningarna är estimat baserade på öppna datakällor.
             De utgör inte tekniska underlag för tillståndsärenden eller officiella utlåtanden.
-            Verkens exakta placering, höjd och ljud kan avvika från verkligheten.
+            Verkens exakta placering, höjd och ljud kan avvika från verkligheten. Kontrollera alltid
+            aktuella uppgifter hos ansvariga myndigheter och officiella källor, till exempel{" "}
+            <a
+              href="https://www.vindbrukskollen.se"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#FF8B01] underline"
+            >
+              Vindbrukskollen
+            </a>
+            {" "}och{" "}
+            <a
+              href="https://www.energimyndigheten.se"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#FF8B01] underline"
+            >
+              Energimyndigheten
+            </a>
+            .
           </p>
 
           <h2 className="mt-6 text-base font-semibold text-white">Delat innehåll</h2>

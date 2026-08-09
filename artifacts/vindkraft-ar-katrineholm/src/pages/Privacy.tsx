@@ -17,6 +17,18 @@ export default function Privacy() {
         <div className="space-y-6 text-sm text-white/80">
 
           <section>
+            <h2 className="mb-2 text-base font-semibold text-white">Ansvarig part</h2>
+            <p>
+              Vindkollen AR är en app utgiven av <strong className="text-white">Catch Me AB</strong>.
+              Frågor om integritet kan skickas till{" "}
+              <a href="mailto:support@vindkollen.com" className="text-[#FF8B01] underline hover:text-[#FFB347]">
+                support@vindkollen.com
+              </a>
+              .
+            </p>
+          </section>
+
+          <section>
             <h2 className="mb-2 text-base font-semibold text-white">Sammanfattning</h2>
             <p>
               Vindkollen AR samlar <strong className="text-white">inte in personuppgifter</strong> och

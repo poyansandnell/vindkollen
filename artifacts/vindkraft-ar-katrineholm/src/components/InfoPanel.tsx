@@ -54,10 +54,11 @@ export function InfoPanel({ onClose, projectId }: { onClose: () => void; project
             så att fler kan bilda sig en egen uppfattning och delta i den lokala demokratiska processen.
           </p>
           <p>
-            Vindkollen är utvecklad av{" "}
-            <span className="font-medium text-[#FFB347]">@PoyanSandnell</span>. Den första versionen togs
-            fram åt Katrineholm Framåt för att visa hur den planerade vindkraftsetableringen nära
-            Katrineholms tätort kan påverka staden och dess invånare.
+            Vindkollen är en fristående app utvecklad av{" "}
+            <span className="font-medium text-[#FFB347]">Catch Me AB</span>. Den är inte kopplad till
+            eller godkänd av någon myndighet, kommun eller offentlig organisation. Den första versionen togs
+            fram för att visa hur den planerade vindkraftsetableringen nära Katrineholms tätort kan
+            påverka staden och dess invånare.
           </p>
 
           {showEricsberg && (
