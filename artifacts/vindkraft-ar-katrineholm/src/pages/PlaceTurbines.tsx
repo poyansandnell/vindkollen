@@ -443,14 +443,18 @@ export default function PlaceTurbines() {
   }
 
   function handleDownloadPdf() {
-    const t = turbines.length > 0 ? turbines : DEFAULT_TURBINES;
-    if (t.length === 0) return;
-    const name = editHandoff?.projectName ?? "Vindkraftsplacering";
-    const doc = generatePlacementPdf(name, t);
-    // iOS PWA: blob-URL + target="_blank" — <a download> no-opar tyst i Safari
-    const url = URL.createObjectURL(doc.output("blob"));
-    window.open(url, "_blank");
-    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    try {
+      const t = turbines.length > 0 ? turbines : DEFAULT_TURBINES;
+      if (t.length === 0) return;
+      const name = editHandoff?.projectName ?? "Vindkraftsplacering";
+      const doc = generatePlacementPdf(name, t);
+      // iOS PWA: blob-URL + target="_blank" — <a download> no-opar tyst i Safari
+      const url = URL.createObjectURL(doc.output("blob"));
+      window.open(url, "_blank");
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (err) {
+      console.warn("[PlaceTurbines] handleDownloadPdf failed:", err);
+    }
   }
 
   async function handleSave() {
@@ -464,9 +468,13 @@ export default function PlaceTurbines() {
     };
 
     // Spara alltid lokalt
-    const next = [...saved, entry].slice(-8);
-    localStorage.setItem(SAVED_KEY, JSON.stringify(next));
-    setSaved(next);
+    try {
+      const next = [...saved, entry].slice(-8);
+      localStorage.setItem(SAVED_KEY, JSON.stringify(next));
+      setSaved(next);
+    } catch (storageErr) {
+      console.warn("[PlaceTurbines] localStorage save failed:", storageErr);
+    }
 
     if (isAuthenticated) {
       // Spara även i molnet
@@ -619,21 +627,25 @@ export default function PlaceTurbines() {
   }
 
   function handleExportBoundaryGeoJson() {
-    const geoJson = boundaryToGeoJson(boundaryEditMode ? editableBoundary : getActiveBoundary());
-    const text = JSON.stringify(geoJson, null, 2);
-    if (isNative()) {
-      // Capacitor WKWebView blockerar window.open med _blank för Blob-URL:er —
-      // visa GeoJSON-texten i en modal med kopieringsknapp istället.
-      setGeoJsonModalText(text);
-      setGeoJsonCopied(false);
-    } else {
-      // Webb/PWA: öppna i ny flik — <a download> nollställs tyst i iOS Safari/PWA
-      // (se .agents/memory/pdf-download-attribute-ios-pwa.md), ny-flik-metoden
-      // låter OS:ets dela/spara-blad ta över på alla plattformar.
-      const blob = new Blob([text], { type: "application/geo+json" });
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+    try {
+      const geoJson = boundaryToGeoJson(boundaryEditMode ? editableBoundary : getActiveBoundary());
+      const text = JSON.stringify(geoJson, null, 2);
+      if (isNative()) {
+        // Capacitor WKWebView blockerar window.open med _blank för Blob-URL:er —
+        // visa GeoJSON-texten i en modal med kopieringsknapp istället.
+        setGeoJsonModalText(text);
+        setGeoJsonCopied(false);
+      } else {
+        // Webb/PWA: öppna i ny flik — <a download> nollställs tyst i iOS Safari/PWA
+        // (se .agents/memory/pdf-download-attribute-ios-pwa.md), ny-flik-metoden
+        // låter OS:ets dela/spara-blad ta över på alla plattformar.
+        const blob = new Blob([text], { type: "application/geo+json" });
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+        window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+      }
+    } catch (err) {
+      console.warn("[PlaceTurbines] handleExportBoundaryGeoJson failed:", err);
     }
   }
 
@@ -1050,14 +1062,18 @@ export default function PlaceTurbines() {
           editHandoff.projectId === String(katrineholmProject.id) && (
             <button
               onClick={() => {
-                const url =
-                  window.location.origin +
-                  import.meta.env.BASE_URL +
-                  "samradsyttrande-forsvarsmakten.pdf";
-                if (isNative()) {
-                  openPdfRoute(url, "Försvarsmaktens samrådsyttrande");
-                } else {
-                  window.open(url, "_blank", "noopener,noreferrer");
+                try {
+                  const url =
+                    window.location.origin +
+                    import.meta.env.BASE_URL +
+                    "samradsyttrande-forsvarsmakten.pdf";
+                  if (isNative()) {
+                    openPdfRoute(url, "Försvarsmaktens samrådsyttrande");
+                  } else {
+                    window.open(url, "_blank", "noopener,noreferrer");
+                  }
+                } catch (err) {
+                  console.warn("[PlaceTurbines] PDF open failed:", err);
                 }
               }}
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-2 text-[11px] font-medium text-white/50 hover:bg-white/10 hover:text-white/70"

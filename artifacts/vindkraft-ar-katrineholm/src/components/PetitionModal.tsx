@@ -113,9 +113,13 @@ export function PetitionModal({ onClose }: { onClose: () => void }) {
       timestamp: Date.now(),
     };
 
-    const next = [...signatures, entry];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    setSignatures(next);
+    try {
+      const next = [...signatures, entry];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      setSignatures(next);
+    } catch (storageErr) {
+      console.warn("[PetitionModal] localStorage save failed:", storageErr);
+    }
     try {
       window.location.href = buildMailto(entry, campaign);
     } catch (err) {

@@ -535,6 +535,8 @@ export default function AndroidPlayScreenshots() {
           : SLIDES[current].filename;
         await downloadEl(slideRef.current, fn, 2);
       }
+    } catch (err) {
+      console.warn("[AndroidPlayScreenshots] download failed:", err);
     } finally {
       setDownloading(false);
     }
@@ -551,6 +553,8 @@ export default function AndroidPlayScreenshots() {
         await downloadEl(el, fn, 2);
         await new Promise((r) => setTimeout(r, 600));
       }
+    } catch (err) {
+      console.warn("[AndroidPlayScreenshots] download-all failed:", err);
     } finally {
       setDownloadingAll(false);
     }

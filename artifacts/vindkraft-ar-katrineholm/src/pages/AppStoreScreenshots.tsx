@@ -532,6 +532,8 @@ export default function AppStoreScreenshots() {
     setDownloading(true);
     try {
       await downloadSlide(slideRef.current, slides[current].filename, dlScale);
+    } catch (err) {
+      console.warn("[AppStoreScreenshots] download failed:", err);
     } finally {
       setDownloading(false);
     }
@@ -547,6 +549,8 @@ export default function AppStoreScreenshots() {
         await downloadSlide(el, slides[i].filename, dlScale);
         await new Promise((r) => setTimeout(r, 600));
       }
+    } catch (err) {
+      console.warn("[AppStoreScreenshots] download-all failed:", err);
     } finally {
       setDownloadingAll(false);
     }
