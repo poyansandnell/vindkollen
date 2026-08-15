@@ -80,6 +80,27 @@ export function useGeolocation(enabled: boolean): GeoState {
     return () => window.removeEventListener("vindkollen:overrideCleared", handler);
   }, []);
 
+  // V26: GPS-omstart vid förgrundning.
+  // GPS-chippen pausas i bakgrunden ("vid användning av appen"-behörighet).
+  // Utan detta returnerar den första watchPosition-callbacken den gamla
+  // cachadon positionen (t.ex. Katrineholm) när användaren öppnar appen på
+  // ny ort (t.ex. Eskilstuna). Fixa: nolla positionen och starta om watchen
+  // så att AR-skärmen visar laddning tills riktig fix anländer.
+  useEffect(() => {
+    if (!enabled) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.info("[useGeolocation] app förgrundad → rensar stale-position och startar om GPS-watch");
+        setState((s) => ({ ...s, lat: null, lon: null, accuracy: null, loading: true }));
+        setResetTrigger((t) => t + 1);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [enabled]);
+
   useEffect(() => {
     if (!enabled) return;
 
