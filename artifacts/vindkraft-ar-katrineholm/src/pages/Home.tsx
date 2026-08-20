@@ -61,6 +61,7 @@ import {
 import { NativeDiagnostics } from "@/components/NativeDiagnostics";
 import { OutdoorConfirmDialog } from "@/components/OutdoorConfirmDialog";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
+import InstallPrompt from "@/components/InstallPrompt";
 
 const PHOTO_DISCLAIMER_TEXT = "Fotomontage/visualisering. GPS, kompass, terräng, väder och sikt kan påverka precisionen.";
 
@@ -1736,12 +1737,15 @@ export default function Home() {
       "bg-[#090909]"
     }`}>
       {!started && positionOverride === null && (
-        <PermissionGate
-          onStart={handleStart}
-          starting={starting}
-          errors={errors}
-          turbineCount={activeTurbines.length}
-        />
+        <>
+          <PermissionGate
+            onStart={handleStart}
+            starting={starting}
+            errors={errors}
+            turbineCount={activeTurbines.length}
+          />
+          <InstallPrompt />
+        </>
       )}
 
       {started && (
