@@ -1,4 +1,5 @@
 import { runWindSync } from "@workspace/wind-sync";
+import { generateBundledProjects } from "./generateBundledProjects";
 import { logger } from "./logger";
 
 const DEFAULT_INTERVAL_HOURS = 24;
@@ -59,6 +60,16 @@ async function runOnce(): Promise<void> {
     state.lastRunStatus = "ok";
     state.lastRunError = null;
     logger.info({ countries: result.countries }, "Scheduled wind data sync completed");
+
+    // Regenerate the bundled offline snapshot so native app builds always
+    // ship current project data even when the API is unreachable.
+    try {
+      const projectCount = await generateBundledProjects();
+      logger.info({ projectCount }, "Bundled projects file regenerated after wind sync");
+    } catch (bundleErr) {
+      // Non-fatal: the wind sync succeeded; just log the failure.
+      logger.warn({ err: bundleErr }, "Failed to regenerate bundled projects after wind sync");
+    }
   } catch (err) {
     state.lastRunStatus = "error";
     state.lastRunError = err instanceof Error ? err.message : String(err);
