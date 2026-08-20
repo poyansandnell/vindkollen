@@ -24,4 +24,6 @@ export type WindSyncStatusScheduler = {
   lastRunError?: string | null;
   /** @nullable */
   nextRunAt?: Date | null;
+  /** Number of sync runs that have failed in a row since the last success. Resets to 0 on a successful run. */
+  consecutiveFailures?: number;
 };

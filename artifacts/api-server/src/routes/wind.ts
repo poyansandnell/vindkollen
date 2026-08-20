@@ -412,6 +412,7 @@ router.get("/wind/sync-status", async (req, res) => {
         lastRunStatus: schedulerState.lastRunStatus,
         lastRunError: schedulerState.lastRunError,
         nextRunAt: schedulerState.nextRunAt,
+        consecutiveFailures: schedulerState.consecutiveFailures,
       },
     }),
   );

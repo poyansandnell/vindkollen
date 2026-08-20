@@ -838,4 +838,5 @@ components:
             lastRunStatus: { type: ["string", "null"], enum: [ok, error, null] }
             lastRunError: { type: ["string", "null"] }
             nextRunAt: { type: ["string", "null"], format: date-time }
+            consecutiveFailures: { type: integer, description: "Number of sync runs that have failed in a row since the last success. Resets to 0 on a successful run." }
 

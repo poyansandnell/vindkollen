@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
 # android-prepare.sh — Vindkollen Android build pipeline
 #
 # Kan köras från var som helst:
@@ -17,7 +17,7 @@
 #   8. Verifiera att cleartext HTTP är blockerat
 #
 # cap sync körs ALDRIG om dist-native-bygget misslyckas.
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
 

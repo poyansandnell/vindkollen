@@ -28,6 +28,7 @@ export interface WindSyncSchedulerState {
   lastRunStatus: "ok" | "error" | null;
   lastRunError: string | null;
   nextRunAt: Date | null;
+  consecutiveFailures: number;
 }
 
 const state: WindSyncSchedulerState = {
@@ -39,6 +40,7 @@ const state: WindSyncSchedulerState = {
   lastRunStatus: null,
   lastRunError: null,
   nextRunAt: null,
+  consecutiveFailures: 0,
 };
 
 export function getWindSyncSchedulerState(): WindSyncSchedulerState {
@@ -59,6 +61,7 @@ async function runOnce(): Promise<void> {
     });
     state.lastRunStatus = "ok";
     state.lastRunError = null;
+    state.consecutiveFailures = 0;
     logger.info({ countries: result.countries }, "Scheduled wind data sync completed");
 
     // Regenerate the bundled offline snapshot so native app builds always
@@ -73,7 +76,11 @@ async function runOnce(): Promise<void> {
   } catch (err) {
     state.lastRunStatus = "error";
     state.lastRunError = err instanceof Error ? err.message : String(err);
-    logger.error({ err }, "Scheduled wind data sync failed");
+    state.consecutiveFailures += 1;
+    logger.error(
+      { err, consecutiveFailures: state.consecutiveFailures },
+      `Scheduled wind data sync failed (${state.consecutiveFailures} consecutive failure(s))`,
+    );
   } finally {
     state.isRunning = false;
     state.lastRunFinishedAt = new Date();

@@ -629,7 +629,8 @@ export const GetWindSyncStatusResponse = zod.object({
   "lastRunFinishedAt": zod.coerce.date().nullish(),
   "lastRunStatus": zod.union([zod.literal('ok'),zod.literal('error'),zod.literal(null)]).nullish(),
   "lastRunError": zod.string().nullish(),
-  "nextRunAt": zod.coerce.date().nullish()
+  "nextRunAt": zod.coerce.date().nullish(),
+  "consecutiveFailures": zod.number().optional().describe('Number of sync runs that have failed in a row since the last success. Resets to 0 on a successful run.')
 }).optional().describe('Status of the in-process automatic re-sync scheduler.')
 })
 
