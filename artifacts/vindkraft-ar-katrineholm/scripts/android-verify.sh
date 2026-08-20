@@ -25,6 +25,10 @@ BUILD_GRADLE="$ARTIFACT_DIR/android/app/build.gradle"
 VARIABLES_GRADLE="$ARTIFACT_DIR/android/variables.gradle"
 STRINGS_XML="$ARTIFACT_DIR/android/app/src/main/res/values/strings.xml"
 NET_CFG="$ARTIFACT_DIR/android/app/src/main/res/xml/network_security_config.xml"
+STYLES_XML="$ARTIFACT_DIR/android/app/src/main/res/values/styles.xml"
+SPLASH_DRAWABLE="$ARTIFACT_DIR/android/app/src/main/res/drawable/vindkollen_splash.xml"
+CAMERA_BRIDGE="$ARTIFACT_DIR/src/lib/capacitorBridge.ts"
+CAMERA_HOOK="$ARTIFACT_DIR/src/hooks/useCameraStream.ts"
 
 echo ""
 echo "=== Vindkollen Android-verifiering ==="
@@ -43,6 +47,12 @@ if grep -rq 'disableAudio[: ]*!0\|disableAudio[: ]*true' dist-native/assets/*.js
   ok "disableAudio:true i dist-native"
 else
   fail "disableAudio:true SAKNAS i dist-native"
+fi
+
+if grep -rqF 'Android: hoppar över Camera.checkPermissions' dist-native/assets/*.js 2>/dev/null; then
+  ok "Android-bundlen hoppar över Capacitor Camera-pluginen"
+else
+  fail "Android-bundlen saknar skyddet mot Capacitor Camera-pluginen"
 fi
 
 # ── Package name och app name ─────────────────────────────────────────────────
@@ -65,6 +75,12 @@ if grep -Fq 'Vindkollen' "$STRINGS_XML" 2>/dev/null; then
   ok "App name: Vindkollen"
 else
   fail "App name saknas i strings.xml"
+fi
+
+if grep -Fq 'versionCode  5' "$BUILD_GRADLE" && grep -Fq 'versionName  "1.1"' "$BUILD_GRADLE"; then
+  ok "Releaseversion: 1.1 (versionCode 5)"
+else
+  fail "Releaseversion är inte 1.1 (versionCode 5)"
 fi
 
 # ── SDK-versioner ─────────────────────────────────────────────────────────────
@@ -114,6 +130,56 @@ if [[ -f "$MANIFEST" ]]; then
   fi
 else
   fail "AndroidManifest.xml saknas"
+fi
+
+# ── Android branding ─────────────────────────────────────────────────────────
+echo ""
+echo "── Android-varumärke ──"
+
+if [[ -f "$SPLASH_DRAWABLE" ]] && grep -Fq '@mipmap/ic_launcher_foreground' "$SPLASH_DRAWABLE"; then
+  ok "Startbild använder Vindkollen-launcherresursen"
+else
+  fail "Vindkollen-startbild saknas eller använder fel resurs"
+fi
+
+if [[ -f "$STYLES_XML" ]] && grep -Fq '@drawable/vindkollen_splash' "$STYLES_XML" && \
+  grep -Fq 'windowSplashScreenAnimatedIcon' "$STYLES_XML"; then
+  ok "Splash-tema är konfigurerat för Android 7–11 och Android 12+"
+else
+  fail "Splash-temat saknar Vindkollen-konfiguration"
+fi
+
+if find "$ARTIFACT_DIR/android/app/src/main/res" -type f -name 'splash.png' -print -quit | grep -q .; then
+  fail "Äldre splash.png hittades fortfarande i Android-resurserna"
+else
+  ok "Ingen äldre blå splash.png finns kvar"
+fi
+
+LAUNCHER_COUNT=$(find "$ARTIFACT_DIR/android/app/src/main/res"/mipmap-* -type f \
+  \( -name 'ic_launcher.png' -o -name 'ic_launcher_round.png' -o -name 'ic_launcher_foreground.png' \) \
+  -size +0c 2>/dev/null | wc -l | tr -d ' ')
+if [[ "$LAUNCHER_COUNT" -eq 15 ]]; then
+  ok "Alla 15 Vindkollen-launcherresurser finns"
+else
+  fail "Förväntade 15 launcherresurser, hittade $LAUNCHER_COUNT"
+fi
+
+# ── Android AR-kameraväg ─────────────────────────────────────────────────────
+echo ""
+echo "── Android AR-kameraväg ──"
+
+if grep -Fq 'if (isAndroidNative())' "$CAMERA_BRIDGE" && \
+  grep -Fq 'hoppar över Camera.checkPermissions' "$CAMERA_BRIDGE"; then
+  ok "Android hoppar över Capacitor Camera.checkPermissions"
+else
+  fail "Android-skydd mot Capacitor Camera-pluginen saknas"
+fi
+
+if grep -Fq 'if (isIosNative())' "$CAMERA_HOOK" && \
+  grep -Fq 'navigator.mediaDevices.getUserMedia' "$CAMERA_HOOK"; then
+  ok "Android använder WebView getUserMedia i AR-flödet"
+else
+  fail "Android getUserMedia-väg saknas i AR-flödet"
 fi
 
 # ── Network security ──────────────────────────────────────────────────────────

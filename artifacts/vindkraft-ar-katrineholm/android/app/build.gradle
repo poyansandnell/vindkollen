@@ -27,8 +27,10 @@ android {
         applicationId "se.catchme.vindkollen"
         minSdkVersion    rootProject.ext.minSdkVersion    // 24
         targetSdkVersion rootProject.ext.targetSdkVersion // 36
-        versionCode  1
-        versionName  "1.0"
+        // Google Play har redan tagit emot versionCode 4. Varje ny AAB måste
+        // ha ett högre, unikt nummer.
+        versionCode  5
+        versionName  "1.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'

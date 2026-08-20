@@ -16,7 +16,13 @@
     </style>
 
 
+    <!-- Samma Vindkollen-varumärke visas på Android 7–11 och Android 12+.
+         Använd aldrig den äldre Capacitor-splashbilden här: den innehöll den
+         blå X-symbolen som inte tillhör Vindkollen. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="android:background">@drawable/vindkollen_splash</item>
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

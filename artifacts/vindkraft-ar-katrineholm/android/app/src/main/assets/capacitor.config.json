@@ -1,0 +1,20 @@
+{
+	"appId": "se.catchme.vindkollen",
+	"appName": "Vindkollen",
+	"webDir": "dist-native",
+	"bundledWebRuntime": false,
+	"ios": {
+		"contentInset": "never",
+		"backgroundColor": "#00000000"
+	},
+	"android": {
+		"allowMixedContent": false
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchAutoHide": false
+		},
+		"Geolocation": {},
+		"Camera": {}
+	}
+}

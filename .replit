@@ -44,3 +44,4 @@ VAPID_PUBLIC_KEY = "BJHQub4d8Gc2hiddVHppcXHjjrcix-7QGsf0wX1pdpgL-zau08ihrSmtLXKE
 
 [nix]
 channel = "stable-25_05"
+packages = ["jdk17"]
