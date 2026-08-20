@@ -46,7 +46,7 @@ export function useInstallPrompt() {
   }, [standalone]);
 
   useEffect(() => {
-    if (!standalone) return;
+    if (standalone) return;
     const handler = () => setDeferredPrompt(null);
     window.addEventListener("appinstalled", handler);
     return () => window.removeEventListener("appinstalled", handler);
