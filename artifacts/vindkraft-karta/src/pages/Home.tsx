@@ -241,22 +241,34 @@ export default function Home() {
 
   if (!mapboxToken) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-background px-4">
-        <div className="flex flex-col items-center gap-4 max-w-sm text-center">
-          <p className="text-muted-foreground">
-            Kartan kunde inte aktiveras. Kontrollera att servern är igång och att Mapbox-token är
-            konfigurerad.
-          </p>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setMapboxToken(undefined);
-              getMapboxToken().then(setMapboxToken);
-            }}
-          >
-            Försök igen
-          </Button>
+      <div className="relative min-h-screen w-full bg-background">
+        <div className="flex min-h-screen items-center justify-center px-4">
+          <div className="flex flex-col items-center gap-4 max-w-sm text-center">
+            <p className="text-muted-foreground">
+              Kartan kunde inte aktiveras. Kontrollera att servern är igång och att Mapbox-token är
+              konfigurerad.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setMapboxToken(undefined);
+                getMapboxToken().then(setMapboxToken);
+              }}
+            >
+              Försök igen
+            </Button>
+            <Button variant="outline" onClick={() => setShowBestPlaces(true)}>
+              <ListOrdered className="h-4 w-4 mr-2" />
+              Bläddra bland vindkraftsorter
+            </Button>
+          </div>
         </div>
+        {showBestPlaces && (
+          <BestPlacesView
+            onClose={() => setShowBestPlaces(false)}
+            onSelectLocality={() => setShowBestPlaces(false)}
+          />
+        )}
       </div>
     );
   }
@@ -277,6 +289,7 @@ export default function Home() {
         sightObserver={sightObserver}
         onPlaceSightObserver={handlePlaceSightObserver}
         onSightResultsChange={setSightResultsInfo}
+        onMapUnavailable={() => setShowBestPlaces(true)}
       />
 
       {showOverlay && (

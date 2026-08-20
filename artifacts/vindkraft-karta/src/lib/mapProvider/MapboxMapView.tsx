@@ -18,6 +18,7 @@ const MapboxMapView = forwardRef<MapRef, MapboxMapViewProps>(function MapboxMapV
     onMapClick,
     onMapMouseMove,
     onMapReady,
+    onMapUnavailable,
     children,
   },
   ref,
@@ -57,12 +58,20 @@ const MapboxMapView = forwardRef<MapRef, MapboxMapViewProps>(function MapboxMapV
 
   if (!webglSupported) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-slate-100 p-6 text-center text-slate-600">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-slate-100 p-6 text-center text-slate-600">
         <p className="font-medium">Kartan kunde inte laddas</p>
         <p className="text-sm">
           Din webbläsare eller enhet stödjer inte WebGL, som krävs för att visa kartan. Prova en
           annan webbläsare (t.ex. Chrome eller Safari) eller enhet.
         </p>
+        {onMapUnavailable && (
+          <button
+            onClick={onMapUnavailable}
+            className="mt-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50"
+          >
+            Bläddra bland vindkraftsorter
+          </button>
+        )}
       </div>
     );
   }

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # android-verify.sh — Vindkollen Android pre-upload verifiering
 #
 # Kontrollerar den färdiga Android-konfigurationen utan att ändra filer.
 # Kör: pnpm android:verify
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 set -euo pipefail
 

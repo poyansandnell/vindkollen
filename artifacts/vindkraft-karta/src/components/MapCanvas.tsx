@@ -39,6 +39,7 @@ interface MapCanvasProps {
   sightObserver?: { lat: number; lng: number } | null;
   onPlaceSightObserver: (point: { lat: number; lng: number }) => void;
   onSightResultsChange: (info: SightResultsInfo) => void;
+  onMapUnavailable?: () => void;
 }
 
 const CLUSTER_LAYER = "turbine-clusters";
@@ -154,6 +155,7 @@ export default function MapCanvas({
   sightObserver,
   onPlaceSightObserver,
   onSightResultsChange,
+  onMapUnavailable,
 }: MapCanvasProps) {
   const mapRef = useRef<MapRef>(null);
   const [mapInstance, setMapInstance] = useState<MapboxMap | null>(null);
@@ -276,6 +278,7 @@ export default function MapCanvas({
       onMapClick={handleClick}
       onMapMouseMove={handleMouseMove}
       onMapReady={setMapInstance}
+      onMapUnavailable={onMapUnavailable}
     >
       <Source
         id="turbines"

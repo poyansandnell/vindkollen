@@ -23,5 +23,7 @@ export interface MapProviderProps {
   onMapMouseMove?: (event: MapLayerMouseEvent) => void;
   /** Fired once after the map (and its terrain DEM source) has finished loading. */
   onMapReady?: (map: mapboxgl.Map) => void;
+  /** Fired when the map cannot be rendered (e.g. WebGL not supported). */
+  onMapUnavailable?: () => void;
   children?: React.ReactNode;
 }
