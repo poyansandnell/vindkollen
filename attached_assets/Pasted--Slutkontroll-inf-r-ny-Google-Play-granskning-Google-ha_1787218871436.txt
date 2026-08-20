@@ -1,0 +1,56 @@
+# Slutkontroll inför ny Google Play-granskning
+
+Google har avslagit Vindkollen igen på exakt tre punkter. Jag vill att du verifierar den faktiska release-builden, inte bara källkoden.
+
+## 1. AR-krasch på Android
+
+Google visar bevis på att appen kraschar när granskarens test trycker på **Starta AR**.
+
+- Kontrollera hela Starta AR-flödet igen.
+- Kontrollera samtliga native/Capacitor-anrop som sker när knappen trycks.
+- Säkerställ att senaste Camera/getUserMedia-fixarna verkligen finns i den native bundle som ska distribueras.
+- Gör en release-build och kontrollera att samma kod finns i AAB:n.
+- Rapportera om det fortfarande finns någon möjlig native crash.
+- Ändra inte bara med try/catch om felet är ett native-undantag som dödar processen.
+
+## 2. Google Play-beskrivningen
+
+Google visar fortfarande en gammal svensk fullständig beskrivning utan officiella URL:er.
+
+Ge mig den slutliga texten som ska klistras in i **Fullständig beskrivning (sv-SE)** och säkerställ att den innehåller:
+
+- https://www.vindbrukskollen.se
+- https://www.energimyndigheten.se
+- https://www.smhi.se
+- tydlig text om att Vindkollen är en fristående app från Catch Me AB
+- tydlig text om att Vindkollen inte representerar någon myndighet
+- tydlig text om att visualiseringar och beräkningar inte ersätter myndighetsbeslut eller officiella tekniska underlag
+
+## 3. Appikon
+
+Google visar att Play Store-ikonen och den installerade Android-appens launcher-ikon fortfarande är olika.
+
+Verifiera exakt vilken ikon som kommer att finnas i den nya release-AAB:n.
+
+Den ikon som ligger i:
+
+- Android adaptive icon
+- Android launcher icon
+- Play Console app icon
+
+ska representera samma Vindkollen-varumärke.
+
+Rapportera vilken ikon den installerade Android-appen faktiskt kommer att visa efter installation av den nya AAB:n.
+
+## Slutrapport
+
+Ge mig därefter:
+
+- vilka filer som ändrades
+- commit-hash
+- vilket versionCode nästa AAB ska ha
+- exakt byggkommando
+- bekräftelse på att AR-flödet är testat i releasekonfiguration
+- eventuell återstående risk innan vi skickar in igen
+
+Skicka inte bara ett generellt "allt är klart". Verifiera varje av Google Plays tre konkreta anmärkningar separat.
