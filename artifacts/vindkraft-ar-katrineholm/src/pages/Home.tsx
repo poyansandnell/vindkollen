@@ -438,7 +438,9 @@ export default function Home() {
   const [soundEnvironment, setSoundEnvironment] = useState<"ute" | "inne">("ute");
 
   const [sunMode, setSunMode] = useState<SunMode>("current");
-  const [realScale, setRealScale] = useState(false);
+  // Börja i fysikaliskt korrekt storlek. Förstärkt visning är ett frivilligt
+  // läge i visualiseringskontrollerna för verk som ligger långt bort.
+  const [realScale, setRealScale] = useState(true);
   const [visibility, setVisibility] = useState<VisibilityLevel>("clear");
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   // Startvärdet matchar den faktiska klockan vid appstart, men efter det är
