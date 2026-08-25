@@ -29,6 +29,10 @@ STYLES_XML="$ARTIFACT_DIR/android/app/src/main/res/values/styles.xml"
 SPLASH_DRAWABLE="$ARTIFACT_DIR/android/app/src/main/res/drawable/vindkollen_splash.xml"
 CAMERA_BRIDGE="$ARTIFACT_DIR/src/lib/capacitorBridge.ts"
 CAMERA_HOOK="$ARTIFACT_DIR/src/hooks/useCameraStream.ts"
+ANDROID_PUBLIC="$ARTIFACT_DIR/android/app/src/main/assets/public"
+CAPACITOR_PLUGINS="$ARTIFACT_DIR/android/app/src/main/assets/capacitor.plugins.json"
+CAPACITOR_BUILD="$ARTIFACT_DIR/android/app/capacitor.build.gradle"
+CAPACITOR_SETTINGS="$ARTIFACT_DIR/android/capacitor.settings.gradle"
 
 echo ""
 echo "=== Vindkollen Android-verifiering ==="
@@ -55,6 +59,18 @@ else
   fail "Android-bundlen saknar skyddet mot Capacitor Camera-pluginen"
 fi
 
+if [[ -f "$ANDROID_PUBLIC/index.html" ]] && cmp -s "dist-native/index.html" "$ANDROID_PUBLIC/index.html"; then
+  ok "Android-assets matchar aktuell dist-native-bundle"
+else
+  fail "Android-assets är gamla eller saknas — kör pnpm android:prepare"
+fi
+
+if grep -rqF 'Android: hoppar över Camera.checkPermissions' "$ANDROID_PUBLIC/assets/"*.js 2>/dev/null; then
+  ok "Androids paketerade assets innehåller Camera-skyddet"
+else
+  fail "Androids paketerade assets saknar Camera-skyddet"
+fi
+
 # ── Package name och app name ─────────────────────────────────────────────────
 echo ""
 echo "── Package name och app name ──"
@@ -77,10 +93,10 @@ else
   fail "App name saknas i strings.xml"
 fi
 
-if grep -Fq 'versionCode  5' "$BUILD_GRADLE" && grep -Fq 'versionName  "1.1"' "$BUILD_GRADLE"; then
-  ok "Releaseversion: 1.1 (versionCode 5)"
+if grep -Fq 'versionCode  6' "$BUILD_GRADLE" && grep -Fq 'versionName  "1.1"' "$BUILD_GRADLE"; then
+  ok "Releaseversion: 1.1 (versionCode 6)"
 else
-  fail "Releaseversion är inte 1.1 (versionCode 5)"
+  fail "Releaseversion är inte 1.1 (versionCode 6)"
 fi
 
 # ── SDK-versioner ─────────────────────────────────────────────────────────────
@@ -180,6 +196,14 @@ if grep -Fq 'if (isIosNative())' "$CAMERA_HOOK" && \
   ok "Android använder WebView getUserMedia i AR-flödet"
 else
   fail "Android getUserMedia-väg saknas i AR-flödet"
+fi
+
+if [[ -f "$CAPACITOR_PLUGINS" && -f "$CAPACITOR_BUILD" && -f "$CAPACITOR_SETTINGS" ]] && \
+   ! grep -Eq '@capacitor/camera|camera-preview|capacitor-camera|capacitor-community-camera-preview' \
+     "$CAPACITOR_PLUGINS" "$CAPACITOR_BUILD" "$CAPACITOR_SETTINGS"; then
+  ok "Android registrerar inga native kamerapluggar"
+else
+  fail "Android registrerar fortfarande Camera eller CameraPreview"
 fi
 
 # ── Network security ──────────────────────────────────────────────────────────

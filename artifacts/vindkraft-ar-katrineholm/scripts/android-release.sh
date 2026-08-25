@@ -261,6 +261,13 @@ if [[ ! -f "$AAB" ]]; then
   exit 1
 fi
 
+echo ""
+echo "── Steg 12: verifiera faktisk AAB ──"
+if ! bash "$SCRIPT_DIR/android-inspect-aab.sh" "$AAB"; then
+  echo "❌  AAB-innehållsverifiering misslyckades — release avbruten."
+  exit 1
+fi
+
 SIZE=$(du -sh "$AAB" | cut -f1)
 CREATED_AT=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$AAB" 2>/dev/null \
           || stat -c "%y" "$AAB" 2>/dev/null | cut -c1-16 \

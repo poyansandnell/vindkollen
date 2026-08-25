@@ -3,8 +3,7 @@
 # android-bundle.sh — Skapar signerad Android App Bundle (.aab) för Google Play
 #
 # Förutsättningar:
-#   1. pnpm android:prepare har körts (dist-native och cap sync klara)
-#   2. keystore.properties finns i android/ ELLER miljövariabler är satta:
+#   1. keystore.properties finns i android/ ELLER miljövariabler är satta:
 #      VINDKOLLEN_STORE_FILE, VINDKOLLEN_STORE_PASSWORD,
 #      VINDKOLLEN_KEY_ALIAS, VINDKOLLEN_KEY_PASSWORD
 #   3. Java/Gradle är installerat (ingår i Android Studio)
@@ -19,6 +18,13 @@ SCRIPT_ABS="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_ABS")"
 ARTIFACT_DIR="$(dirname "$SCRIPT_DIR")"
 
+echo "── Bygger och synkar färsk native bundle ──"
+echo ""
+if ! bash "$SCRIPT_DIR/android-prepare.sh"; then
+  echo "❌  android:prepare misslyckades — releasebundle skapas inte."
+  exit 1
+fi
+
 cd "$ARTIFACT_DIR/android"
 
 echo ""
@@ -26,12 +32,6 @@ echo "╔═══════════════════════�
 echo "║       Vindkollen — android:bundle            ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
-
-# Kontrollera att dist-native finns (android:prepare måste ha körts)
-if [[ ! -d "$ARTIFACT_DIR/dist-native" ]]; then
-  echo "❌  dist-native saknas — kör först: pnpm android:prepare"
-  exit 1
-fi
 
 # Kontrollera signeringskonfiguration
 KEYSTORE_PROPS="$ARTIFACT_DIR/android/keystore.properties"
@@ -69,6 +69,9 @@ fi
 AAB="$ARTIFACT_DIR/android/app/build/outputs/bundle/release/app-release.aab"
 
 if [[ -f "$AAB" ]]; then
+  echo ""
+  echo "── Verifierar den faktiska AAB-filen ──"
+  bash "$SCRIPT_DIR/android-inspect-aab.sh" "$AAB"
   SIZE=$(du -sh "$AAB" | cut -f1)
   echo ""
   echo "╔══════════════════════════════════════════════╗"

@@ -9,7 +9,7 @@
 # Steg:
 #   1. Rensa och bygg dist-native (avbryt om det misslyckas)
 #   2. Verifiera disableAudio:true i dist-native
-#   3. cap sync android
+#   3. cap sync android och ta bort iOS-specifika kamerapluggar från Android
 #   4. Verifiera package name och app name
 #   5. Verifiera compileSdk / targetSdk / minSdk
 #   6. Verifiera att RECORD_AUDIO saknas i AndroidManifest.xml
@@ -75,6 +75,14 @@ if ! npx cap sync android; then
   exit 1
 fi
 echo "✅  cap sync android klar"
+
+echo ""
+echo "── Steg 3b: säkra Android-pluginregistrering ──"
+if ! node "$SCRIPT_DIR/fix-android-plugins.mjs"; then
+  echo "❌  Android-kamerapluggar kunde inte tas bort från den genererade registreringen"
+  exit 1
+fi
+echo "✅  Android använder bara WebView getUserMedia för kamera"
 
 # ── 4. Verifiera package name och app name ────────────────────────────────────
 

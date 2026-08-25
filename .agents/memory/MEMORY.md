@@ -1,4 +1,5 @@
 - [GitHub connector fallback](github-connector-stale-git-auth.md) — if shell Git keeps rejecting stored auth, use the authorized GitHub connector for small source/project files; regenerate native bundles during release prep.
+- [Local Android AAB prerequisites](local-android-aab-prerequisites.md) — this Replit environment needs a local Android SDK plus explicit JDK 21 selection for a reproducible Gradle release build.
 - [Capacitor SPM direct target linkage](capacitor-spm-direct-linkage.md) — `import Capacitor` needs XCRemoteSwiftPackageReference + product dep in project.pbxproj; Package.resolved alone can't fix it.
 - [Hash-navigate no-op kills mounted-component transitions](hash-navigate-noop-mounted.md) — setting window.location.hash to the SAME value fires no hashchange; use localStorage handoff + sessionStorage flag + hash bounce (via "/") to guarantee remount.
 - [PWA AR without WebXR](ar-without-webxr.md) — objects at fixed world positions from bearing/distance; camera rotates via device orientation, not objects; works broadly, no WebXR needed.

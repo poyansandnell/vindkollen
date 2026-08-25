@@ -71,7 +71,8 @@ export default function About() {
               </li>
             </ul>
             <p className="mt-3 text-xs text-white/40">
-              Kontrollera alltid aktuella uppgifter direkt hos respektive officiell källa.
+              Data och visualiseringar kan ändras. Kontrollera alltid aktuella uppgifter direkt hos respektive
+              officiell källa.
             </p>
           </section>
 
@@ -108,12 +109,14 @@ export default function About() {
           <section className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
             <h2 className="mb-2 text-base font-semibold text-white">Ansvarsfriskrivning</h2>
             <p className="leading-relaxed text-white/70">
-              Vindkollen är en fristående app utvecklad av Catch Me AB. Appen är inte kopplad till, godkänd av
-              eller representerar någon myndighet, kommun eller offentlig organisation.
+              Vindkollen är en fristående app utvecklad av Catch Me AB. Appen representerar inte
+              Energimyndigheten, Länsstyrelsen, någon kommun eller någon annan myndighet, och är inte kopplad
+              till eller godkänd av dessa organisationer.
             </p>
             <p className="mt-2 leading-relaxed text-white/70">
-              Informationen i appen används för visualisering och analys av vindkraftsprojekt. Användaren bör
-              alltid kontrollera aktuella uppgifter hos ansvariga myndigheter och officiella källor.
+              AR, ljud och övriga beräkningar är hjälpmedel för visualisering och analys. De ersätter inte
+              officiell teknisk dokumentation, tillståndsbeslut eller professionella bedömningar. Kontrollera
+              alltid aktuella uppgifter hos ansvariga myndigheter och officiella källor.
             </p>
           </section>
 

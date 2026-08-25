@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   areNativePermissionsGranted,
+  isAndroidNative,
   isIosNative,
   isNative,
   requestNativeCameraPermission,
@@ -37,6 +38,32 @@ export function useCameraStream(enabled: boolean): CameraState {
     setState((s) => ({ ...s, error: null, loading: true }));
     setRetryToken((t) => t + 1);
   }, []);
+
+  // Android kan stänga WebView-kameran när appen ligger i bakgrunden utan att
+  // komponenten unmountas. När användaren återvänder startar vi därför om den
+  // vanliga getUserMedia-vägen. Det blir ett synligt retry-läge vid fel i
+  // stället för en fastfrusen eller svart AR-kamera.
+  useEffect(() => {
+    if (!enabled || !isAndroidNative()) return;
+
+    let wasHidden = document.visibilityState === "hidden";
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        wasHidden = true;
+        return;
+      }
+      if (!wasHidden) return;
+
+      wasHidden = false;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      console.info("[AR] Android resumed — restarting WebView camera");
+      retry();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [enabled, retry]);
 
   useEffect(() => {
     if (!enabled) return;
