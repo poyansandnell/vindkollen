@@ -1,0 +1,100 @@
+# Google Play rejection – final Android release fix
+
+Google has rejected Vindkollen again. These are the same three issues, and I want you to fix and VERIFY the actual Android release build before we submit again.
+
+## 1. CRITICAL: Start AR still crashes
+
+Google's evidence clearly shows:
+
+**Start AR → "Vindkollen keeps stopping"**
+
+So the Android release build Google received is still crashing when Start AR is pressed.
+
+Do not assume previous fixes are included just because they exist in source code.
+
+Please:
+
+- Trace the complete Android `Start AR` flow from the button press until AR is mounted.
+- Check every Capacitor/native call, permission call, camera call, geolocation call, WebView call and component mount that occurs.
+- Search again for ALL uses of:
+  - `@capacitor/camera`
+  - `Camera.checkPermissions`
+  - `Camera.requestPermissions`
+  - `CameraPreview`
+  - permission wrappers
+  - `getUserMedia`
+- Verify Android never enters the previously crashing Capacitor Camera permission path.
+- Inspect the actual built `dist-native` / Android assets that will be packaged into the AAB.
+- Check whether `cap sync android` could be restoring stale assets.
+- Ensure errors result in an in-app error/retry state and can never terminate the Android process.
+- Review Android lifecycle/background-resume paths as well.
+
+Most importantly: tell me exactly why Google's release build can still crash even though our local Samsung test previously worked.
+
+## 2. App icon mismatch
+
+Google again shows two different icons:
+
+- Google Play store icon = current Vindkollen branding
+- Installed Android launcher icon = old blue Vindkollen icon
+
+Verify the actual release AAB contains the SAME icon as the Play Store listing.
+
+Check all Android resources:
+
+- `mipmap-*`
+- `ic_launcher`
+- `ic_launcher_round`
+- adaptive icon foreground/background
+- Android 12+ splash/startup icon
+- Manifest references
+- generated Capacitor resources
+
+Do not only inspect source PNG files. Verify which resources the release build actually resolves to.
+
+## 3. Government/public-data source links
+
+Google now specifically quotes the **English Full Description**, and it is still the old text without official source URLs.
+
+Give me final compliant Play Store copy for BOTH:
+
+- Swedish Full Description
+- English Full Description
+
+Both must explicitly contain working URLs to the official/public sources used by Vindkollen, including where applicable:
+
+- https://www.vindbrukskollen.se
+- https://www.energimyndigheten.se
+- https://www.smhi.se
+
+Both descriptions must clearly say:
+
+- Vindkollen is an independent app developed by Catch Me AB.
+- Vindkollen does not represent Energimyndigheten, Länsstyrelsen, any municipality or other government authority.
+- Data and visualisations may change and should be checked against official sources.
+- AR, sound and other calculations are visualisation/analysis aids and do not replace official technical documentation, permit decisions or professional assessments.
+
+Also verify the same disclaimer and source links are clearly accessible inside the app.
+
+## 4. Release verification
+
+Before saying this is fixed, give me:
+
+- exact files changed
+- exact root cause of the AR crash
+- confirmation of which icon the RELEASE AAB will display
+- final Swedish Play Store Full Description
+- final English Play Store Full Description
+- commit hash
+- next Android `versionCode`
+- exact Mac build commands
+
+Do NOT mark this as ready merely because TypeScript passes.
+
+The final verification must explicitly distinguish between:
+
+1. source-code verification
+2. native bundle verification
+3. physical Android test still required
+
+If Replit cannot build the signed AAB, say so clearly and give me the exact Mac commands needed to build it and test `Start AR` with `adb logcat` before uploading to Google.
