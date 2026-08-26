@@ -7,14 +7,16 @@
 #   bash scripts/android-prepare.sh      (från artifacts/vindkraft-ar-katrineholm/)
 #
 # Steg:
-#   1. Rensa och bygg dist-native (avbryt om det misslyckas)
-#   2. Verifiera disableAudio:true i dist-native
-#   3. cap sync android och ta bort iOS-specifika kamerapluggar från Android
-#   4. Verifiera package name och app name
-#   5. Verifiera compileSdk / targetSdk / minSdk
-#   6. Verifiera att RECORD_AUDIO saknas i AndroidManifest.xml
-#   7. Verifiera att bakgrundsplats saknas
-#   8. Verifiera att cleartext HTTP är blockerat
+#   1. Generera Android-ikoner från den bekräftade Vindkollen-källan
+#   2. Rensa och bygg dist-native (avbryt om det misslyckas)
+#   3. Verifiera disableAudio:true i dist-native
+#   4. cap sync android och ta bort iOS-specifika kamerapluggar från Android
+#   5. Återskapa Android-ikoner efter cap sync
+#   6. Verifiera package name och app name
+#   7. Verifiera compileSdk / targetSdk / minSdk
+#   8. Verifiera att RECORD_AUDIO saknas i AndroidManifest.xml
+#   9. Verifiera att bakgrundsplats saknas
+#  10. Verifiera att cleartext HTTP är blockerat
 #
 # cap sync körs ALDRIG om dist-native-bygget misslyckas.
 # -----------------------------------------------------------------------------
@@ -36,9 +38,18 @@ echo ""
 
 cd "$ARTIFACT_DIR"
 
-# ── 1. Rensa och bygg dist-native ────────────────────────────────────────────
+# ── 1. Generera Android-ikoner från bekräftad källa ───────────────────────────
 
-echo "── Steg 1: pnpm native:build ──"
+echo "── Steg 1: generera Android-ikoner ──"
+if ! bash "$SCRIPT_DIR/generate-android-icons.sh"; then
+  echo "❌  Android-ikoner kunde inte genereras"
+  exit 1
+fi
+echo "✅  Android-ikoner genererade"
+
+# ── 2. Rensa och bygg dist-native ────────────────────────────────────────────
+
+echo "── Steg 2: pnpm native:build ──"
 rm -rf dist-native
 
 if ! pnpm native:build; then
@@ -50,10 +61,10 @@ if ! pnpm native:build; then
 fi
 echo "✅  dist-native byggd"
 
-# ── 2. Verifiera disableAudio:true ───────────────────────────────────────────
+# ── 3. Verifiera disableAudio:true ───────────────────────────────────────────
 
 echo ""
-echo "── Steg 2: verifiera disableAudio ──"
+echo "── Steg 3: verifiera disableAudio ──"
 
 # Vite minifierar true → !0
 if grep -rq 'disableAudio[: ]*!0\|disableAudio[: ]*true' dist-native/assets/*.js 2>/dev/null; then
@@ -65,10 +76,10 @@ else
   exit 1
 fi
 
-# ── 3. cap sync android ───────────────────────────────────────────────────────
+# ── 4. cap sync android ───────────────────────────────────────────────────────
 
 echo ""
-echo "── Steg 3: cap sync android ──"
+echo "── Steg 4: cap sync android ──"
 
 if ! npx cap sync android; then
   echo "❌  cap sync android misslyckades"
@@ -84,10 +95,20 @@ if ! node "$SCRIPT_DIR/fix-android-plugins.mjs"; then
 fi
 echo "✅  Android använder bara WebView getUserMedia för kamera"
 
-# ── 4. Verifiera package name och app name ────────────────────────────────────
+# ── 5. Återskapa ikoner efter Capacitor-sync ───────────────────────────────────
 
 echo ""
-echo "── Steg 4: package name och app name ──"
+echo "── Steg 5: säkra Android-ikoner efter cap sync ──"
+if ! bash "$SCRIPT_DIR/generate-android-icons.sh"; then
+  echo "❌  Android-ikoner kunde inte återskapas efter cap sync"
+  exit 1
+fi
+echo "✅  Android-launcherresurser säkrade efter cap sync"
+
+# ── 6. Verifiera package name och app name ────────────────────────────────────
+
+echo ""
+echo "── Steg 6: package name och app name ──"
 
 BUILD_GRADLE="$ARTIFACT_DIR/android/app/build.gradle"
 STRINGS_XML="$ARTIFACT_DIR/android/app/src/main/res/values/strings.xml"
@@ -106,10 +127,10 @@ else
   exit 1
 fi
 
-# ── 5. Verifiera SDK-versioner ────────────────────────────────────────────────
+# ── 7. Verifiera SDK-versioner ────────────────────────────────────────────────
 
 echo ""
-echo "── Steg 5: SDK-versioner ──"
+echo "── Steg 7: SDK-versioner ──"
 
 VARIABLES_GRADLE="$ARTIFACT_DIR/android/variables.gradle"
 
@@ -128,10 +149,10 @@ else
   exit 1
 fi
 
-# ── 6. Verifiera att RECORD_AUDIO saknas ──────────────────────────────────────
+# ── 8. Verifiera att RECORD_AUDIO saknas ──────────────────────────────────────
 
 echo ""
-echo "── Steg 6: RECORD_AUDIO ──"
+echo "── Steg 8: RECORD_AUDIO ──"
 
 MANIFEST="$ARTIFACT_DIR/android/app/src/main/AndroidManifest.xml"
 
@@ -149,10 +170,10 @@ else
   echo "✅  RECORD_AUDIO saknas (korrekt)"
 fi
 
-# ── 7. Verifiera att bakgrundsplats saknas ────────────────────────────────────
+# ── 9. Verifiera att bakgrundsplats saknas ────────────────────────────────────
 
 echo ""
-echo "── Steg 7: bakgrundsplats ──"
+echo "── Steg 9: bakgrundsplats ──"
 
 if grep -q 'ACCESS_BACKGROUND_LOCATION' "$MANIFEST"; then
   echo "❌  ACCESS_BACKGROUND_LOCATION finns i AndroidManifest.xml — ta bort den"
@@ -160,10 +181,10 @@ if grep -q 'ACCESS_BACKGROUND_LOCATION' "$MANIFEST"; then
 fi
 echo "✅  Ingen ACCESS_BACKGROUND_LOCATION"
 
-# ── 8. Verifiera cleartext HTTP blockerat ─────────────────────────────────────
+# ── 10. Verifiera cleartext HTTP blockerat ─────────────────────────────────────
 
 echo ""
-echo "── Steg 8: network security ──"
+echo "── Steg 10: network security ──"
 
 NET_CFG="$ARTIFACT_DIR/android/app/src/main/res/xml/network_security_config.xml"
 

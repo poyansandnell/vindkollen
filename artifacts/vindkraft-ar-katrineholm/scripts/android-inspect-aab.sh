@@ -10,6 +10,8 @@ SCRIPT_ABS="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_ABS")"
 ARTIFACT_DIR="$(dirname "$SCRIPT_DIR")"
 AAB="${1:-$ARTIFACT_DIR/android/app/build/outputs/bundle/release/app-release.aab}"
+EXPECTED_VERSION_CODE=8
+EXPECTED_VERSION_NAME="1.1"
 
 PASS=0
 FAIL=0
@@ -70,11 +72,11 @@ if [[ -n "$AAPT2" && -x "$AAPT2" ]]; then
   else
     fail "AAB package name är inte se.catchme.vindkollen"
   fi
-  if grep -Fq 'versionCode(0x0101021b)=6 (Raw: "6")' "$TMP_DIR/manifest-tree.txt" && \
-     grep -Fq 'versionName(0x0101021c)="1.1" (Raw: "1.1")' "$TMP_DIR/manifest-tree.txt"; then
-    ok "AAB version är 1.1 (versionCode 6)"
+  if grep -Fq "versionCode(0x0101021b)=$EXPECTED_VERSION_CODE (Raw: \"$EXPECTED_VERSION_CODE\")" "$TMP_DIR/manifest-tree.txt" && \
+     grep -Fq "versionName(0x0101021c)=\"$EXPECTED_VERSION_NAME\" (Raw: \"$EXPECTED_VERSION_NAME\")" "$TMP_DIR/manifest-tree.txt"; then
+    ok "AAB version är $EXPECTED_VERSION_NAME (versionCode $EXPECTED_VERSION_CODE)"
   else
-    fail "AAB har inte förväntad version 1.1 (versionCode 6)"
+    fail "AAB har inte förväntad version $EXPECTED_VERSION_NAME (versionCode $EXPECTED_VERSION_CODE)"
   fi
 else
   fail "Kunde inte hitta aapt2 för att verifiera AAB:s paketadata"
@@ -115,6 +117,46 @@ if grep -Eq '^base/res/mipmap-.*/ic_launcher(\.png|\.xml)$' "$ENTRY_LIST" && \
   ok "AAB innehåller launcher-, round- och foreground-resurser"
 else
   fail "AAB saknar en eller flera launcherresurser"
+fi
+
+if grep -Fxq 'base/res/mipmap-anydpi-v26/ic_launcher.xml' "$ENTRY_LIST" && \
+   grep -Fxq 'base/res/mipmap-anydpi-v26/ic_launcher_round.xml' "$ENTRY_LIST"; then
+  ok "AAB innehåller båda adaptive-icon XML-resurserna"
+else
+  fail "AAB saknar en eller flera adaptive-icon XML-resurser"
+fi
+
+echo ""
+echo "── Byteverifiering av paketerade launcher-ikoner ──"
+for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+  for name in ic_launcher ic_launcher_round ic_launcher_foreground; do
+    entry="base/res/mipmap-${density}-v4/${name}.png"
+    expected="$ARTIFACT_DIR/android/app/src/main/res/mipmap-${density}/${name}.png"
+    extracted="$TMP_DIR/${density}-${name}.png"
+    if grep -Fxq "$entry" "$ENTRY_LIST" && [[ -f "$expected" ]]; then
+      unzip -p "$AAB" "$entry" > "$extracted"
+      if cmp -s "$expected" "$extracted"; then
+        ok "$density/$name.png matchar exakt AAB-innehållet"
+      else
+        fail "$density/$name.png skiljer sig mellan källa och AAB"
+      fi
+    else
+      fail "AAB eller källprojekt saknar $density/$name.png"
+    fi
+  done
+done
+
+ANDROID_ICON_ENTRY="base/assets/public/android/icon-512.png"
+ANDROID_ICON_SOURCE="$ARTIFACT_DIR/public/android/icon-512.png"
+if grep -Fxq "$ANDROID_ICON_ENTRY" "$ENTRY_LIST" && [[ -f "$ANDROID_ICON_SOURCE" ]]; then
+  unzip -p "$AAB" "$ANDROID_ICON_ENTRY" > "$TMP_DIR/android-icon-512.png"
+  if cmp -s "$ANDROID_ICON_SOURCE" "$TMP_DIR/android-icon-512.png"; then
+    ok "AAB:s Android Play-ikon matchar aktuell Vindkollen-källa"
+  else
+    fail "AAB:s Android Play-ikon skiljer sig från aktuell källa"
+  fi
+else
+  fail "AAB saknar Android Play-ikonens paketerade källa"
 fi
 
 if grep -Eq '^base/res/drawable.*/vindkollen_splash\.xml$' "$ENTRY_LIST"; then

@@ -93,10 +93,10 @@ else
   fail "App name saknas i strings.xml"
 fi
 
-if grep -Fq 'versionCode  6' "$BUILD_GRADLE" && grep -Fq 'versionName  "1.1"' "$BUILD_GRADLE"; then
-  ok "Releaseversion: 1.1 (versionCode 6)"
+if grep -Fq 'versionCode  8' "$BUILD_GRADLE" && grep -Fq 'versionName  "1.1"' "$BUILD_GRADLE"; then
+  ok "Releaseversion: 1.1 (versionCode 8)"
 else
-  fail "Releaseversion är inte 1.1 (versionCode 6)"
+  fail "Releaseversion är inte 1.1 (versionCode 8)"
 fi
 
 # ── SDK-versioner ─────────────────────────────────────────────────────────────
@@ -163,6 +163,25 @@ if [[ -f "$STYLES_XML" ]] && grep -Fq '@drawable/vindkollen_splash' "$STYLES_XML
   ok "Splash-tema är konfigurerat för Android 7–11 och Android 12+"
 else
   fail "Splash-temat saknar Vindkollen-konfiguration"
+fi
+
+if grep -Fq 'android:icon="@mipmap/ic_launcher"' "$MANIFEST" && \
+  grep -Fq 'android:roundIcon="@mipmap/ic_launcher_round"' "$MANIFEST"; then
+  ok "AndroidManifest.xml pekar på ic_launcher och ic_launcher_round"
+else
+  fail "AndroidManifest.xml pekar på fel launcherresurser"
+fi
+
+ADAPTIVE_ICON="$ARTIFACT_DIR/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
+ADAPTIVE_ICON_ROUND="$ARTIFACT_DIR/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml"
+if [[ -f "$ADAPTIVE_ICON" && -f "$ADAPTIVE_ICON_ROUND" ]] && \
+  grep -Fq '@color/ic_launcher_background' "$ADAPTIVE_ICON" && \
+  grep -Fq '@mipmap/ic_launcher_foreground' "$ADAPTIVE_ICON" && \
+  grep -Fq '@color/ic_launcher_background' "$ADAPTIVE_ICON_ROUND" && \
+  grep -Fq '@mipmap/ic_launcher_foreground' "$ADAPTIVE_ICON_ROUND"; then
+  ok "Adaptive-icon XML använder Vindkollen background/foreground"
+else
+  fail "Adaptive-icon XML saknar rätt background/foreground"
 fi
 
 if find "$ARTIFACT_DIR/android/app/src/main/res" -type f -name 'splash.png' -print -quit | grep -q .; then
