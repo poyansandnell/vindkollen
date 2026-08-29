@@ -41,6 +41,7 @@ externalPort = 3000
 VITE_API_BASE_URL = "https://b9014749-0395-4a74-81ac-8deb3fc86054-00-1te953tm13n9f.riker.replit.dev"
 VAPID_EMAIL = "mailto:vindkollen@katrineholm.example.com"
 VAPID_PUBLIC_KEY = "BJHQub4d8Gc2hiddVHppcXHjjrcix-7QGsf0wX1pdpgL-zau08ihrSmtLXKEcEKICDZa-Q5jMKhpVPq_DLAcU3E"
+VINDKOLLEN_STORE_FILE = "/Users/poyansandnell/nycklar/vindkollen-upload.jks"
 
 [nix]
 channel = "stable-25_05"
